@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOTEL - Demo PMS Completo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        * { box-sizing: border-box; max-width: 100%; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .hab-selectable { transition: all 0.2s; cursor: pointer; }
+        .hab-selectable:hover { transform: scale(1.02); }
+        .chk-label { cursor: pointer; user-select: none; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all z-50">
+        <div class="p-6 flex items-center gap-3 border-b border-slate-800">
+            <div class="bg-amber-500 text-slate-900 p-2 rounded-lg shadow-lg">
+                <i class="fa-solid fa-hotel text-lg"></i>
+            </div>
+            <span class="text-xl font-bold text-white tracking-wide">Hotel<span class="text-amber-500"> Marte</span></span>
+        </div>
+        
+        <nav class="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto">
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-2 px-2">Operaciones</p>
+            <button onclick="switchTab('dashboard')" id="btn-dashboard" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500 text-slate-900 shadow-md transition-all font-bold">
+                <i class="fa-solid fa-border-all w-5"></i> Panel Principal
+            </button>
+            <button onclick="switchTab('habitaciones')" id="btn-habitaciones" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+                <i class="fa-solid fa-bed w-5"></i> Habitaciones
+            </button>
+            <button onclick="switchTab('reservas')" id="btn-reservas" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+                <i class="fa-solid fa-calendar-check w-5"></i> Reservas
+            </button>
+            <button onclick="switchTab('caja')" id="btn-caja" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+                <i class="fa-solid fa-cash-register w-5"></i> Caja y Cobros
+            </button>
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Fidelización & CRM</p>
+            <button onclick="switchTab('clientes')" id="btn-clientes" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+                <i class="fa-solid fa-users w-5"></i> Mis Clientes
+            </button>
+        </nav>
+        
+        <div class="p-6 border-t border-slate-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">
+                    <i class="fa-solid fa-user-tie"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-bold text-white">Recepción</p>
+                    <p class="text-xs text-slate-400">Turno Mañana</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col overflow-y-auto relative">
+        
+        <!-- TOPBAR -->
+        <header class="bg-white px-8 py-5 flex justify-between items-center shadow-sm shrink-0 border-b border-slate-200 sticky top-0 z-40">
+            <h1 id="page-title" class="text-2xl font-black text-slate-800">Dashboard de Recepción</h1>
+            <div class="flex gap-3">
+                <button class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2.5 rounded-lg font-bold text-sm transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass"></i> Buscar
+                </button>
+                <button onclick="abrirModalNuevaReserva()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 px-5 py-2.5 rounded-lg font-bold text-sm shadow-md transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-phone"></i> Nueva Reserva
+                </button>
+            </div>
+        </header>
+
+        <div class="p-8 flex-1">
+
+            <!-- ================= TAB: DASHBOARD ================= -->
+            <section id="tab-dashboard" class="tab-content space-y-8 fade-in">
+                <!-- INDICADORES (KPIs) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-plane-arrival"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase">Llegadas Pendientes</p><p id="kpi-llegadas" class="text-2xl font-black text-slate-700">0</p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-green-50 text-green-500 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-key"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase">Hab. Libres</p><p id="kpi-libres" class="text-2xl font-black text-slate-700">0</p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-bed"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase">Hab. Ocupadas</p><p id="kpi-ocupadas" class="text-2xl font-black text-slate-700">0</p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-yellow-50 text-yellow-500 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-broom"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase">En Limpieza</p><p id="kpi-limpieza" class="text-2xl font-black text-slate-700">0</p></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- MAPA DE HABITACIONES -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                        <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-3">
+                            <h3 class="text-lg font-bold text-slate-800">Mapa de Habitaciones (Piso 1)</h3>
+                            <div class="flex gap-3 text-xs font-bold flex-wrap">
+                                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-green-500"></span> Libre</span>
+                                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Reservada</span>
+                                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-500"></span> Ocupada</span>
+                                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Limpieza</span>
+                            </div>
+                        </div>
+                        <div id="grid-habitaciones-dash" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            <!-- JS -->
+                        </div>
+                    </div>
+
+                    <!-- LLEGADAS DEL DÍA -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-[500px]">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Llegadas Pendientes (Reservas)</h3>
+                        <div id="lista-llegadas-dash" class="space-y-3 flex-1 overflow-y-auto pr-2">
+                            <!-- JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: HABITACIONES CON FILTROS -->
+            <section id="tab-habitaciones" class="tab-content hidden space-y-6 fade-in">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                        <h3 class="text-lg font-bold text-slate-800">Gestión General de Habitaciones</h3>
+                        
+                        <div class="flex gap-2 bg-slate-100 p-1 rounded-lg">
+                            <button onclick="filtrarHabitaciones('Todas')" id="filtro-Todas" class="filtro-btn px-4 py-1.5 rounded-md text-xs font-bold bg-white text-slate-800 shadow-sm">Todas</button>
+                            <button onclick="filtrarHabitaciones('Libre')" id="filtro-Libre" class="filtro-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-500 hover:text-slate-800">Libres</button>
+                            <button onclick="filtrarHabitaciones('Ocupada')" id="filtro-Ocupada" class="filtro-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-500 hover:text-slate-800">Ocupadas</button>
+                            <button onclick="filtrarHabitaciones('Limpieza')" id="filtro-Limpieza" class="filtro-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-500 hover:text-slate-800">Limpieza</button>
+                            <button onclick="filtrarHabitaciones('Reservada')" id="filtro-Reservada" class="filtro-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-500 hover:text-slate-800">Reservadas</button>
+                        </div>
+                    </div>
+                    
+                    <div id="grid-habitaciones-full" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <!-- JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: RESERVAS -->
+            <section id="tab-reservas" class="tab-content hidden space-y-6 fade-in">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-slate-800">Todas las Reservas Pendientes</h3>
+                    </div>
+                    <div class="overflow-x-auto w-full">
+                        <table class="w-full text-left border-collapse min-w-max">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-600 text-xs font-bold uppercase border-b border-slate-200">
+                                    <th class="p-4 pl-6">Cód. Reserva</th>
+                                    <th class="p-4">Huésped Titular</th>
+                                    <th class="p-4">Acompañante</th>
+                                    <th class="p-4">Habitación</th>
+                                    <th class="p-4 text-center">Hora Llegada</th>
+                                    <th class="p-4 text-center">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-reservas" class="divide-y divide-slate-100 text-sm">
+                                <!-- JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: CAJA -->
+            <section id="tab-caja" class="tab-content hidden space-y-6 fade-in">
+                <!-- KPIs de Finanzas -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-money-bill-trend-up"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase">Total Ingresos</p><p id="caja-total-ingresos" class="text-2xl font-black text-green-600">S/ 0.00</p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                        <div><p class="text-xs font-bold text-slate-400 uppercase">Total Egresos</p><p id="caja-total-egresos" class="text-2xl font-black text-rose-600">S/ 0.00</p></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border-2 border-amber-400 flex items-center gap-4 bg-amber-50/30">
+                        <div class="w-14 h-14 rounded-full bg-amber-500 text-slate-900 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-cash-register"></i></div>
+                        <div><p class="text-xs font-bold text-slate-500 uppercase">Saldo Neto en Caja</p><p id="caja-saldo-neto" class="text-2xl font-black text-slate-800">S/ 0.00</p></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Historial de Movimientos -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-5 border-b border-slate-100"><h3 class="text-lg font-bold text-slate-800">Flujo de Caja Activo</h3></div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-max">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-600 text-xs font-bold uppercase border-b border-slate-200">
+                                        <th class="p-4 pl-6">Hora</th>
+                                        <th class="p-4">Concepto / Detalle</th>
+                                        <th class="p-4">Tipo</th>
+                                        <th class="p-4">Método</th>
+                                        <th class="p-4">Monto</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-caja" class="divide-y divide-slate-100 text-sm">
+                                    <!-- JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Cobro Directo -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2"><i class="fa-solid fa-hand-holding-dollar text-amber-500 mr-2"></i> Registrar Operación</h3>
+                        <form onsubmit="agregarMovimientoManual(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Movimiento</label>
+                                <select id="caja-tipo" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500" required>
+                                    <option value="Ingreso">Ingreso (Cobro / Venta)</option>
+                                    <option value="Egreso">Egreso (Gasto / Pago)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Concepto o Detalle</label>
+                                <input type="text" id="caja-concepto" placeholder="Ej. Cobro Hospedaje Hab 105" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500" required>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Monto (S/)</label>
+                                    <input type="number" id="caja-monto" placeholder="0.00" step="0.01" min="0.1" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500" required>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Método de Pago</label>
+                                    <select id="caja-metodo" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500" required>
+                                        <option value="Efectivo">Efectivo</option>
+                                        <option value="Tarjeta">Tarjeta (Crédito/Débito)</option>
+                                        <option value="Transferencia">Transferencia / Yape</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl shadow-md transition-colors text-sm mt-2">
+                                Procesar Transacción
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= TAB: CLIENTES ================= -->
+            <section id="tab-clientes" class="tab-content hidden space-y-6 fade-in">
+                <div class="flex justify-between items-end mb-2">
+                    <p class="text-slate-500 text-sm">Base de datos de huéspedes frecuentes.</p>
+                </div>
+                <div id="grid-clientes" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <!-- JS -->
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- MODALES DE OPERACIÓN  -->
+
+    <!-- 1. MODAL: ASIGNAR HABITACIÓN DIRECTA (WALK-IN) -->
+    <div id="modal-asignar-directo" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-person-walking-luggage text-green-500 mr-2"></i> Asignar al Instante</h3>
+                <button onclick="cerrarModalAsignarDirecto()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <div class="overflow-y-auto pr-2">
+                <div class="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-center text-green-800 font-bold flex justify-between items-center px-6">
+                    <span>Hab. Seleccionada:</span> 
+                    <span id="lbl-hab-directa" class="text-2xl font-black">---</span>
+                    <span id="lbl-tipo-hab-directa" class="text-xs uppercase bg-green-200 px-2 py-1 rounded"></span>
+                </div>
+
+                <!-- BUSCADOR INTELIGENTE -->
+                <div class="relative mb-5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-end mb-1">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">¿Cliente frecuente?</label>
+                        <button type="button" onclick="limpiarCampos('dir')" class="text-[10px] text-blue-500 hover:underline font-bold">Limpiar datos</button>
+                    </div>
+                    <div class="relative">
+                        <input type="text" id="busqueda-cli-directo" onkeyup="buscarClienteExistente(this.value, 'res-directo')" placeholder="Buscar Titular por Nombre o DNI..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-400">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+                    </div>
+                    <div id="resultados-busqueda-res-directo" class="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 hidden max-h-40 overflow-y-auto"></div>
+                </div>
+
+                <form onsubmit="guardarAsignacionDirecta(event)" class="space-y-4">
+                    <input type="hidden" id="dir-hab-num">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">DNI Titular</label>
+                            <input type="text" id="dir-dni" required placeholder="Ej. 76543210" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Titular</label>
+                            <input type="text" id="dir-nombre" required placeholder="Nombre del Huésped" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Celular</label>
+                            <input type="text" id="dir-tel" required placeholder="999888777" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white">
+                        </div>
+                    </div>
+
+                    <!-- CAMPO DINÁMICO: ACOMPAÑANTE -->
+                    <div id="seccion-acompanante-directo" class="hidden border-t border-slate-200 pt-3 mt-4">
+                        <p class="text-xs font-bold text-indigo-500 uppercase mb-2 flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Datos del Acompañante</p>
+                        <div class="grid grid-cols-2 gap-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">DNI Acompañante</label>
+                                <input type="text" id="dir-dni-acomp" placeholder="DNI (Opcional)" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Acompañante</label>
+                                <input type="text" id="dir-nom-acomp" placeholder="Nombre completo" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN DETALLE DE COBRO (NUEVO) -->
+                    <div class="border-t border-slate-200 pt-3 mt-4">
+                        <p class="text-xs font-bold text-amber-500 uppercase mb-2 flex items-center gap-1"><i class="fa-solid fa-wallet"></i> Detalle de Cobro Inmediato</p>
+                        <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto a Cobrar (S/)</label>
+                                <input type="number" id="dir-monto" placeholder="0.00" step="0.01" min="0" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
+                                <select id="dir-metodo" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white">
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Tarjeta">Tarjeta</option>
+                                    <option value="Transferencia">Transferencia / Yape</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Comprobante</label>
+                                <select id="dir-comprobante" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white">
+                                    <option value="Boleta">Boleta</option>
+                                    <option value="Factura">Factura</option>
+                                    <option value="Ticket Interno">Ticket Interno</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors mt-4">
+                        Registrar Ingreso (Check-In)
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. MODAL: NUEVA RESERVA -->
+    <div id="modal-nueva-reserva" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh]">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-phone text-blue-500 mr-2"></i> Reservar Habitación</h3>
+                <button onclick="cerrarModalNuevaReserva()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <div class="overflow-y-auto pr-2">
+                <div class="mb-5">
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">1. Seleccione Habitación (Solo Libres)</label>
+                    <input type="hidden" id="res-hab-seleccionada" required>
+                    <div id="grid-habs-libres-reserva" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+                </div>
+
+                <div class="relative mb-5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-end mb-1">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">2. Buscar Cliente (Titular)</label>
+                        <button type="button" onclick="limpiarCampos('res')" class="text-[10px] text-blue-500 hover:underline font-bold">Limpiar datos</button>
+                    </div>
+                    <div class="relative">
+                        <input type="text" id="busqueda-cli-reserva" onkeyup="buscarClienteExistente(this.value, 'res-reserva')" placeholder="Buscar por Nombre o DNI..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+                    </div>
+                    <div id="resultados-busqueda-res-reserva" class="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 hidden max-h-40 overflow-y-auto"></div>
+                </div>
+
+                <form onsubmit="guardarNuevaReserva(event)" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="col-span-2 sm:col-span-1">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">DNI Titular</label>
+                            <input type="text" id="res-dni" required placeholder="DNI del titular" class="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400">
+                        </div>
+                        <div class="col-span-2 sm:col-span-1">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Hora Llegada</label>
+                            <input type="time" id="res-hora" required class="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Titular</label>
+                            <input type="text" id="res-nombre" required placeholder="Nombre completo" class="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Celular</label>
+                            <input type="text" id="res-tel" required placeholder="999..." class="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400">
+                        </div>
+                    </div>
+
+                    <div id="seccion-acompanante-reserva" class="hidden border-t border-slate-200 pt-3 mt-4">
+                        <p class="text-xs font-bold text-indigo-500 uppercase mb-2 flex items-center gap-1"><i class="fa-solid fa-user-plus"></i> Datos del Acompañante</p>
+                        <div class="grid grid-cols-2 gap-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">DNI Acompañante</label>
+                                <input type="text" id="res-dni-acomp" placeholder="DNI" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Acompañante</label>
+                                <input type="text" id="res-nom-acomp" placeholder="Nombre completo" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN DETALLE DE COBRO (NUEVO) -->
+                    <div class="border-t border-slate-200 pt-3 mt-4">
+                        <p class="text-xs font-bold text-amber-500 uppercase mb-2 flex items-center gap-1"><i class="fa-solid fa-wallet"></i> Pago de Reserva / Adelanto</p>
+                        <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto a Cobrar (S/)</label>
+                                <input type="number" id="res-monto" placeholder="0.00" step="0.01" min="0" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
+                                <select id="res-metodo" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white">
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Tarjeta">Tarjeta</option>
+                                    <option value="Transferencia">Transferencia / Yape</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Comprobante</label>
+                                <select id="res-comprobante" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white">
+                                    <option value="Boleta">Boleta</option>
+                                    <option value="Factura">Factura</option>
+                                    <option value="Ticket Interno">Ticket Interno</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors mt-2">
+                        Confirmar Reserva
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. MODAL: CHECK IN EXITOSO -->
+    <div id="modal-checkin" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div class="bg-green-500 p-6 text-center text-white">
+                <div class="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-4xl mx-auto mb-3">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <h3 class="text-2xl font-black">¡Check-In Exitoso!</h3>
+            </div>
+            <div class="p-6 text-center space-y-4">
+                <p class="text-slate-500 text-sm">El huésped <strong id="ci-huesped" class="text-slate-800">---</strong> ha sido registrado.</p>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 inline-block mx-auto min-w-[200px]">
+                    <p class="text-xs font-bold text-slate-400 uppercase mb-1">Habitación Asignada</p>
+                    <p id="ci-hab" class="text-3xl font-black text-slate-800">---</p>
+                    <p id="ci-acomp" class="text-xs text-indigo-500 font-bold mt-1 hidden"><i class="fa-solid fa-user-group"></i> + 1 Acompañante</p>
+                </div>
+                <div class="text-xs text-slate-500 font-mono">Hora Límite de Salida: 12:00 PM</div>
+                <div class="pt-4 border-t border-slate-100">
+                    <button onclick="cerrarModalCheckin()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl transition-colors text-sm shadow-md">Cerrar y Continuar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. MODAL: CHECK-OUT -->
+    <div id="modal-checkout" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-person-walking-arrow-right text-rose-500 mr-2"></i> Procesar Check-Out</h3>
+                <button onclick="cerrarModalCheckout()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <div class="text-center mb-5">
+                <p class="text-xs font-bold text-slate-400 uppercase mb-1">Habitación / Titular</p>
+                <div class="text-2xl font-black text-slate-800 mb-1" id="co-hab-num">---</div>
+                <p class="text-sm font-bold text-blue-600" id="co-huesped-nom">---</p>
+            </div>
+
+            <form onsubmit="procesarCheckout(event)">
+                <input type="hidden" id="co-hab-hidden">
+                
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Checklist de Inspección</p>
+                    <div class="space-y-3 text-sm font-bold text-slate-700">
+                        <label class="flex items-center gap-3 chk-label">
+                            <input type="checkbox" id="chk-sabanas" checked onchange="evaluarChecklist()" class="w-4 h-4 text-rose-500 rounded border-slate-300 focus:ring-rose-500">
+                            Sábanas y Toallas Limpias/Completas
+                        </label>
+                        <label class="flex items-center gap-3 chk-label">
+                            <input type="checkbox" id="chk-control" checked onchange="evaluarChecklist()" class="w-4 h-4 text-rose-500 rounded border-slate-300 focus:ring-rose-500">
+                            Control Remoto (TV / AC) en la Hab.
+                        </label>
+                        <label class="flex items-center gap-3 chk-label">
+                            <input type="checkbox" id="chk-danos" checked onchange="evaluarChecklist()" class="w-4 h-4 text-rose-500 rounded border-slate-300 focus:ring-rose-500">
+                            Sin Daños Estructurales ni manchas
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ALERTA PENALIDAD -->
+                <div id="caja-penalidad" class="hidden mb-4 bg-rose-50 border border-rose-200 p-3 rounded-xl fade-in">
+                    <label class="block text-xs font-bold text-rose-700 uppercase mb-1"><i class="fa-solid fa-triangle-exclamation"></i> Ingrese Monto de Penalidad (S/)</label>
+                    <input type="number" id="co-monto-penalidad" placeholder="Ej. 50.00" min="1" step="0.5" class="w-full px-4 py-2 rounded-lg border border-rose-300 text-sm outline-none focus:ring-1 focus:ring-rose-500 bg-white font-bold text-rose-700">
+                </div>
+
+                <button type="submit" id="btn-finalizar-co" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors">
+                    <i class="fa-solid fa-check mr-2"></i> Todo Conforme - Finalizar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= SCRIPTS ================= -->
+    <script>
+        // BASE DE DATOS DEL PMS
+        const appState = {
+            habitaciones: [
+                { num: '101', tipo: 'Doble', estado: 'Ocupada', huesped: 'M. Vargas', acomp: 'L. Torres', ingreso: '14:30', salida: '12:00' },
+                { num: '102', tipo: 'Matrimonial', estado: 'Libre', huesped: '', acomp: '', ingreso: '', salida: '' },
+                { num: '103', tipo: 'Doble', estado: 'Limpieza', huesped: '', acomp: '', ingreso: '', salida: '' },
+                { num: '104', tipo: 'Suite', estado: 'Ocupada', huesped: 'J. Doe', acomp: '', ingreso: '18:15', salida: '12:00' },
+                { num: '105', tipo: 'Simple', estado: 'Libre', huesped: '', acomp: '', ingreso: '', salida: '' },
+                { num: '106', tipo: 'Simple', estado: 'Libre', huesped: '', acomp: '', ingreso: '', salida: '' },
+                { num: '107', tipo: 'Doble', estado: 'Reservada', huesped: 'C. Santana', acomp: 'M. Diaz', ingreso: '', salida: '' },
+                { num: '108', tipo: 'Matrimonial', estado: 'Ocupada', huesped: 'R. Gomez', acomp: 'A. Silva', ingreso: '09:10', salida: '12:00' },
+                { num: '109', tipo: 'Suite', estado: 'Libre', huesped: '', acomp: '', ingreso: '', salida: '' },
+                { num: '110', tipo: 'Simple', estado: 'Ocupada', huesped: 'L. Medina', acomp: '', ingreso: '21:05', salida: '12:00' },
+            ],
+            reservas: [
+                { id: 'r1', res: 'RES-4091', clienteId: 'c4', nombreAcomp: '', numHabitacion: '102', hora: '10:00' },
+                { id: 'r2', res: 'RES-9022', clienteId: 'c2', nombreAcomp: 'M. Diaz', numHabitacion: '107', hora: '15:30' },
+                { id: 'r3', res: 'RES-1134', clienteId: 'c5', nombreAcomp: 'E. Ruiz', numHabitacion: '109', hora: '18:00' }
+            ],
+            clientes: [
+                { id: 'c1', nombre: 'Laura Medina', dni: '76543210', tel: '999888777', visitas: 1 },
+                { id: 'c2', nombre: 'Carlos Santana', dni: '45678912', tel: '912345678', visitas: 5 }, 
+                { id: 'c3', nombre: 'Roberto Gómez', dni: '12345678', tel: '987654321', visitas: 2 },
+                { id: 'c4', nombre: 'Juan Pérez', dni: '78901234', tel: '955444333', visitas: 0 },
+                { id: 'c5', nombre: 'María Fernández', dni: '87654321', tel: '922111000', visitas: 8 }
+            ],
+            caja: [
+                { id: 't1', tipo: 'Ingreso', concepto: 'Apertura de Turno Recepción', monto: 300.00, metodo: 'Efectivo', hora: '07:30' },
+                { id: 't2', tipo: 'Ingreso', concepto: 'Cobro Reserva M. Vargas - Hab 101', monto: 150.00, metodo: 'Tarjeta', hora: '08:15' },
+                { id: 't3', tipo: 'Egreso', concepto: 'Compra de Artículos de Limpieza', monto: 45.00, metodo: 'Efectivo', hora: '09:00' }
+            ],
+            filtroActualHabitaciones: 'Todas'
+        };
+
+        // --- NAVEGACIÓN ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('bg-amber-500', 'text-slate-900', 'font-bold'); b.classList.add('text-slate-400'); });
+            
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            const btn = document.getElementById(`btn-${tabId}`);
+            btn.classList.add('bg-amber-500', 'text-slate-900', 'font-bold');
+            btn.classList.remove('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
+            
+            const titles = { dashboard: 'Dashboard de Recepción', habitaciones: 'Gestión de Habitaciones', reservas: 'Historial de Reservas', clientes: 'Directorio de Clientes VIP', caja: 'Control de Caja y Cobros habituales' };
+            document.getElementById('page-title').innerText = titles[tabId];
+            updateUI();
+        }
+
+        function filtrarHabitaciones(estado) {
+            appState.filtroActualHabitaciones = estado;
+            document.querySelectorAll('.filtro-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-slate-800', 'shadow-sm'); btn.classList.add('text-slate-500');
+            });
+            const activeBtn = document.getElementById(`filtro-${estado}`);
+            activeBtn.classList.remove('text-slate-500'); activeBtn.classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+            updateUI();
+        }
+
+        // --- RENDERIZADO UI ---
+        function updateUI() {
+            const libres = appState.habitaciones.filter(h => h.estado === 'Libre').length;
+            const ocupadas = appState.habitaciones.filter(h => h.estado === 'Ocupada').length;
+            const limpieza = appState.habitaciones.filter(h => h.estado === 'Limpieza').length;
+            
+            document.getElementById('kpi-llegadas').innerText = appState.reservas.length;
+            document.getElementById('kpi-libres').innerText = libres;
+            document.getElementById('kpi-ocupadas').innerText = ocupadas;
+            document.getElementById('kpi-limpieza').innerText = limpieza;
+
+            const crearHtmlHabitacion = (h) => {
+                let bgColor = "bg-green-50 border-green-200 text-green-700"; let iconColor = "text-green-500";
+                let infoBottom = `<button onclick="abrirModalAsignarDirecto('${h.num}')" class="w-full bg-green-500 text-white text-[10px] font-bold py-1.5 rounded hover:bg-green-600 transition-colors shadow-sm">ASIGNAR AL INSTANTE</button>`;
+                
+                if(h.estado === 'Ocupada') { 
+                    bgColor = "bg-red-50 border-red-200 text-red-700"; iconColor = "text-red-400"; 
+                    infoBottom = `
+                        <div class="mb-1 text-[10px] font-bold text-red-700 truncate" title="${h.huesped} ${h.acomp ? '& '+h.acomp:''}"><i class="fa-solid fa-user mr-1"></i> ${h.huesped} ${h.acomp ? '<i class="fa-solid fa-user-plus ml-1 text-[8px]"></i>':''}</div>
+                        <div class="mb-2 text-[9px] text-red-600 font-mono"><i class="fa-regular fa-clock"></i> Salida: ${h.salida || '12:00'}</div>
+                        <button onclick="abrirModalCheckout('${h.num}')" class="w-full bg-rose-500 text-white text-[10px] font-bold py-1.5 rounded hover:bg-rose-600 shadow-sm transition-colors">CHECK-OUT</button>
+                    `; 
+                } 
+                else if (h.estado === 'Limpieza') { bgColor = "bg-yellow-50 border-yellow-300 text-yellow-700"; iconColor = "text-yellow-500"; infoBottom = `<button onclick="terminarLimpieza('${h.num}')" class="w-full bg-yellow-400 text-yellow-900 text-[10px] font-bold py-1.5 rounded hover:bg-yellow-500 transition-colors shadow-sm">TERMINAR LIMPIEZA</button>`; }
+                else if (h.estado === 'Reservada') { bgColor = "bg-blue-50 border-blue-300 text-blue-700"; iconColor = "text-blue-500"; infoBottom = `<div class="mb-1 text-[10px] font-bold text-blue-600 truncate bg-blue-100 px-2 py-1 rounded text-center" title="${h.huesped}">${h.huesped}</div><button onclick="checkInDeReserva('${h.num}')" class="w-full bg-blue-500 text-white text-[10px] font-bold py-1.5 rounded hover:bg-blue-600 shadow-sm transition-colors">CHECK-IN</button>`; }
+                
+                return `<div class="${bgColor} border rounded-xl p-3 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow"><div class="flex justify-between items-start mb-2"><span class="font-black text-lg">${h.num}</span><div class="text-right"><i class="fa-solid fa-bed ${iconColor}"></i><p class="text-[8px] uppercase font-bold opacity-70 mt-1">${h.tipo}</p></div></div><div>${infoBottom}</div></div>`;
+            };
+
+            if(document.getElementById('grid-habitaciones-dash')) document.getElementById('grid-habitaciones-dash').innerHTML = appState.habitaciones.map(crearHtmlHabitacion).join('');
+            
+            if(document.getElementById('grid-habitaciones-full')) {
+                const filtradas = appState.filtroActualHabitaciones === 'Todas' ? appState.habitaciones : appState.habitaciones.filter(h => h.estado === appState.filtroActualHabitaciones);
+                document.getElementById('grid-habitaciones-full').innerHTML = filtradas.length ? filtradas.map(crearHtmlHabitacion).join('') : `<p class="text-slate-400 text-sm col-span-full py-4">No hay habitaciones en este estado.</p>`;
+            }
+
+            if(document.getElementById('lista-llegadas-dash')) {
+                document.getElementById('lista-llegadas-dash').innerHTML = appState.reservas.length === 0 ? `<p class="text-center text-slate-400 py-6">No hay reservas programadas.</p>` : appState.reservas.map(r => {
+                    const cli = appState.clientes.find(c => c.id === r.clienteId);
+                    return `<div class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col hover:bg-blue-50 transition-colors border-l-4 border-l-blue-400"><div class="flex justify-between items-start mb-2"><div><p class="font-bold text-slate-800 text-sm">${cli.nombre}</p><p class="text-[10px] text-slate-400 font-mono font-bold">${r.res}</p></div><span class="bg-blue-100 text-blue-700 text-xs font-black px-2 py-1 rounded border border-blue-200">Hab. ${r.numHabitacion}</span></div><div class="flex justify-between items-center mt-1"><p class="text-xs text-slate-500 font-medium"><i class="regular fa-clock text-amber-500"></i> Llegada Est: ${r.hora}</p><button onclick="checkInDeReserva('${r.numHabitacion}')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] transition-colors shadow-sm">CHECK-IN</button></div></div>`;
+                }).join('');
+            }
+
+            if(document.getElementById('tabla-reservas')) {
+                document.getElementById('tabla-reservas').innerHTML = appState.reservas.map(r => {
+                    const cli = appState.clientes.find(c => c.id === r.clienteId);
+                    return `<tr class="hover:bg-slate-50"><td class="p-4 pl-6 font-mono text-xs font-bold text-slate-500">${r.res}</td><td class="p-4 font-bold text-slate-800">${cli.nombre}</td><td class="p-4 text-xs text-slate-500">${r.nombreAcomp ? r.nombreAcomp : '-'}</td><td class="p-4 font-bold text-blue-600">Hab. ${r.numHabitacion}</td><td class="p-4 text-center font-bold text-amber-600">${r.hora}</td><td class="p-4 text-center"><span class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold uppercase">Pendiente</span></td></tr>`;
+                }).join('') || `<tr><td colspan="6" class="text-center py-6 text-slate-400">Sin reservas pendientes</td></tr>`;
+            }
+
+            if(document.getElementById('grid-clientes')) {
+                document.getElementById('grid-clientes').innerHTML = appState.clientes.sort((a,b) => b.visitas - a.visitas).map(c => {
+                    const isVip = c.visitas >= 5;
+                    return `<div class="bg-white border ${isVip?'border-amber-300':'border-slate-200'} rounded-2xl p-6 flex flex-col shadow-sm relative overflow-hidden">${isVip ? `<div class="absolute top-0 right-0 bg-amber-500 text-white text-[9px] font-black uppercase px-6 py-1 rotate-45 translate-x-4 mt-2">VIP</div>` : ''}<div class="flex items-center gap-4 mb-4"><div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-xl ${isVip?'text-amber-500':'text-slate-400'}"><i class="fa-solid ${isVip ? 'fa-star' : 'fa-user'}"></i></div><div><h4 class="font-bold text-slate-800 text-lg leading-tight">${c.nombre}</h4><p class="text-xs text-slate-400 font-mono mt-0.5">DNI: ${c.dni}</p></div></div><div class="space-y-2 mb-4 flex-1"><div class="flex items-center gap-2 text-sm text-slate-600"><i class="fa-solid fa-phone w-4 text-slate-400"></i> ${c.tel}</div></div><div class="border-t border-slate-100 pt-4 flex justify-between items-center"><p class="text-xs font-bold text-slate-400 uppercase">Fidelización</p><span class="px-3 py-1 rounded-lg border text-xs font-black flex items-center gap-1 ${isVip?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}"><i class="fa-solid fa-bed"></i> ${c.visitas} Visitas</span></div></div>`;
+                }).join('');
+            }
+
+            // Actualización del módulo de caja
+            if(document.getElementById('tabla-caja')) {
+                let ingresos = 0;
+                let egresos = 0;
+
+                const htmlTransacciones = appState.caja.map(t => {
+                    if (t.tipo === 'Ingreso') ingresos += t.monto;
+                    else egresos += t.monto;
+
+                    const colorBadge = t.tipo === 'Ingreso' ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700';
+                    const colorMonto = t.tipo === 'Ingreso' ? 'text-green-600' : 'text-rose-600';
+                    const signo = t.tipo === 'Ingreso' ? '+' : '-';
+
+                    return `<tr class="hover:bg-slate-50">
+                        <td class="p-4 pl-6 font-mono text-xs text-slate-400">${t.hora}</td>
+                        <td class="p-4 font-bold text-slate-700">${t.concepto}</td>
+                        <td class="p-4"><span class="${colorBadge} px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase">${t.tipo}</span></td>
+                        <td class="p-4 text-slate-500 text-xs font-medium">${t.metodo}</td>
+                        <td class="p-4 font-black ${colorMonto}">${signo} S/ ${t.monto.toFixed(2)}</td>
+                    </tr>`;
+                }).join('');
+
+                document.getElementById('tabla-caja').innerHTML = htmlTransacciones || `<tr><td colspan="5" class="text-center py-6 text-slate-400">Sin movimientos registrados.</td></tr>`;
+                document.getElementById('caja-total-ingresos').innerText = `S/ ${ingresos.toFixed(2)}`;
+                document.getElementById('caja-total-egresos').innerText = `S/ ${egresos.toFixed(2)}`;
+                document.getElementById('caja-saldo-neto').innerText = `S/ ${(ingresos - egresos).toFixed(2)}`;
+            }
+        }
+
+        // Obtener hora actual formato HH:MM
+        function getHoraActual() {
+            const now = new Date();
+            return String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        }
+
+        // ================= PROCEDIMIENTO DE CAJA MANUAL =================
+        function agregarMovimientoManual(e) {
+            e.preventDefault();
+            const tipo = document.getElementById('caja-tipo').value;
+            const concepto = document.getElementById('caja-concepto').value.trim();
+            const monto = parseFloat(document.getElementById('caja-monto').value);
+            const metodo = document.getElementById('caja-metodo').value;
+
+            appState.caja.push({
+                id: 't_' + Date.now(),
+                tipo,
+                concepto,
+                monto,
+                metodo,
+                hora: getHoraActual()
+            });
+
+            document.getElementById('caja-concepto').value = '';
+            document.getElementById('caja-monto').value = '';
+            updateUI();
+        }
+
+        // ================= FLUJO: CHECK-OUT =================
+        function abrirModalCheckout(numHabitacion) {
+            const hab = appState.habitaciones.find(h => h.num === numHabitacion);
+            document.getElementById('co-hab-num').innerText = hab.num;
+            document.getElementById('co-huesped-nom').innerText = hab.huesped + (hab.acomp ? ` & ${hab.acomp}` : '');
+            document.getElementById('co-hab-hidden').value = numHabitacion;
+            
+            ['sabanas', 'control', 'danos'].forEach(id => document.getElementById(`chk-${id}`).checked = true);
+            document.getElementById('co-monto-penalidad').value = '';
+            evaluarChecklist();
+            
+            document.getElementById('modal-checkout').classList.remove('hidden');
+        }
+
+        function cerrarModalCheckout() { document.getElementById('modal-checkout').classList.add('hidden'); }
+
+        function evaluarChecklist() {
+            const ok1 = document.getElementById('chk-sabanas').checked;
+            const ok2 = document.getElementById('chk-control').checked;
+            const ok3 = document.getElementById('chk-danos').checked;
+            const cajaPena = document.getElementById('caja-penalidad');
+            const btn = document.getElementById('btn-finalizar-co');
+
+            if(!ok1 || !ok2 || !ok3) {
+                cajaPena.classList.remove('hidden');
+                document.getElementById('co-monto-penalidad').required = true;
+                btn.className = "w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors mt-2";
+                btn.innerHTML = `<i class="fa-solid fa-hand-holding-dollar mr-2"></i> Cobrar Extra y Finalizar`;
+            } else {
+                cajaPena.classList.add('hidden');
+                document.getElementById('co-monto-penalidad').required = false;
+                btn.className = "w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors mt-2";
+                btn.innerHTML = `<i class="fa-solid fa-check mr-2"></i> Todo Conforme - Finalizar`;
+            }
+        }
+
+        function procesarCheckout(e) {
+            e.preventDefault();
+            const numHab = document.getElementById('co-hab-hidden').value;
+            const hab = appState.habitaciones.find(h => h.num === numHab);
+            
+            let mensajeExtra = '';
+            if(!document.getElementById('caja-penalidad').classList.contains('hidden')) {
+                const monto = parseFloat(document.getElementById('co-monto-penalidad').value);
+                mensajeExtra = `\n⚠️ Se ha registrado un cobro extra de S/ ${monto} por faltas en el checklist.`;
+                
+                appState.caja.push({
+                    id: 't_' + Date.now(),
+                    tipo: 'Ingreso',
+                    concepto: `Penalidad Check-Out Hab ${hab.num} (${hab.huesped})`,
+                    monto: monto,
+                    metodo: 'Efectivo',
+                    hora: getHoraActual()
+                });
+            }
+
+            hab.estado = 'Limpieza';
+            hab.huesped = '';
+            hab.acomp = '';
+            hab.ingreso = '';
+            hab.salida = '';
+
+            cerrarModalCheckout();
+            updateUI();
+            alert(`✅ Check-Out completado para la Habitación ${hab.num}. La habitación pasa a LIMPIEZA.${mensajeExtra}`);
+        }
+
+        function terminarLimpieza(num) { const hab = appState.habitaciones.find(h => h.num === num); if(hab) { hab.estado = 'Libre'; updateUI(); } }
+
+        // ================= GESTIÓN CRM Y BÚSQUEDAS =================
+        function buscarClienteExistente(query, context) {
+            const box = document.getElementById(`resultados-busqueda-${context}`);
+            if(query.trim().length < 2) { box.classList.add('hidden'); return; }
+            const q = query.toLowerCase();
+            const filtrados = appState.clientes.filter(c => c.dni.toLowerCase().includes(q) || c.nombre.toLowerCase().includes(q));
+            if(filtrados.length === 0) {
+                box.innerHTML = `<div class="p-3 text-xs text-slate-500 text-center bg-slate-50">No encontrado. Complete abajo como <b>Nuevo Cliente</b>.</div>`;
+                box.classList.remove('hidden'); return;
+            }
+            box.innerHTML = filtrados.map(c => `
+                <div onclick="autocompletarCliente('${c.id}', '${context}')" class="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 flex justify-between items-center transition-colors">
+                    <div><p class="font-bold text-sm text-slate-800">${c.nombre}</p><p class="text-[10px] text-slate-400 font-mono">DNI: ${c.dni}</p></div>
+                </div>
+            `).join('');
+            box.classList.remove('hidden');
+        }
+
+        function autocompletarCliente(id, context) {
+            const cli = appState.clientes.find(c => c.id === id);
+            if(!cli) return;
+            const prefix = context === 'res-directo' ? 'dir' : 'res';
+            document.getElementById(`${prefix}-dni`).value = cli.dni;
+            document.getElementById(`${prefix}-nombre`).value = cli.nombre;
+            document.getElementById(`${prefix}-tel`).value = cli.tel;
+            ['dni', 'nombre', 'tel'].forEach(f => { document.getElementById(`${prefix}-${f}`).classList.add('bg-blue-50', 'border-blue-300', 'text-blue-800'); });
+            document.getElementById(`resultados-busqueda-${context}`).classList.add('hidden');
+            document.getElementById(`busqueda-cli-${context}`).value = ''; 
+        }
+
+        function limpiarCampos(prefix) {
+            ['dni', 'nombre', 'tel', 'dni-acomp', 'nom-acomp', 'monto'].forEach(f => {
+                const el = document.getElementById(`${prefix}-${f}`);
+                if(el) { el.value = ''; el.classList.remove('bg-blue-50', 'border-blue-300', 'text-blue-800'); el.classList.add('bg-white'); }
+            });
+            if(document.getElementById(`${prefix}-metodo`)) document.getElementById(`${prefix}-metodo`).value = 'Efectivo';
+            if(document.getElementById(`${prefix}-comprobante`)) document.getElementById(`${prefix}-comprobante`).value = 'Boleta';
+        }
+
+        // ================= PROCEDIMIENTO INGRESO DIRECTO =================
+        function abrirModalAsignarDirecto(numHabitacion) {
+            const hab = appState.habitaciones.find(h => h.num === numHabitacion);
+            document.getElementById('dir-hab-num').value = numHabitacion;
+            document.getElementById('lbl-hab-directa').innerText = numHabitacion;
+            document.getElementById('lbl-tipo-hab-directa').innerText = hab.tipo;
+            if(hab.tipo === 'Doble' || hab.tipo === 'Matrimonial' || hab.tipo === 'Suite') document.getElementById('seccion-acompanante-directo').classList.remove('hidden');
+            else document.getElementById('seccion-acompanante-directo').classList.add('hidden');
+            limpiarCampos('dir'); document.getElementById('busqueda-cli-directo').value = '';
+            document.getElementById('modal-asignar-directo').classList.remove('hidden');
+        }
+        function cerrarModalAsignarDirecto() { document.getElementById('modal-asignar-directo').classList.add('hidden'); }
+        
+        function guardarAsignacionDirecta(e) {
+            e.preventDefault();
+            const dni = document.getElementById('dir-dni').value.trim();
+            const numHabitacion = document.getElementById('dir-hab-num').value;
+            const nomAcomp = document.getElementById('dir-nom-acomp') ? document.getElementById('dir-nom-acomp').value.trim() : '';
+            
+            // Campos de cobro
+            const monto = parseFloat(document.getElementById('dir-monto').value) || 0;
+            const metodo = document.getElementById('dir-metodo').value;
+            const comprobante = document.getElementById('dir-comprobante').value;
+            
+            let cliente = appState.clientes.find(c => c.dni === dni);
+            if(!cliente) {
+                cliente = { id: 'c_' + Date.now(), dni: dni, nombre: document.getElementById('dir-nombre').value.trim(), tel: document.getElementById('dir-tel').value.trim(), visitas: 0 };
+                appState.clientes.push(cliente);
+            }
+            cliente.visitas += 1;
+            
+            const hab = appState.habitaciones.find(h => h.num === numHabitacion);
+            hab.estado = 'Ocupada';
+            hab.huesped = cliente.nombre.split(' ')[0][0] + '. ' + (cliente.nombre.split(' ')[1] || '');
+            hab.acomp = nomAcomp;
+            hab.ingreso = getHoraActual();
+            hab.salida = '12:00';
+
+            // Registro automático en Caja si el monto es mayor a 0
+            if (monto > 0) {
+                appState.caja.push({
+                    id: 't_' + Date.now(),
+                    tipo: 'Ingreso',
+                    concepto: `Hospedaje Check-In Hab ${hab.num} (${cliente.nombre}) - ${comprobante}`,
+                    monto: monto,
+                    metodo: metodo,
+                    hora: getHoraActual()
+                });
+            }
+
+            cerrarModalAsignarDirecto(); updateUI();
+            mostrarCheckinExitoso(cliente.nombre, hab.num, nomAcomp !== '');
+        }
+
+        // ================= PROCEDIMIENTO DE RESERVAS =================
+        function abrirModalNuevaReserva() {
+            const libres = appState.habitaciones.filter(h => h.estado === 'Libre');
+            const grid = document.getElementById('grid-habs-libres-reserva');
+            document.getElementById('res-hab-seleccionada').value = '';
+            document.getElementById('seccion-acompanante-reserva').classList.add('hidden');
+
+            if(libres.length === 0) grid.innerHTML = "<p class='col-span-full text-xs text-red-500 font-bold'>No hay habitaciones libres.</p>";
+            else grid.innerHTML = libres.map(h => `<div id="box-hab-${h.num}" onclick="seleccionarHabReserva('${h.num}', '${h.tipo}')" class="hab-selectable bg-white border border-slate-300 rounded-lg p-2 text-center shadow-sm"><span class="block font-black text-slate-700 text-lg">${h.num}</span><span class="block text-[9px] uppercase font-bold text-slate-500">${h.tipo}</span></div>`).join('');
+            
+            limpiarCampos('res'); document.getElementById('res-hora').value = getHoraActual();
+            document.getElementById('busqueda-cli-reserva').value = '';
+            document.getElementById('modal-nueva-reserva').classList.remove('hidden');
+        }
+
+        function seleccionarHabReserva(num, tipo) {
+            document.getElementById('res-hab-seleccionada').value = num;
+            document.querySelectorAll('.hab-selectable').forEach(el => { el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'border-blue-500'); el.classList.add('border-slate-300', 'bg-white'); });
+            const box = document.getElementById(`box-hab-${num}`);
+            box.classList.remove('border-slate-300', 'bg-white'); box.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'border-blue-500');
+
+            if(tipo === 'Doble' || tipo === 'Matrimonial' || tipo === 'Suite') document.getElementById('seccion-acompanante-reserva').classList.remove('hidden');
+            else { document.getElementById('seccion-acompanante-reserva').classList.add('hidden'); document.getElementById('res-dni-acomp').value = ''; document.getElementById('res-nom-acomp').value = ''; }
+        }
+
+        function cerrarModalNuevaReserva() { document.getElementById('modal-nueva-reserva').classList.add('hidden'); }
+
+        function guardarNuevaReserva(e) {
+            e.preventDefault();
+            const numHabitacion = document.getElementById('res-hab-seleccionada').value;
+            if(!numHabitacion) { alert("¡Debe seleccionar una habitación en el mapa visual!"); return; }
+
+            const dni = document.getElementById('res-dni').value.trim();
+            const nomAcomp = document.getElementById('res-nom-acomp') ? document.getElementById('res-nom-acomp').value.trim() : '';
+            
+            // Campos de cobro
+            const monto = parseFloat(document.getElementById('res-monto').value) || 0;
+            const metodo = document.getElementById('res-metodo').value;
+            const comprobante = document.getElementById('res-comprobante').value;
+
+            let cliente = appState.clientes.find(c => c.dni === dni);
+            if(!cliente) {
+                cliente = { id: 'c_' + Date.now(), dni: dni, nombre: document.getElementById('res-nombre').value.trim(), tel: document.getElementById('res-tel').value.trim(), visitas: 0 };
+                appState.clientes.push(cliente);
+            }
+
+            const hab = appState.habitaciones.find(h => h.num === numHabitacion);
+            hab.estado = 'Reservada';
+            hab.huesped = cliente.nombre.split(' ')[0][0] + '. ' + (cliente.nombre.split(' ')[1] || '');
+
+            appState.reservas.push({ id: 'r_' + Date.now(), res: 'RES-' + Math.floor(Math.random() * 9000 + 1000), clienteId: cliente.id, nombreAcomp: nomAcomp, numHabitacion: hab.num, hora: document.getElementById('res-hora').value });
+
+            // Registro automático en Caja si el monto es mayor a 0
+            if (monto > 0) {
+                appState.caja.push({
+                    id: 't_' + Date.now(),
+                    tipo: 'Ingreso',
+                    concepto: `Cobro Adelanto Reserva Hab ${hab.num} (${cliente.nombre}) - ${comprobante}`,
+                    monto: monto,
+                    metodo: metodo,
+                    hora: getHoraActual()
+                });
+            }
+
+            cerrarModalNuevaReserva(); updateUI();
+            alert(`✅ Hab. ${hab.num} BLOQUEADA exitosamente para ${cliente.nombre}.`);
+        }
+
+        // Check-in viniendo de una reserva previa (usa datos guardados)
+        function checkInDeReserva(numHabitacion) {
+            const reservaIndex = appState.reservas.findIndex(r => r.numHabitacion === numHabitacion);
+            if(reservaIndex === -1) return;
+            const reserva = appState.reservas[reservaIndex];
+            const cliente = appState.clientes.find(c => c.id === reserva.clienteId);
+            const hab = appState.habitaciones.find(h => h.num === numHabitacion);
+
+            hab.estado = 'Ocupada';
+            hab.acomp = reserva.nombreAcomp;
+            hab.ingreso = getHoraActual();
+            hab.salida = '12:00';
+            cliente.visitas += 1;
+            appState.reservas.splice(reservaIndex, 1);
+
+            updateUI();
+            mostrarCheckinExitoso(cliente.nombre, hab.num, reserva.nombreAcomp !== '');
+        }
+
+        function mostrarCheckinExitoso(nombre, habNum, tieneAcomp) {
+            document.getElementById('ci-huesped').innerText = nombre;
+            document.getElementById('ci-hab').innerText = habNum;
+            const acompLabel = document.getElementById('ci-acomp');
+            if(tieneAcomp) acompLabel.classList.remove('hidden'); else acompLabel.classList.add('hidden');
+            
+            document.getElementById('modal-checkin').classList.remove('hidden');
+        }
+        function cerrarModalCheckin() { document.getElementById('modal-checkin').classList.add('hidden'); }
+
+        updateUI();
+    </script>
+</body>
+</html>
