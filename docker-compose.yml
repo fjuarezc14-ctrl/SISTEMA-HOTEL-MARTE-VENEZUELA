@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hotel-marte-backend
+    ports:
+      - "3010:3010"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - hotel-data:/app/data
+    environment:
+      - NODE_ENV=development
+      - PORT=3010
+      - DB_PATH=/app/data/hotel.db
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hotel-marte-frontend
+    ports:
+      - "5180:5180"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_PORT=5180
+    depends_on:
+      - backend
+    command: npm run dev
+
+volumes:
+  hotel-data:

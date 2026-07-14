@@ -1,0 +1,10 @@
+# Ignore node_modules in any directory
+**/node_modules/
+**/dist/
+**/*.db
+**/*.db-journal
+**/*.db-shm
+**/*.db-wal
+.git/
+.gitignore
+.vscode/
