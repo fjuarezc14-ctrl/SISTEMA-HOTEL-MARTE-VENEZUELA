@@ -221,7 +221,9 @@ export default function App() {
       {/* SIDEBAR */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all z-40">
         <div className="p-6 flex flex-col items-center justify-center border-b border-slate-800 bg-slate-950/40">
-          <img src="/logo.png" alt="Hotel Marte" className="h-20 w-auto object-contain" />
+          <div className="bg-white p-3 rounded-2xl shadow-inner max-w-[150px] flex items-center justify-center border border-slate-800">
+            <img src="/logo.png" alt="Hotel Marte" className="h-16 w-auto object-contain" />
+          </div>
         </div>
         
         <nav className="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto">
