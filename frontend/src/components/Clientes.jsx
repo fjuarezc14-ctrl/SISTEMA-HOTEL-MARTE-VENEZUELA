@@ -1,19 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function Clientes({ clientes }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredClientes = clientes.filter(c => 
+    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.dni.includes(searchTerm) ||
+    c.tel.includes(searchTerm)
+  );
+
   return (
     <div className="space-y-6 fade-in">
-      <div className="flex justify-between items-end mb-2">
-        <p className="text-slate-500 text-sm">Base de datos de huéspedes frecuentes.</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+          <p className="text-slate-500 text-sm">Base de datos de huéspedes frecuentes.</p>
+        </div>
+        <div className="relative w-full sm:w-80">
+          <input 
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por Nombre, DNI o Celular..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
+          />
+          <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+        </div>
       </div>
       
-      {clientes.length === 0 ? (
-        <div className="bg-white p-12 text-center text-slate-400 rounded-2xl border border-slate-200 text-sm">
-          No hay clientes registrados en el sistema.
+      {filteredClientes.length === 0 ? (
+        <div className="bg-white p-12 text-center text-slate-400 rounded-2xl border border-slate-200 text-sm font-medium">
+          {searchTerm ? 'No se encontraron clientes que coincidan con la búsqueda.' : 'No hay clientes registrados en el sistema.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {clientes.map(c => (
+          {filteredClientes.map(c => (
             <div 
               key={c.id} 
               className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between"
