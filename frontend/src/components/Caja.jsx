@@ -57,8 +57,8 @@ export default function Caja({ caja, onCajaMovimiento }) {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-amber-400 flex items-center gap-4 bg-amber-50/30">
-          <div className="w-14 h-14 rounded-full bg-amber-500 text-slate-900 flex items-center justify-center text-2xl shrink-0">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-[#c5920c] flex items-center gap-4 bg-amber-50/10">
+          <div className="w-14 h-14 rounded-full bg-[#c5920c] text-white flex items-center justify-center text-2xl shrink-0">
             <i className="fa-solid fa-cash-register"></i>
           </div>
           <div>
@@ -121,7 +121,7 @@ export default function Caja({ caja, onCajaMovimiento }) {
         {/* Transaction Register Form */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
           <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">
-            <i className="fa-solid fa-hand-holding-dollar text-amber-500 mr-2"></i> 
+            <i className="fa-solid fa-hand-holding-dollar text-[#c5920c] mr-2"></i> 
             Registrar Operación
           </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -132,7 +132,7 @@ export default function Caja({ caja, onCajaMovimiento }) {
               <select 
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                 required
               >
                 <option value="Ingreso">Ingreso (Cobro / Venta)</option>
@@ -149,7 +149,7 @@ export default function Caja({ caja, onCajaMovimiento }) {
                 value={concepto}
                 onChange={(e) => setConcepto(e.target.value)}
                 placeholder="Ej. Cobro Hospedaje Hab 105" 
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500 bg-white" 
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white" 
                 required
               />
             </div>
@@ -166,7 +166,7 @@ export default function Caja({ caja, onCajaMovimiento }) {
                   placeholder="0.00" 
                   step="0.01" 
                   min="0.1" 
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500 bg-white font-bold" 
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold" 
                   required
                 />
               </div>
@@ -178,7 +178,7 @@ export default function Caja({ caja, onCajaMovimiento }) {
                 <select 
                   value={metodo}
                   onChange={(e) => setMetodo(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                   required
                 >
                   <option value="Efectivo">Efectivo</option>
@@ -190,7 +190,7 @@ export default function Caja({ caja, onCajaMovimiento }) {
             
             <button 
               type="submit" 
-              className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl shadow-md transition-colors text-sm mt-2"
+              className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-3 rounded-xl shadow-md transition-colors text-sm mt-2"
             >
               Procesar Transacción
             </button>

@@ -220,13 +220,8 @@ export default function App() {
     <div className="flex w-full h-full overflow-hidden">
       {/* SIDEBAR */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all z-40">
-        <div className="p-6 flex items-center gap-3 border-b border-slate-800">
-          <div className="bg-amber-500 text-slate-900 p-2 rounded-lg shadow-lg">
-            <i className="fa-solid fa-hotel text-lg"></i>
-          </div>
-          <span className="text-xl font-bold text-white tracking-wide">
-            Hotel<span className="text-amber-500"> Marte</span>
-          </span>
+        <div className="p-6 flex flex-col items-center justify-center border-b border-slate-800 bg-slate-950/40">
+          <img src="/logo.png" alt="Hotel Marte" className="h-20 w-auto object-contain" />
         </div>
         
         <nav className="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto">
@@ -235,7 +230,7 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')} 
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               activeTab === 'dashboard'
-                ? 'bg-amber-500 text-slate-900 shadow-md font-bold'
+                ? 'bg-[#ff331f] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
@@ -246,7 +241,7 @@ export default function App() {
             onClick={() => setActiveTab('habitaciones')} 
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               activeTab === 'habitaciones'
-                ? 'bg-amber-500 text-slate-900 shadow-md font-bold'
+                ? 'bg-[#ff331f] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
@@ -257,7 +252,7 @@ export default function App() {
             onClick={() => setActiveTab('reservas')} 
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               activeTab === 'reservas'
-                ? 'bg-amber-500 text-slate-900 shadow-md font-bold'
+                ? 'bg-[#ff331f] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
@@ -268,7 +263,7 @@ export default function App() {
             onClick={() => setActiveTab('caja')} 
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               activeTab === 'caja'
-                ? 'bg-amber-500 text-slate-900 shadow-md font-bold'
+                ? 'bg-[#ff331f] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
@@ -280,7 +275,7 @@ export default function App() {
             onClick={() => setActiveTab('clientes')} 
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               activeTab === 'clientes'
-                ? 'bg-amber-500 text-slate-900 shadow-md font-bold'
+                ? 'bg-[#ff331f] text-white shadow-md font-bold'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
@@ -309,7 +304,7 @@ export default function App() {
           <div className="flex gap-3">
             <button 
               onClick={() => setIsNuevaReservaOpen(true)}
-              className="bg-amber-500 hover:bg-amber-600 text-slate-900 px-5 py-2.5 rounded-lg font-bold text-sm shadow-md transition-colors flex items-center gap-2"
+              className="bg-[#c5920c] hover:bg-[#b08107] text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-md transition-colors flex items-center gap-2"
             >
               <i className="fa-solid fa-phone"></i> Nueva Reserva
             </button>
@@ -320,7 +315,7 @@ export default function App() {
         <div className="p-8 flex-1">
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff331f]"></div>
             </div>
           ) : (
             <>

@@ -121,7 +121,7 @@ export function AsignarDirectoModal({
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Buscar Titular por Nombre o DNI..." 
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-amber-400 bg-white"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
               />
               <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
             </div>
@@ -212,7 +212,7 @@ export function AsignarDirectoModal({
 
             {/* Payment Section */}
             <div className="border-t border-slate-200 pt-3 mt-4">
-              <p className="text-xs font-bold text-amber-500 uppercase mb-2 flex items-center gap-1">
+              <p className="text-xs font-bold text-[#c5920c] uppercase mb-2 flex items-center gap-1">
                 <i className="fa-solid fa-wallet"></i> Detalle de Cobro Inmediato
               </p>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -226,7 +226,7 @@ export function AsignarDirectoModal({
                     step="0.01" 
                     min="0" 
                     required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                   />
                 </div>
                 <div>
@@ -235,7 +235,7 @@ export function AsignarDirectoModal({
                     value={metodo}
                     onChange={(e) => setMetodo(e.target.value)}
                     required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white font-bold"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
                     <option value="Efectivo">Efectivo</option>
                     <option value="Tarjeta">Tarjeta</option>
@@ -248,7 +248,7 @@ export function AsignarDirectoModal({
                     value={comprobante}
                     onChange={(e) => setComprobante(e.target.value)}
                     required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white font-bold"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
                     <option value="Boleta">Boleta</option>
                     <option value="Factura">Factura</option>
@@ -536,7 +536,7 @@ export function NuevaReservaModal({
 
             {/* Deposit Payment Details */}
             <div className="border-t border-slate-200 pt-3 mt-4">
-              <p className="text-xs font-bold text-amber-500 uppercase mb-2 flex items-center gap-1">
+              <p className="text-xs font-bold text-[#c5920c] uppercase mb-2 flex items-center gap-1">
                 <i className="fa-solid fa-wallet"></i> Pago de Reserva / Adelanto
               </p>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -550,7 +550,7 @@ export function NuevaReservaModal({
                     step="0.01" 
                     min="0" 
                     required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                   />
                 </div>
                 <div>
@@ -559,7 +559,7 @@ export function NuevaReservaModal({
                     value={metodo}
                     onChange={(e) => setMetodo(e.target.value)}
                     required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white font-bold"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
                     <option value="Efectivo">Efectivo</option>
                     <option value="Tarjeta">Tarjeta</option>
@@ -572,7 +572,7 @@ export function NuevaReservaModal({
                     value={comprobante}
                     onChange={(e) => setComprobante(e.target.value)}
                     required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-amber-500 bg-white font-bold"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
                     <option value="Boleta">Boleta</option>
                     <option value="Factura">Factura</option>
