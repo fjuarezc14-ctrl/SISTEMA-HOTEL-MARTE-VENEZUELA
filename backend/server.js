@@ -137,7 +137,7 @@ app.post('/api/checkin-directo', async (req, res) => {
   }
 });
 
-// 3. POST /api/reservar - Block a room and save reservation
+// 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
 app.post('/api/reservar', async (req, res) => {
   const { numHabitacion, dni, nombre, tel, nomAcomp, dniAcomp, hora, monto, metodo, comprobante } = req.body;
 
@@ -201,7 +201,7 @@ app.post('/api/reservar', async (req, res) => {
   }
 });
 
-// 4. POST /api/checkin-reserva - Confirm Check-In for an active reservation
+// 4. POST /api/checkin-reserva - Confirma el Check-In para una reserva activa (Fase 3)
 app.post('/api/checkin-reserva', async (req, res) => {
   const { numHabitacion } = req.body;
 
