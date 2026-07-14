@@ -127,5 +127,37 @@ export async function initDb() {
     console.log('Seeding finished successfully.');
   }
 
+  // Sincronizar estados de habitaciones con reservas activas (Autocuración de Consistencia)
+  // 1. Si la habitación está marcada como 'Reservada' pero no tiene reserva activa, cambiarla a 'Libre'
+  await db.run(`
+    UPDATE habitaciones 
+    SET estado = 'Libre', huesped = '' 
+    WHERE estado = 'Reservada' AND num NOT IN (SELECT numHabitacion FROM reservas)
+  `);
+
+  // 2. Si la habitación tiene una reserva activa y está marcada como 'Libre', cambiarla a 'Reservada'
+  const activeReservations = await db.all(`
+    SELECT r.numHabitacion, c.nombre 
+    FROM reservas r 
+    JOIN clientes c ON r.clienteId = c.id
+  `);
+
+  for (const resv of activeReservations) {
+    const parts = resv.nombre.trim().split(/\s+/);
+    let formattedName = '';
+    if (parts.length > 0) {
+      const firstInitial = parts[0][0] ? parts[0][0].toUpperCase() + '.' : '';
+      const rest = parts.slice(1).join(' ');
+      formattedName = `${firstInitial} ${rest}`.trim();
+    }
+    
+    await db.run(
+      `UPDATE habitaciones 
+       SET estado = 'Reservada', huesped = ? 
+       WHERE num = ? AND estado = 'Libre'`,
+      [formattedName, resv.numHabitacion]
+    );
+  }
+
   return db;
 }
