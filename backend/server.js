@@ -283,7 +283,7 @@ app.post('/api/checkout', async (req, res) => {
   }
 });
 
-// 6. POST /api/caja - Manual transaction log (Income / Expense)
+// 6. POST /api/caja - Registro manual de movimientos de caja (Fase 4)
 app.post('/api/caja', async (req, res) => {
   const { tipo, concepto, monto, metodo } = req.body;
 
