@@ -503,30 +503,34 @@ export default function App() {
             </>
           )}
 
-          {user.rol === 'Administrador' && (
+          {(user.rol === 'Administrador' || user.permisos.includes('configuracion')) && (
             <>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Administración</p>
-              <button 
-                onClick={() => setActiveTab('usuarios')} 
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  activeTab === 'usuarios'
-                    ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <i className="fa-solid fa-user-gear w-5"></i> Personal y Roles
-              </button>
+              {user.rol === 'Administrador' && (
+                <button 
+                  onClick={() => setActiveTab('usuarios')} 
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activeTab === 'usuarios'
+                      ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <i className="fa-solid fa-user-gear w-5"></i> Personal y Roles
+                </button>
+              )}
               
-              <button 
-                onClick={() => setActiveTab('configuracion')} 
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  activeTab === 'configuracion'
-                    ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <i className="fa-solid fa-sliders w-5"></i> Catálogo y Tarifas
-              </button>
+              {user.permisos.includes('configuracion') && (
+                <button 
+                  onClick={() => setActiveTab('configuracion')} 
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    activeTab === 'configuracion'
+                      ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <i className="fa-solid fa-sliders w-5"></i> Catálogo y Tarifas
+                </button>
+              )}
             </>
           )}
         </nav>

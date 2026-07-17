@@ -609,10 +609,10 @@ app.get('/api/productos', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/productos - Crear producto (Solo Admin)
+// POST /api/productos - Crear producto (Solo Admin o con permiso)
 app.post('/api/productos', requireAuth, async (req, res) => {
-  if (req.user.rol !== 'Administrador') {
-    return res.status(403).json({ error: 'Acceso denegado. Solo administradores pueden agregar productos.' });
+  if (!req.user.permisos.includes('configuracion')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
   const { nombre, precio_venta, stock } = req.body;
   if (!nombre || precio_venta === undefined) {
@@ -641,10 +641,10 @@ app.post('/api/productos', requireAuth, async (req, res) => {
   }
 });
 
-// PUT /api/productos/:id - Editar stock o precio de producto (Solo Admin)
+// PUT /api/productos/:id - Editar stock o precio de producto (Solo Admin o con permiso)
 app.put('/api/productos/:id', requireAuth, async (req, res) => {
-  if (req.user.rol !== 'Administrador') {
-    return res.status(403).json({ error: 'Acceso denegado.' });
+  if (!req.user.permisos.includes('configuracion')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
   const { id } = req.params;
   const { nombre, precio_venta, stock } = req.body;
@@ -670,10 +670,10 @@ app.put('/api/productos/:id', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/productos/:id - Eliminar producto del catálogo (Solo Admin)
+// DELETE /api/productos/:id - Eliminar producto del catálogo (Solo Admin o con permiso)
 app.delete('/api/productos/:id', requireAuth, async (req, res) => {
-  if (req.user.rol !== 'Administrador') {
-    return res.status(403).json({ error: 'Acceso denegado.' });
+  if (!req.user.permisos.includes('configuracion')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
   const { id } = req.params;
 
@@ -702,10 +702,10 @@ app.get('/api/tarifas', requireAuth, async (req, res) => {
   }
 });
 
-// PUT /api/tarifas/:tipo - Editar tarifa de un tipo de habitación (Solo Admin)
+// PUT /api/tarifas/:tipo - Editar tarifa de un tipo de habitación (Solo Admin o con permiso)
 app.put('/api/tarifas/:tipo', requireAuth, async (req, res) => {
-  if (req.user.rol !== 'Administrador') {
-    return res.status(403).json({ error: 'Acceso denegado.' });
+  if (!req.user.permisos.includes('configuracion')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
   const { tipo } = req.params;
   const { precio_diario } = req.body;

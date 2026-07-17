@@ -174,7 +174,7 @@ export async function initDb() {
         adminPassHash,
         'Administrador Root',
         'Administrador',
-        JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes'])
+        JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion'])
       ]
     );
 
@@ -189,8 +189,13 @@ export async function initDb() {
         JSON.stringify(['habitaciones', 'reservas', 'clientes'])
       ]
     );
-    console.log('Seeding default users finished.');
   }
+
+  // Ensure default admin u_admin always has the full set of permissions including new modules
+  await db.run(
+    "UPDATE usuarios SET permisos = ? WHERE id = 'u_admin'",
+    [JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion'])]
+  );
 
   // Seed tarifas (v2 - Fase 2)
   const countRates = await db.get('SELECT COUNT(*) as count FROM tarifas');

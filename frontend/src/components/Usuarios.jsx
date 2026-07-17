@@ -17,7 +17,8 @@ export default function Usuarios({ token, currentUser }) {
     habitaciones: true,
     reservas: true,
     caja: false,
-    clientes: true
+    clientes: true,
+    configuracion: false
   });
 
   const fetchUsers = async () => {
@@ -53,7 +54,8 @@ export default function Usuarios({ token, currentUser }) {
       habitaciones: true,
       reservas: true,
       caja: false,
-      clientes: true
+      clientes: true,
+      configuracion: false
     });
     setIsModalOpen(true);
   };
@@ -75,7 +77,8 @@ export default function Usuarios({ token, currentUser }) {
       habitaciones: false,
       reservas: false,
       caja: false,
-      clientes: false
+      clientes: false,
+      configuracion: false
     };
     if (user.permisos && Array.isArray(user.permisos)) {
       user.permisos.forEach(p => {
@@ -219,7 +222,8 @@ export default function Usuarios({ token, currentUser }) {
                           habitaciones: 'Habitaciones',
                           reservas: 'Reservas',
                           caja: 'Caja',
-                          clientes: 'Clientes'
+                          clientes: 'Clientes',
+                          configuracion: 'Catálogo'
                         };
                         return (
                           <span key={p} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg font-bold border border-blue-100">
@@ -376,6 +380,15 @@ export default function Usuarios({ token, currentUser }) {
                       className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
                     />
                     Directorio de Clientes VIP (CRM)
+                  </label>
+                  <label className="flex items-center gap-3 chk-label cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={permisos.configuracion}
+                      onChange={() => handlePermissionChange('configuracion')}
+                      className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
+                    />
+                    Catálogo y Tarifas
                   </label>
                 </div>
               </div>
