@@ -80,7 +80,7 @@ export default function App() {
 
   // Handle Login form submission (v2 - Fase 1)
   const handleLoginSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setLoginError('');
     try {
       const res = await fetch('/api/auth/login', {
@@ -359,7 +359,7 @@ export default function App() {
             </div>
           </div>
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Usuario</label>
               <div className="relative">
@@ -371,6 +371,8 @@ export default function App() {
                   value={loginUsername}
                   onChange={(e) => setLoginUsername(e.target.value)}
                   placeholder="Ingrese su usuario"
+                  autoComplete="off"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold"
                   required
                 />
@@ -388,6 +390,8 @@ export default function App() {
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="new-password"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold"
                   required
                 />
@@ -401,12 +405,13 @@ export default function App() {
             )}
 
             <button 
-              type="submit"
+              type="button"
+              onClick={() => handleLoginSubmit()}
               className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-black py-3 rounded-xl text-xs shadow-md transition-all uppercase tracking-widest mt-2"
             >
               Iniciar Sesión
             </button>
-          </form>
+          </div>
         </div>
       </div>
     );
