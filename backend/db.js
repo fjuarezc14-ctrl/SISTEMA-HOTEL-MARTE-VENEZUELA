@@ -72,6 +72,18 @@ export async function initDb() {
       rol TEXT NOT NULL,
       permisos TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS productos (
+      id TEXT PRIMARY KEY,
+      nombre TEXT UNIQUE NOT NULL,
+      precio_venta REAL NOT NULL,
+      stock INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS tarifas (
+      tipo TEXT PRIMARY KEY,
+      precio_diario REAL NOT NULL
+    );
   `);
 
   // Seed data if empty
@@ -178,6 +190,29 @@ export async function initDb() {
       ]
     );
     console.log('Seeding default users finished.');
+  }
+
+  // Seed tarifas (v2 - Fase 2)
+  const countRates = await db.get('SELECT COUNT(*) as count FROM tarifas');
+  if (countRates.count === 0) {
+    console.log('Seeding default room rates...');
+    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Simple', 80.00)");
+    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Doble', 120.00)");
+    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Matrimonial', 150.00)");
+    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Suite', 250.00)");
+    console.log('Seeding default room rates finished.');
+  }
+
+  // Seed productos (v2 - Fase 2)
+  const countProducts = await db.get('SELECT COUNT(*) as count FROM productos');
+  if (countProducts.count === 0) {
+    console.log('Seeding default product catalog...');
+    await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p1', 'Agua Mineral 500ml', 3.00, 50)");
+    await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p2', 'Gaseosa Coca-Cola 350ml', 4.50, 40)");
+    await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p3', 'Cerveza Pilsen Callao 350ml', 7.00, 30)");
+    await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p4', 'Papas Fritas Lays Clásica', 4.00, 25)");
+    await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p5', 'Snack Frito Lays Queso', 4.00, 20)");
+    console.log('Seeding default product catalog finished.');
   }
 
   // Sincronizar estados de habitaciones con reservas activas (Autocuración de Consistencia)

@@ -5,6 +5,7 @@ import Reservas from './components/Reservas';
 import Caja from './components/Caja';
 import Clientes from './components/Clientes';
 import Usuarios from './components/Usuarios';
+import Configuracion from './components/Configuracion';
 import { 
   AsignarDirectoModal, 
   NuevaReservaModal, 
@@ -58,7 +59,9 @@ export default function App() {
     reservas: [],
     clientes: [],
     caja: [],
-    consumos: []
+    consumos: [],
+    productos: [],
+    tarifas: []
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
@@ -513,6 +516,17 @@ export default function App() {
               >
                 <i className="fa-solid fa-user-gear w-5"></i> Personal y Roles
               </button>
+              
+              <button 
+                onClick={() => setActiveTab('configuracion')} 
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  activeTab === 'configuracion'
+                    ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <i className="fa-solid fa-sliders w-5"></i> Catálogo y Tarifas
+              </button>
             </>
           )}
         </nav>
@@ -599,6 +613,13 @@ export default function App() {
                 <Usuarios 
                   token={token}
                   currentUser={user}
+                />
+              )}
+              {activeTab === 'configuracion' && user.rol === 'Administrador' && (
+                <Configuracion 
+                  token={token}
+                  appState={appState}
+                  onStateChange={fetchState}
                 />
               )}
             </>

@@ -252,8 +252,10 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const clientes = await db.all('SELECT * FROM clientes');
     const caja = await db.all('SELECT * FROM caja');
     const consumos = await db.all('SELECT * FROM consumos');
+    const productos = await db.all('SELECT * FROM productos');
+    const tarifas = await db.all('SELECT * FROM tarifas');
 
-    res.json({ habitaciones, reservas, clientes, caja, consumos });
+    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas });
   } catch (error) {
     console.error('Error fetching state:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -589,6 +591,141 @@ app.delete('/api/consumos/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting consumo:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ====================================================
+// ENDPOINTS: INVENTARIO / CATÁLOGO Y TARIFAS (v2 - Fase 2)
+// ====================================================
+
+// GET /api/productos - Listar productos (con auth)
+app.get('/api/productos', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM productos ORDER BY nombre ASC');
+    res.json(list);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al listar productos del catálogo.' });
+  }
+});
+
+// POST /api/productos - Crear producto (Solo Admin)
+app.post('/api/productos', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado. Solo administradores pueden agregar productos.' });
+  }
+  const { nombre, precio_venta, stock } = req.body;
+  if (!nombre || precio_venta === undefined) {
+    return res.status(400).json({ error: 'Nombre y precio de venta son obligatorios.' });
+  }
+
+  try {
+    const existing = await db.get('SELECT id FROM productos WHERE nombre = ?', [nombre.trim()]);
+    if (existing) {
+      return res.status(400).json({ error: 'Ya existe un producto con este nombre.' });
+    }
+
+    const id = 'p_' + Date.now();
+    const precio = parseFloat(precio_venta) || 0;
+    const stk = parseInt(stock) || 0;
+
+    await db.run(
+      'INSERT INTO productos (id, nombre, precio_venta, stock) VALUES (?, ?, ?, ?)',
+      [id, nombre.trim(), precio, stk]
+    );
+
+    res.json({ success: true, message: 'Producto agregado al catálogo.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al agregar producto.' });
+  }
+});
+
+// PUT /api/productos/:id - Editar stock o precio de producto (Solo Admin)
+app.put('/api/productos/:id', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { id } = req.params;
+  const { nombre, precio_venta, stock } = req.body;
+
+  try {
+    const item = await db.get('SELECT id FROM productos WHERE id = ?', [id]);
+    if (!item) {
+      return res.status(404).json({ error: 'Producto no encontrado.' });
+    }
+
+    const precio = parseFloat(precio_venta);
+    const stk = parseInt(stock);
+
+    await db.run(
+      'UPDATE productos SET nombre = ?, precio_venta = ?, stock = ? WHERE id = ?',
+      [nombre.trim(), precio, stk, id]
+    );
+
+    res.json({ success: true, message: 'Producto actualizado.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar producto.' });
+  }
+});
+
+// DELETE /api/productos/:id - Eliminar producto del catálogo (Solo Admin)
+app.delete('/api/productos/:id', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { id } = req.params;
+
+  try {
+    const item = await db.get('SELECT id FROM productos WHERE id = ?', [id]);
+    if (!item) {
+      return res.status(404).json({ error: 'Producto no encontrado.' });
+    }
+
+    await db.run('DELETE FROM productos WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Producto eliminado del catálogo.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar producto.' });
+  }
+});
+
+// GET /api/tarifas - Listar tarifas de habitación (con auth)
+app.get('/api/tarifas', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM tarifas');
+    res.json(list);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener tarifas.' });
+  }
+});
+
+// PUT /api/tarifas/:tipo - Editar tarifa de un tipo de habitación (Solo Admin)
+app.put('/api/tarifas/:tipo', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { tipo } = req.params;
+  const { precio_diario } = req.body;
+
+  try {
+    const rate = await db.get('SELECT tipo FROM tarifas WHERE tipo = ?', [tipo]);
+    if (!rate) {
+      return res.status(404).json({ error: 'Tipo de tarifa no encontrada.' });
+    }
+
+    const precio = parseFloat(precio_diario);
+    if (isNaN(precio) || precio <= 0) {
+      return res.status(400).json({ error: 'Precio diario inválido.' });
+    }
+
+    await db.run('UPDATE tarifas SET precio_diario = ? WHERE tipo = ?', [precio, tipo]);
+    res.json({ success: true, message: `Tarifa de habitación ${tipo} actualizada a S/ ${precio.toFixed(2)}.` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar tarifa.' });
   }
 });
 
