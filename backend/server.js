@@ -2,7 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { initDb } from './db.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'superSecretMarteHotel2026';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,8 +45,184 @@ function formatGuestName(fullName) {
   return `${firstInitial} ${rest}`.trim();
 }
 
+// ====================================================
+// SEGURIDAD Y AUTH MIDDLEWARE (v2 - Fase 1)
+// ====================================================
+const requireAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No autorizado. Falta token.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Validate if user exists in database (Immediate session revocation on user deletion)
+    const user = await db.get('SELECT id, username, nombre, rol, permisos FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario no encontrado o sesión revocada.' });
+    }
+    
+    req.user = user;
+    req.user.permisos = JSON.parse(user.permisos || '[]');
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Token inválido o expirado.' });
+  }
+};
+
+// POST /api/auth/login - Autenticar usuario y firmar token
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Debe ingresar usuario y contraseña.' });
+  }
+
+  try {
+    const user = await db.get('SELECT * FROM usuarios WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+    }
+
+    const isValidPassword = bcrypt.compareSync(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '8h' });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        nombre: user.nombre,
+        rol: user.rol,
+        permisos: JSON.parse(user.permisos || '[]')
+      }
+    });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// GET /api/usuarios - Listar usuarios (Solo Admin)
+app.get('/api/usuarios', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Administrador.' });
+  }
+  try {
+    const users = await db.all('SELECT id, username, nombre, rol, permisos FROM usuarios');
+    const parsedUsers = users.map(u => ({
+      ...u,
+      permisos: JSON.parse(u.permisos || '[]')
+    }));
+    res.json(parsedUsers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al listar usuarios' });
+  }
+});
+
+// POST /api/usuarios - Crear usuario (Solo Admin)
+app.post('/api/usuarios', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { username, password, nombre, rol, permisos } = req.body;
+  if (!username || !password || !nombre || !rol || !permisos) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+  }
+
+  try {
+    const existing = await db.get('SELECT id FROM usuarios WHERE username = ?', [username]);
+    if (existing) {
+      return res.status(400).json({ error: 'El nombre de usuario ya está registrado.' });
+    }
+
+    const id = 'u_' + Date.now();
+    const hash = bcrypt.hashSync(password, 10);
+    const permsStr = JSON.stringify(permisos);
+
+    await db.run(
+      'INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, username, hash, nombre, rol, permsStr]
+    );
+
+    res.json({ success: true, message: 'Usuario creado correctamente.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al crear usuario' });
+  }
+});
+
+// PUT /api/usuarios/:id - Editar permisos y datos de usuario (Solo Admin)
+app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { id } = req.params;
+  const { nombre, rol, permisos, password } = req.body;
+
+  if (id === 'u_admin') {
+    return res.status(400).json({ error: 'El administrador por defecto es inmutable y no puede modificarse.' });
+  }
+
+  try {
+    const user = await db.get('SELECT id FROM usuarios WHERE id = ?', [id]);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    if (password) {
+      const hash = bcrypt.hashSync(password, 10);
+      await db.run(
+        'UPDATE usuarios SET nombre = ?, rol = ?, permisos = ?, password_hash = ? WHERE id = ?',
+        [nombre, rol, JSON.stringify(permisos), hash, id]
+      );
+    } else {
+      await db.run(
+        'UPDATE usuarios SET nombre = ?, rol = ?, permisos = ? WHERE id = ?',
+        [nombre, rol, JSON.stringify(permisos), id]
+      );
+    }
+
+    res.json({ success: true, message: 'Usuario actualizado correctamente.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
+
+// DELETE /api/usuarios/:id - Eliminar usuario (Solo Admin - Cierre de sesion inmediato en todos los disp.)
+app.delete('/api/usuarios/:id', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { id } = req.params;
+
+  if (id === 'u_admin') {
+    return res.status(400).json({ error: 'El administrador por defecto es inmutable y no puede eliminarse.' });
+  }
+
+  try {
+    const user = await db.get('SELECT id FROM usuarios WHERE id = ?', [id]);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    await db.run('DELETE FROM usuarios WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Usuario eliminado correctamente. Todas sus sesiones han sido revocadas.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar usuario' });
+  }
+});
+
 // 1. GET /api/state - Fetch the entire application state
-app.get('/api/state', async (req, res) => {
+app.get('/api/state', requireAuth, async (req, res) => {
   try {
     const habitaciones = await db.all('SELECT * FROM habitaciones');
     
@@ -81,7 +261,7 @@ app.get('/api/state', async (req, res) => {
 });
 
 // 2. POST /api/checkin-directo - Process immediate walk-in check-in
-app.post('/api/checkin-directo', async (req, res) => {
+app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   const { dni, nombre, tel, numHabitacion, nomAcomp, dniAcomp, monto, metodo, comprobante } = req.body;
 
   if (!dni || !nombre || !tel || !numHabitacion) {
@@ -139,7 +319,7 @@ app.post('/api/checkin-directo', async (req, res) => {
 });
 
 // 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
-app.post('/api/reservar', async (req, res) => {
+app.post('/api/reservar', requireAuth, async (req, res) => {
   const { numHabitacion, dni, nombre, tel, nomAcomp, dniAcomp, hora, monto, metodo, comprobante } = req.body;
 
   if (!numHabitacion || !dni || !nombre || !tel || !hora) {
@@ -203,7 +383,7 @@ app.post('/api/reservar', async (req, res) => {
 });
 
 // 4. POST /api/checkin-reserva - Confirma el Check-In para una reserva activa (Fase 3)
-app.post('/api/checkin-reserva', async (req, res) => {
+app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
   const { numHabitacion } = req.body;
 
   if (!numHabitacion) {
@@ -239,7 +419,7 @@ app.post('/api/checkin-reserva', async (req, res) => {
 });
 
 // 5. POST /api/checkout - Procesar check-out de la habitación (Fase 6)
-app.post('/api/checkout', async (req, res) => {
+app.post('/api/checkout', requireAuth, async (req, res) => {
   const { numHabitacion, penalidad, detallePenalidad, montoConsumos, montoHabitacion, metodoPago } = req.body;
 
   if (!numHabitacion) {
@@ -325,7 +505,7 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 // 6. POST /api/caja - Registro manual de movimientos de caja (Fase 4)
-app.post('/api/caja', async (req, res) => {
+app.post('/api/caja', requireAuth, async (req, res) => {
   const { tipo, concepto, monto, metodo } = req.body;
 
   if (!tipo || !concepto || !monto || !metodo) {
@@ -347,7 +527,7 @@ app.post('/api/caja', async (req, res) => {
 });
 
 // 7. POST /api/limpieza-terminada - Change room status from Limpieza to Libre
-app.post('/api/limpieza-terminada', async (req, res) => {
+app.post('/api/limpieza-terminada', requireAuth, async (req, res) => {
   const { numHabitacion } = req.body;
 
   if (!numHabitacion) {
@@ -364,7 +544,7 @@ app.post('/api/limpieza-terminada', async (req, res) => {
 });
 
 // 8. GET /api/consumos/:numHabitacion - Listar consumos de una habitación (Fase 5)
-app.get('/api/consumos/:numHabitacion', async (req, res) => {
+app.get('/api/consumos/:numHabitacion', requireAuth, async (req, res) => {
   const { numHabitacion } = req.params;
   try {
     const list = await db.all('SELECT * FROM consumos WHERE numHabitacion = ?', [numHabitacion]);
@@ -376,7 +556,7 @@ app.get('/api/consumos/:numHabitacion', async (req, res) => {
 });
 
 // 9. POST /api/consumos - Agregar un consumo a una habitación (Fase 5)
-app.post('/api/consumos', async (req, res) => {
+app.post('/api/consumos', requireAuth, async (req, res) => {
   const { numHabitacion, concepto, monto, cantidad } = req.body;
   if (!numHabitacion || !concepto || !monto) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
@@ -401,7 +581,7 @@ app.post('/api/consumos', async (req, res) => {
 });
 
 // 10. DELETE /api/consumos/:id - Eliminar un consumo por ID (Fase 5)
-app.delete('/api/consumos/:id', async (req, res) => {
+app.delete('/api/consumos/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
     await db.run('DELETE FROM consumos WHERE id = ?', [id]);

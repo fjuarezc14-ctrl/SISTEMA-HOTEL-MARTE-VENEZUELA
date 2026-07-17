@@ -1,6 +1,7 @@
 import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 
 const dbPath = process.env.DB_PATH || path.resolve('./hotel.db');
 
@@ -61,6 +62,15 @@ export async function initDb() {
       cantidad INTEGER DEFAULT 1,
       fecha TEXT NOT NULL,
       FOREIGN KEY(numHabitacion) REFERENCES habitaciones(num)
+    );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      nombre TEXT NOT NULL,
+      rol TEXT NOT NULL,
+      permisos TEXT NOT NULL
     );
   `);
 
@@ -135,6 +145,39 @@ export async function initDb() {
     }
 
     console.log('Seeding finished successfully.');
+  }
+
+  // Seed usuarios (v2 - Fase 1)
+  const countUsers = await db.get('SELECT COUNT(*) as count FROM usuarios');
+  if (countUsers.count === 0) {
+    console.log('Seeding default users...');
+    const adminPassHash = bcrypt.hashSync('adminMarte2026', 10);
+    const recepPassHash = bcrypt.hashSync('marteRecepcion', 10);
+    
+    await db.run(
+      `INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        'u_admin',
+        'admin',
+        adminPassHash,
+        'Administrador Root',
+        'Administrador',
+        JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes'])
+      ]
+    );
+
+    await db.run(
+      `INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        'u_recep',
+        'recepcion',
+        recepPassHash,
+        'Recepcionista de Turno',
+        'Personal',
+        JSON.stringify(['habitaciones', 'reservas', 'clientes'])
+      ]
+    );
+    console.log('Seeding default users finished.');
   }
 
   // Sincronizar estados de habitaciones con reservas activas (Autocuración de Consistencia)
