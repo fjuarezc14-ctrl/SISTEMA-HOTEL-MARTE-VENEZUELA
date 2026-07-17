@@ -650,6 +650,7 @@ export function CheckinExitosoModal({
 export function CheckoutModal({ 
   isOpen, 
   room, 
+  consumos = [],
   onClose, 
   onSubmit 
 }) {
@@ -658,6 +659,12 @@ export function CheckoutModal({
   const [danos, setDanos] = useState(true);
   const [penalidad, setPenalidad] = useState('');
   const [detallePenalidad, setDetallePenalidad] = useState('');
+  const [montoHabitacion, setMontoHabitacion] = useState('0.00');
+  const [metodoPago, setMetodoPago] = useState('Efectivo');
+
+  // Filter consumptions for this room
+  const roomConsumos = room ? consumos.filter(c => c.numHabitacion === room.num) : [];
+  const totalConsumos = roomConsumos.reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
 
   useEffect(() => {
     if (isOpen) {
@@ -666,6 +673,8 @@ export function CheckoutModal({
       setDanos(true);
       setPenalidad('');
       setDetallePenalidad('');
+      setMontoHabitacion('0.00');
+      setMetodoPago('Efectivo');
     }
   }, [isOpen]);
 
@@ -673,16 +682,16 @@ export function CheckoutModal({
 
   // Penalties are required if any checklist is unchecked
   const showPenalidadInput = !sabanas || !control || !danos;
+  const finalPenalidad = showPenalidadInput ? (parseFloat(penalidad) || 0) : 0;
+  const finalHab = parseFloat(montoHabitacion) || 0;
+  const totalCobrar = finalHab + totalConsumos + finalPenalidad;
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
     
-    let finalPenalidad = 0;
     let finalDetalle = '';
     
     if (showPenalidadInput) {
-      finalPenalidad = parseFloat(penalidad) || 0;
-      
       const details = [];
       if (!sabanas) details.push("Sábanas/Toallas faltantes o sucias");
       if (!control) details.push("Control remoto extraviado");
@@ -696,35 +705,94 @@ export function CheckoutModal({
     onSubmit({
       numHabitacion: room.num,
       penalidad: finalPenalidad,
-      detallePenalidad: finalDetalle
+      detallePenalidad: finalDetalle,
+      montoConsumos: totalConsumos,
+      montoHabitacion: finalHab,
+      metodoPago
     });
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in flex flex-col">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh] overflow-y-auto">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
-            <i className="fa-solid fa-person-walking-arrow-right text-rose-500 mr-2"></i> Procesar Check-Out
+            <i className="fa-solid fa-person-walking-arrow-right text-rose-500 mr-2"></i> Liquidación y Check-Out
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
 
-        <div className="text-center mb-5">
+        <div className="text-center mb-5 shrink-0">
           <p className="text-xs font-bold text-slate-400 uppercase mb-1">Habitación / Titular</p>
           <div className="text-2xl font-black text-slate-800 mb-1">{room.num}</div>
           <p className="text-sm font-bold text-blue-600">{room.huesped}</p>
         </div>
 
-        <form onSubmit={handleFormSubmit}>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+        <form onSubmit={handleFormSubmit} className="space-y-4 flex-1">
+          {/* Billing breakdown */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
-              Checklist de Inspección
+              Detalle de Cuenta a Cobrar
             </p>
-            <div className="space-y-3 text-sm font-bold text-slate-700">
-              <label className="flex items-center gap-3 chk-label">
+            <div className="space-y-2 text-xs font-bold text-slate-600">
+              <div className="flex justify-between items-center">
+                <span>Saldo Pendiente Hospedaje:</span>
+                <div className="flex items-center gap-1">
+                  <span>S/</span>
+                  <input 
+                    type="number"
+                    value={montoHabitacion}
+                    onChange={(e) => setMontoHabitacion(e.target.value)}
+                    min="0"
+                    step="1.00"
+                    className="w-20 px-2 py-1 rounded border border-slate-300 text-center font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center border-t border-slate-100 pt-2">
+                <span>Consumos Extras Cargados:</span>
+                <span className="text-slate-800">S/ {totalConsumos.toFixed(2)}</span>
+              </div>
+
+              {showPenalidadInput && (
+                <div className="flex justify-between items-center text-rose-600 border-t border-slate-100 pt-2">
+                  <span>Penalidad Checklist:</span>
+                  <span>S/ {finalPenalidad.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center text-sm font-black text-slate-800 border-t-2 border-dashed border-slate-200 pt-2.5">
+                <span>TOTAL A COBRAR EN CAJA:</span>
+                <span className="text-green-600 text-base">S/ {totalCobrar.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Method selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Método de Pago para Liquidación</label>
+            <select 
+              value={metodoPago}
+              onChange={(e) => setMetodoPago(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+              required
+            >
+              <option value="Efectivo">Efectivo</option>
+              <option value="Tarjeta">Tarjeta (Crédito/Débito)</option>
+              <option value="Transferencia">Transferencia / Yape</option>
+            </select>
+          </div>
+
+          {/* Inspection Checklist */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+              Checklist de Inspección de Salida
+            </p>
+            <div className="space-y-3 text-xs font-bold text-slate-700">
+              <label className="flex items-center gap-3 chk-label cursor-pointer">
                 <input 
                   type="checkbox" 
                   checked={sabanas} 
@@ -733,7 +801,7 @@ export function CheckoutModal({
                 />
                 Sábanas y Toallas Limpias/Completas
               </label>
-              <label className="flex items-center gap-3 chk-label">
+              <label className="flex items-center gap-3 chk-label cursor-pointer">
                 <input 
                   type="checkbox" 
                   checked={control} 
@@ -742,7 +810,7 @@ export function CheckoutModal({
                 />
                 Control Remoto (TV / AC) en la Hab.
               </label>
-              <label className="flex items-center gap-3 chk-label">
+              <label className="flex items-center gap-3 chk-label cursor-pointer">
                 <input 
                   type="checkbox" 
                   checked={danos} 
@@ -754,9 +822,9 @@ export function CheckoutModal({
             </div>
           </div>
 
-          {/* Penalty Alerts */}
+          {/* Penalty inputs */}
           {showPenalidadInput && (
-            <div className="mb-4 bg-rose-50 border border-rose-200 p-3 rounded-xl fade-in space-y-2">
+            <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl fade-in space-y-2">
               <label className="block text-xs font-bold text-rose-700 uppercase">
                 <i className="fa-solid fa-triangle-exclamation"></i> Ingrese Monto de Penalidad (S/)
               </label>
@@ -782,15 +850,16 @@ export function CheckoutModal({
 
           <button 
             type="submit" 
-            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors"
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors text-sm"
           >
-            <i className="fa-solid fa-check mr-2"></i> {showPenalidadInput ? 'Aplicar Penalidad y Finalizar' : 'Todo Conforme - Finalizar'}
+            <i className="fa-solid fa-check mr-2"></i> {showPenalidadInput ? 'Aplicar Penalidad y Procesar Salida' : 'Liquidar Cuenta y Procesar Salida'}
           </button>
         </form>
       </div>
     </div>
   );
 }
+
 
 // ==========================================
 // 5. MODAL: DETALLE HABITACIÓN OCUPADA (CON CONSUMOS)

@@ -238,9 +238,9 @@ app.post('/api/checkin-reserva', async (req, res) => {
   }
 });
 
-// 5. POST /api/checkout - Process room checkout
+// 5. POST /api/checkout - Procesar check-out de la habitación (Fase 6)
 app.post('/api/checkout', async (req, res) => {
-  const { numHabitacion, penalidad, detallePenalidad } = req.body;
+  const { numHabitacion, penalidad, detallePenalidad, montoConsumos, montoHabitacion, metodoPago } = req.body;
 
   if (!numHabitacion) {
     return res.status(400).json({ error: 'Falta número de habitación' });
@@ -252,7 +252,10 @@ app.post('/api/checkout', async (req, res) => {
       return res.status(404).json({ error: 'Habitación no encontrada' });
     }
 
-    // Update room status to Limpieza
+    const huespedNombre = room.huesped || 'Huésped';
+    const metodo = metodoPago || 'Efectivo';
+
+    // 1. Update room status to Limpieza
     await db.run(
       `UPDATE habitaciones 
        SET estado = 'Limpieza', huesped = '', acomp = '', ingreso = '', salida = '' 
@@ -260,10 +263,10 @@ app.post('/api/checkout', async (req, res) => {
       [numHabitacion]
     );
 
-    // Register penalty in Caja if penalty > 0
+    // 2. Register penalty in Caja if penalty > 0
     const finalPenalidad = parseFloat(penalidad) || 0;
     if (finalPenalidad > 0) {
-      const transactionId = 't_' + Date.now();
+      const transactionId = 't_pen_' + Date.now();
       await db.run(
         'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
         [
@@ -271,13 +274,50 @@ app.post('/api/checkout', async (req, res) => {
           'Ingreso',
           `Penalidad Check-Out Hab ${numHabitacion} - ${detallePenalidad || 'Incumplimiento de checklist'}`,
           finalPenalidad,
-          'Efectivo',
+          metodo,
           getHoraActual()
         ]
       );
     }
 
-    res.json({ success: true, message: 'Check-Out finalizado correctamente. Habitación enviada a limpieza.' });
+    // 3. Register room balance payment in Caja if > 0
+    const finalHab = parseFloat(montoHabitacion) || 0;
+    if (finalHab > 0) {
+      const transactionId = 't_hab_' + Date.now();
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          transactionId,
+          'Ingreso',
+          `Cobro Saldo Pendiente Hab ${numHabitacion} (${huespedNombre})`,
+          finalHab,
+          metodo,
+          getHoraActual()
+        ]
+      );
+    }
+
+    // 4. Register consumption consolidated payment in Caja if > 0
+    const finalConsumos = parseFloat(montoConsumos) || 0;
+    if (finalConsumos > 0) {
+      const transactionId = 't_cns_' + Date.now();
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          transactionId,
+          'Ingreso',
+          `Cobro Consumos Extras Hab ${numHabitacion} (${huespedNombre})`,
+          finalConsumos,
+          metodo,
+          getHoraActual()
+        ]
+      );
+    }
+
+    // 5. Delete all consumptions of the room
+    await db.run('DELETE FROM consumos WHERE numHabitacion = ?', [numHabitacion]);
+
+    res.json({ success: true, message: 'Check-Out finalizado correctamente. Habitación enviada a limpieza y consumos liquidados.' });
   } catch (error) {
     console.error('Error performing checkout:', error);
     res.status(500).json({ error: 'Internal server error' });

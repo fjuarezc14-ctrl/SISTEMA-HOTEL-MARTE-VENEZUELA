@@ -431,6 +431,7 @@ export default function App() {
       <CheckoutModal 
         isOpen={isCheckoutOpen}
         room={selectedRoom}
+        consumos={appState.consumos}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
       />
