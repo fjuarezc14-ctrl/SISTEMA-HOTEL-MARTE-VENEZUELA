@@ -71,8 +71,9 @@ app.get('/api/state', async (req, res) => {
 
     const clientes = await db.all('SELECT * FROM clientes');
     const caja = await db.all('SELECT * FROM caja');
+    const consumos = await db.all('SELECT * FROM consumos');
 
-    res.json({ habitaciones, reservas, clientes, caja });
+    res.json({ habitaciones, reservas, clientes, caja, consumos });
   } catch (error) {
     console.error('Error fetching state:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -318,6 +319,55 @@ app.post('/api/limpieza-terminada', async (req, res) => {
     res.json({ success: true, message: `Habitación ${numHabitacion} ahora está libre` });
   } catch (error) {
     console.error('Error completing room cleaning:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// 8. GET /api/consumos/:numHabitacion - Listar consumos de una habitación (Fase 5)
+app.get('/api/consumos/:numHabitacion', async (req, res) => {
+  const { numHabitacion } = req.params;
+  try {
+    const list = await db.all('SELECT * FROM consumos WHERE numHabitacion = ?', [numHabitacion]);
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching consumos:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// 9. POST /api/consumos - Agregar un consumo a una habitación (Fase 5)
+app.post('/api/consumos', async (req, res) => {
+  const { numHabitacion, concepto, monto, cantidad } = req.body;
+  if (!numHabitacion || !concepto || !monto) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
+  try {
+    const id = 'cns_' + Date.now();
+    const cant = parseInt(cantidad) || 1;
+    
+    // Obtener la hora actual en formato HH:MM
+    const now = new Date();
+    const fecha = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    await db.run(
+      'INSERT INTO consumos (id, numHabitacion, concepto, monto, cantidad, fecha) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, numHabitacion, concepto.trim(), parseFloat(monto), cant, fecha]
+    );
+    res.json({ success: true, message: 'Consumo registrado correctamente' });
+  } catch (error) {
+    console.error('Error adding consumo:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// 10. DELETE /api/consumos/:id - Eliminar un consumo por ID (Fase 5)
+app.delete('/api/consumos/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.run('DELETE FROM consumos WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Consumo eliminado correctamente' });
+  } catch (error) {
+    console.error('Error deleting consumo:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

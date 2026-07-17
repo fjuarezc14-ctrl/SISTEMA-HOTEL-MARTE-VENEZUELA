@@ -8,7 +8,8 @@ import {
   AsignarDirectoModal, 
   NuevaReservaModal, 
   CheckinExitosoModal, 
-  CheckoutModal 
+  CheckoutModal,
+  DetalleHabitacionOcupadaModal
 } from './components/Modales';
 
 export default function App() {
@@ -16,7 +17,8 @@ export default function App() {
     habitaciones: [],
     reservas: [],
     clientes: [],
-    caja: []
+    caja: [],
+    consumos: []
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
@@ -25,6 +27,7 @@ export default function App() {
   const [isAsignarDirectoOpen, setIsAsignarDirectoOpen] = useState(false);
   const [isNuevaReservaOpen, setIsNuevaReservaOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isDetalleOcupadaOpen, setIsDetalleOcupadaOpen] = useState(false);
   const [isCheckinExitosoOpen, setIsCheckinExitosoOpen] = useState(false);
   
   // Selected entities for modals
@@ -63,7 +66,7 @@ export default function App() {
       setIsAsignarDirectoOpen(true);
     } else if (room.estado === 'Ocupada') {
       setSelectedRoom(room);
-      setIsCheckoutOpen(true);
+      setIsDetalleOcupadaOpen(true);
     } else if (room.estado === 'Reservada') {
       const confirmCheckin = window.confirm(`¿Confirmar Check-In para la reserva de la Habitación ${room.num}?`);
       if (confirmCheckin) {
@@ -198,6 +201,36 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al liberar habitación');
 
+      await fetchState();
+    } catch (error) {
+      alert(`⚠️ Error: ${error.message}`);
+    }
+  };
+
+  // API Call: Register room consumption (Fase 5)
+  const handleConsumoSubmit = async (formData) => {
+    try {
+      const res = await fetch('/api/consumos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al registrar consumo');
+      await fetchState();
+    } catch (error) {
+      alert(`⚠️ Error: ${error.message}`);
+    }
+  };
+
+  // API Call: Delete room consumption (Fase 5)
+  const handleConsumoDelete = async (id) => {
+    try {
+      const res = await fetch(`/api/consumos/${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar consumo');
       await fetchState();
     } catch (error) {
       alert(`⚠️ Error: ${error.message}`);
@@ -380,6 +413,19 @@ export default function App() {
         roomNum={checkinSuccessDetails.numHab}
         tieneAcomp={checkinSuccessDetails.tieneAcomp}
         onClose={() => setIsCheckinExitosoOpen(false)}
+      />
+
+      <DetalleHabitacionOcupadaModal 
+        isOpen={isDetalleOcupadaOpen}
+        room={selectedRoom}
+        consumos={appState.consumos}
+        onClose={() => setIsDetalleOcupadaOpen(false)}
+        onAddConsumo={handleConsumoSubmit}
+        onDeleteConsumo={handleConsumoDelete}
+        onCheckout={(room) => {
+          setIsDetalleOcupadaOpen(false);
+          setIsCheckoutOpen(true);
+        }}
       />
 
       <CheckoutModal 

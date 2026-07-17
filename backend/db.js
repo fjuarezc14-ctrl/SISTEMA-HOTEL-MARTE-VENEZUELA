@@ -52,6 +52,16 @@ export async function initDb() {
       metodo TEXT NOT NULL,
       hora TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS consumos (
+      id TEXT PRIMARY KEY,
+      numHabitacion TEXT NOT NULL,
+      concepto TEXT NOT NULL,
+      monto REAL NOT NULL,
+      cantidad INTEGER DEFAULT 1,
+      fecha TEXT NOT NULL,
+      FOREIGN KEY(numHabitacion) REFERENCES habitaciones(num)
+    );
   `);
 
   // Seed data if empty

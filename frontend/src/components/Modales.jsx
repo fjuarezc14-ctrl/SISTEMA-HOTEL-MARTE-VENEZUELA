@@ -791,3 +791,178 @@ export function CheckoutModal({
     </div>
   );
 }
+
+// ==========================================
+// 5. MODAL: DETALLE HABITACIÓN OCUPADA (CON CONSUMOS)
+// ==========================================
+export function DetalleHabitacionOcupadaModal({
+  isOpen,
+  room,
+  consumos = [],
+  onClose,
+  onAddConsumo,
+  onDeleteConsumo,
+  onCheckout
+}) {
+  const [concepto, setConcepto] = useState('');
+  const [monto, setMonto] = useState('');
+  const [cantidad, setCantidad] = useState(1);
+
+  if (!isOpen || !room) return null;
+
+  const roomConsumos = consumos.filter(c => c.numHabitacion === room.num);
+  const totalConsumos = roomConsumos.reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!concepto.trim() || !monto || parseFloat(monto) <= 0) return;
+
+    onAddConsumo({
+      numHabitacion: room.num,
+      concepto: concepto.trim(),
+      monto: parseFloat(monto),
+      cantidad: parseInt(cantidad) || 1
+    });
+
+    setConcepto('');
+    setMonto('');
+    setCantidad(1);
+  };
+
+  const handleCheckoutClick = () => {
+    onCheckout(room);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4 shrink-0">
+          <h3 className="text-lg font-bold text-slate-800">
+            <i className="fa-solid fa-hotel text-[#c5920c] mr-2"></i> Habitación {room.num} - Detalle de Estadía
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
+            <i className="fa-solid fa-xmark text-xl"></i>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto pr-2 flex-1 space-y-5">
+          {/* Guest Card Info */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Huésped Titular</p>
+            <h4 className="text-lg font-black text-slate-800">{room.huesped}</h4>
+            <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-600 font-semibold">
+              <div><span className="text-slate-400">Tipo Hab:</span> {room.tipo}</div>
+              <div><span className="text-slate-400">Ingreso:</span> {room.ingreso || 'N/A'}</div>
+              {room.acomp && <div className="col-span-2"><span className="text-slate-400">Acompañante:</span> {room.acomp}</div>}
+            </div>
+          </div>
+
+          {/* Consumptions List */}
+          <div>
+            <div className="flex justify-between items-center mb-2 border-b border-slate-100 pb-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                <i className="fa-solid fa-mug-hot text-[#c5920c] mr-1"></i> Consumos y Cargos Extra
+              </p>
+              <span className="bg-[#c5920c] text-white text-xs font-black px-2.5 py-0.5 rounded-lg">
+                Total: S/ {totalConsumos.toFixed(2)}
+              </span>
+            </div>
+
+            {roomConsumos.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                No hay consumos registrados en esta habitación.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {roomConsumos.map(c => (
+                  <div key={c.id} className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                    <div className="flex items-center gap-1.5">
+                      <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">{c.cantidad}x</span>
+                      <span>{c.concepto}</span>
+                      <span className="text-slate-400 font-medium">({c.fecha})</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-800">S/ {(c.monto * c.cantidad).toFixed(2)}</span>
+                      <button 
+                        onClick={() => onDeleteConsumo(c.id)}
+                        className="text-slate-400 hover:text-rose-500 transition-colors"
+                        title="Eliminar cargo"
+                      >
+                        <i className="fa-solid fa-trash-can"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add Consumption Form */}
+          <form onSubmit={handleSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              Registrar Nuevo Cargo
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2">
+                <input 
+                  type="text" 
+                  value={concepto}
+                  onChange={(e) => setConcepto(e.target.value)}
+                  placeholder="Detalle (Ej: Gaseosa, Cerveza, Bar)" 
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
+                  required
+                />
+              </div>
+              <div>
+                <input 
+                  type="number" 
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                  placeholder="Precio S/" 
+                  step="0.10"
+                  min="0.10"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+                  required
+                />
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Cant:</label>
+                <input 
+                  type="number" 
+                  value={cantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
+                  min="1"
+                  className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold text-center"
+                  required
+                />
+              </div>
+              <div className="flex justify-end">
+                <button 
+                  type="submit"
+                  className="bg-[#c5920c] hover:bg-[#b08107] text-white px-4 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors flex items-center gap-1.5 w-full justify-center"
+                >
+                  <i className="fa-solid fa-plus"></i> Agregar
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 mt-4 flex gap-3 shrink-0">
+          <button 
+            onClick={onClose} 
+            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm border border-slate-200"
+          >
+            Cerrar
+          </button>
+          <button 
+            onClick={handleCheckoutClick}
+            className="flex-1 bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-3 rounded-xl transition-colors text-sm shadow-md flex items-center justify-center gap-2"
+          >
+            <i className="fa-solid fa-person-walking-arrow-right"></i> Procesar Check-Out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
