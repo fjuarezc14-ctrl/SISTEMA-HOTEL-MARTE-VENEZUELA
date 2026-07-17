@@ -868,6 +868,7 @@ export function DetalleHabitacionOcupadaModal({
   isOpen,
   room,
   consumos = [],
+  productos = [],
   onClose,
   onAddConsumo,
   onDeleteConsumo,
@@ -876,6 +877,17 @@ export function DetalleHabitacionOcupadaModal({
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
   const [cantidad, setCantidad] = useState(1);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const filteredProducts = productos.filter(p => 
+    p.nombre.toLowerCase().includes(concepto.toLowerCase())
+  );
+
+  const handleSelectProduct = (prod) => {
+    setConcepto(prod.nombre);
+    setMonto(prod.precio_venta.toString());
+    setShowDropdown(false);
+  };
 
   if (!isOpen || !room) return null;
 
@@ -967,20 +979,42 @@ export function DetalleHabitacionOcupadaModal({
           </div>
 
           {/* Add Consumption Form */}
-          <form onSubmit={handleSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+          <form onSubmit={handleSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 relative z-30">
+            {showDropdown && (
+              <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
+            )}
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest relative z-20">
               Registrar Nuevo Cargo
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 relative z-20">
+              <div className="sm:col-span-2 relative">
                 <input 
                   type="text" 
                   value={concepto}
-                  onChange={(e) => setConcepto(e.target.value)}
+                  onChange={(e) => {
+                    setConcepto(e.target.value);
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
                   placeholder="Detalle (Ej: Gaseosa, Cerveza, Bar)" 
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium relative z-30"
                   required
                 />
+                {showDropdown && filteredProducts.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto divide-y divide-slate-100">
+                    {filteredProducts.map(prod => (
+                      <button
+                        key={prod.id}
+                        type="button"
+                        onClick={() => handleSelectProduct(prod)}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 transition-colors flex justify-between items-center font-bold"
+                      >
+                        <span className="text-slate-800">{prod.nombre}</span>
+                        <span className="text-[#c5920c]">S/ {prod.precio_venta.toFixed(2)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <input 

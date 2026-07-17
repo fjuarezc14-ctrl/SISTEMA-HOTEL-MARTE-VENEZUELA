@@ -619,7 +619,7 @@ export default function App() {
                   currentUser={user}
                 />
               )}
-              {activeTab === 'configuracion' && user.rol === 'Administrador' && (
+              {activeTab === 'configuracion' && user.permisos.includes('configuracion') && (
                 <Configuracion 
                   token={token}
                   appState={appState}
@@ -660,6 +660,7 @@ export default function App() {
         isOpen={isDetalleOcupadaOpen}
         room={selectedRoom}
         consumos={appState.consumos}
+        productos={appState.productos}
         onClose={() => setIsDetalleOcupadaOpen(false)}
         onAddConsumo={handleConsumoSubmit}
         onDeleteConsumo={handleConsumoDelete}
