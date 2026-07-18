@@ -611,6 +611,8 @@ export default function App() {
               {activeTab === 'clientes' && user.permisos.includes('clientes') && (
                 <Clientes 
                   clientes={appState.clientes} 
+                  token={token}
+                  onStateChange={fetchState}
                 />
               )}
               {activeTab === 'usuarios' && user.rol === 'Administrador' && (

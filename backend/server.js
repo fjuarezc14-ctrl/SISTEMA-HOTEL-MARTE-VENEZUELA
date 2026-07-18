@@ -729,6 +729,40 @@ app.put('/api/tarifas/:tipo', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/clientes - Registrar un nuevo cliente directamente (CRM) (v2 - Fase 3)
+app.post('/api/clientes', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('clientes')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Clientes.' });
+  }
+
+  const { nombre, dni, tel } = req.body;
+  if (!nombre || !dni) {
+    return res.status(400).json({ error: 'El nombre y el DNI son obligatorios.' });
+  }
+
+  try {
+    const existing = await db.get('SELECT id FROM clientes WHERE dni = ?', [dni.trim()]);
+    if (existing) {
+      return res.status(400).json({ error: 'Ya existe un cliente registrado con este DNI.' });
+    }
+
+    const id = 'c_' + Date.now();
+    await db.run(
+      'INSERT INTO clientes (id, nombre, dni, tel, visitas) VALUES (?, ?, ?, ?, 0)',
+      [id, nombre.trim(), dni.trim(), tel ? tel.trim() : '']
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Cliente registrado correctamente en el CRM.', 
+      cliente: { id, nombre: nombre.trim(), dni: dni.trim(), tel: tel ? tel.trim() : '', visitas: 0 } 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al registrar cliente.' });
+  }
+});
+
 // Serve frontend build in production
 const publicPath = path.join(__dirname, 'public');
 app.use(express.static(publicPath));
