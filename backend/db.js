@@ -159,13 +159,11 @@ export async function initDb() {
     console.log('Seeding finished successfully.');
   }
 
-  // Seed usuarios (v2 - Fase 1)
-  const countUsers = await db.get('SELECT COUNT(*) as count FROM usuarios');
-  if (countUsers.count === 0) {
-    console.log('Seeding default users...');
-    const adminPassHash = bcrypt.hashSync('adminMarte2026', 10);
-    const recepPassHash = bcrypt.hashSync('marteRecepcion', 10);
-    
+  // Seed usuarios (v2 - Fase 1) - Individual self-healing checks
+  const adminPassHash = bcrypt.hashSync('adminMarte2026', 10);
+  const adminUser = await db.get("SELECT id FROM usuarios WHERE username = 'admin'");
+  if (!adminUser) {
+    console.log('Seeding default admin user...');
     await db.run(
       `INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos) VALUES (?, ?, ?, ?, ?, ?)`,
       [
@@ -177,7 +175,15 @@ export async function initDb() {
         JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion'])
       ]
     );
+  } else {
+    // Force-reset root admin password to ensure consistency and resolve lockouts across pulled updates
+    await db.run("UPDATE usuarios SET password_hash = ? WHERE id = 'u_admin'", [adminPassHash]);
+  }
 
+  const recepUser = await db.get("SELECT id FROM usuarios WHERE username = 'recepcion'");
+  if (!recepUser) {
+    console.log('Seeding default reception user...');
+    const recepPassHash = bcrypt.hashSync('marteRecepcion', 10);
     await db.run(
       `INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos) VALUES (?, ?, ?, ?, ?, ?)`,
       [
