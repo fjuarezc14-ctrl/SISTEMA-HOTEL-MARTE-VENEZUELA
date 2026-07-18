@@ -51,6 +51,7 @@ function formatGuestName(fullName) {
 const requireAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('requireAuth failed: missing or invalid authorization header prefix');
     return res.status(401).json({ error: 'No autorizado. Falta token.' });
   }
 
@@ -61,6 +62,7 @@ const requireAuth = async (req, res, next) => {
     // Validate if user exists in database (Immediate session revocation on user deletion)
     const user = await db.get('SELECT id, username, nombre, rol, permisos FROM usuarios WHERE id = ?', [decoded.id]);
     if (!user) {
+      console.log(`requireAuth failed: user ID "${decoded.id}" not found in SQLite database`);
       return res.status(401).json({ error: 'Usuario no encontrado o sesión revocada.' });
     }
     
@@ -68,6 +70,7 @@ const requireAuth = async (req, res, next) => {
     req.user.permisos = JSON.parse(user.permisos || '[]');
     next();
   } catch (error) {
+    console.log('requireAuth failed: jwt.verify error:', error.message);
     return res.status(401).json({ error: 'Token inválido o expirado.' });
   }
 };
