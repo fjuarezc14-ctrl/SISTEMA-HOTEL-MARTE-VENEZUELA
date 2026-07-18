@@ -1,0 +1,37 @@
+SOLICITUDES PARA EL SISTEMA HOTEL MARTE 
+--------------------------------------------------------------------------------------
+Control de acceso--
+
+Los usuarios que son creados por super admin, deben tener el acceso activado, si este acceso es desmarcado por el admin 
+no tendrán acceso al sistema, ya que quieren que el sistema, también les de su reporte de los días y horas que los trabajadores 
+se loguean y mantienen activo su usuario. 
+
+--------------------------------------------------------------------------------------
+
+Medios de pago--
+
+EL admin debe tener el acceso a poder colocar el tipo de cambio de dólar a bolívares y se vea reflejado en los preciso de las habitaciones 
+automáticamente al momento de cambiar este dato. 
+
+los medios de pago que los clientes hacen es (PAGO MOVIL, PUNTO DE VENTA, DIVISAS DOLARES, EFECTIVO BOLIVARES, BYNACES)
+
+---------------------------------------------------------------------------------------
+
+Tipos de Habitaciones 
+
+Martrimonial (agregar el precio en la tarjeta de la habitación en bolívares y dólares 10 USD 4 horas, tener en cuenta que esto va variar cuando el admin agregue el tipo de cambio del dia) que el sistema valide la hora de ingreso y automáticamente calcule las 4 horas para el checkout
+
+y Mini Suit (agregar el precio en la tarjeta de la habitación en bolívares y dólares 14 USD 4 horas, tener en cuenta que esto va variar cuando el admin agregue el tipo de cambio del dia) que el sistema valide la hora de ingreso y automáticamente calcule las 4 horas para el checkout
+
+En caso el cliente quiera un dia completo que se llama PERNOCTA, el usuario debe marcar esta opción y el precio es 20 USD en matrimonial y 24 USD en mini suit) el checkout es a las 11 am si o si.
+
+--------------------------------------------------------------------------------------------
+
+Cuando se hace el check out el personal del hotel debe tener el menú con las opciones de verificación.
+
+darle opciones al admin de agregar todas las opciones que quiere que su personal haga en el checkout y pueda agregar el precio de cada observación
+
+----------------------------------------------------------------------------------------------
+Darle en el menú una opción de ventas de refrescos y productos que tienen en us tienda del hotel para que asi también lleven un control de esas ventas
+---------------------------------------------------------------------------------------------
+
