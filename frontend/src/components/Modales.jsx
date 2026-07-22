@@ -7,49 +7,69 @@ export function AsignarDirectoModal({
   isOpen, 
   room, 
   clientes, 
+  configuracion,
   onClose, 
   onSubmit 
 }) {
-  const [dni, setDni] = useState('');
+  const [ci, setCi] = useState('');
   const [nombre, setNombre] = useState('');
   const [tel, setTel] = useState('');
   const [nomAcomp, setNomAcomp] = useState('');
-  const [dniAcomp, setDniAcomp] = useState('');
-  const [monto, setMonto] = useState('');
-  const [metodo, setMetodo] = useState('Efectivo');
-  const [comprobante, setComprobante] = useState('Boleta');
+  const [ciAcomp, setCiAcomp] = useState('');
+  const [modalidad, setModalidad] = useState('4h');
+  const [esMenor, setEsMenor] = useState(false);
+  const [monto, setMonto] = useState('10');
+  const [metodo, setMetodo] = useState('Efectivo Bolívares');
+  const [comprobante, setComprobante] = useState('Nota de Venta');
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredClientes, setFilteredClientes] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
+
   useEffect(() => {
-    if (isOpen) {
-      // Reset form
-      setDni('');
+    if (isOpen && room) {
+      setCi('');
       setNombre('');
       setTel('');
       setNomAcomp('');
-      setDniAcomp('');
-      setMonto('');
-      setMetodo('Efectivo');
-      setComprobante('Boleta');
+      setCiAcomp('');
+      setModalidad('4h');
+      setEsMenor(false);
+      setMetodo('Efectivo Bolívares');
+      setComprobante('Nota de Venta');
       setSearchQuery('');
       setShowSuggestions(false);
+
+      const basePrice = room.tipo === 'Mini Suite' ? '14' : '10';
+      setMonto(basePrice);
     }
-  }, [isOpen]);
+  }, [isOpen, room]);
+
+  const handleModalidadChange = (mod) => {
+    setModalidad(mod);
+    if (room) {
+      if (mod === 'pernocta') {
+        setMonto(room.tipo === 'Mini Suite' ? '24' : '20');
+      } else {
+        setMonto(room.tipo === 'Mini Suite' ? '14' : '10');
+      }
+    }
+  };
 
   if (!isOpen || !room) return null;
 
-  const hasAcompanante = ['Doble', 'Matrimonial', 'Suite'].includes(room.tipo);
+  const hasAcompanante = ['Doble', 'Matrimonial', 'Mini Suite', 'Suite'].includes(room.tipo);
 
   const handleSearchChange = (val) => {
     setSearchQuery(val);
     if (val.trim().length > 1) {
       const filtered = clientes.filter(c => 
         c.nombre.toLowerCase().includes(val.toLowerCase()) || 
-        c.dni.includes(val)
+        (c.ci && c.ci.includes(val)) ||
+        (c.dni && c.dni.includes(val))
       );
       setFilteredClientes(filtered);
       setShowSuggestions(true);
@@ -60,7 +80,7 @@ export function AsignarDirectoModal({
   };
 
   const selectCliente = (c) => {
-    setDni(c.dni);
+    setCi(c.ci || c.dni || '');
     setNombre(c.nombre);
     setTel(c.tel);
     setShowSuggestions(false);
@@ -71,23 +91,29 @@ export function AsignarDirectoModal({
     e.preventDefault();
     onSubmit({
       numHabitacion: room.num,
-      dni,
-      nombre,
-      tel,
-      nomAcomp: hasAcompanante ? nomAcomp : '',
-      dniAcomp: hasAcompanante ? dniAcomp : '',
+      ci: ci.trim(),
+      dni: ci.trim(),
+      nombre: nombre.trim(),
+      tel: tel.trim(),
+      nomAcomp: hasAcompanante ? nomAcomp.trim() : '',
+      ciAcomp: hasAcompanante ? ciAcomp.trim() : '',
       monto: parseFloat(monto) || 0,
       metodo,
-      comprobante
+      comprobante,
+      modalidad,
+      esMenor
     });
   };
+
+  const montoNum = parseFloat(monto) || 0;
+  const montoVes = (montoNum * tasaUsd).toFixed(2);
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
-            <i className="fa-solid fa-person-walking-luggage text-green-500 mr-2"></i> Asignar al Instante
+            <i className="fa-solid fa-person-walking-luggage text-green-500 mr-2"></i> Asignar al Instante (Walk-In)
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
             <i className="fa-solid fa-xmark text-xl"></i>
@@ -95,20 +121,54 @@ export function AsignarDirectoModal({
         </div>
         
         <div className="overflow-y-auto pr-2 flex-1">
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-center text-green-800 font-bold flex justify-between items-center px-6">
-            <span>Hab. Seleccionada:</span> 
-            <span className="text-2xl font-black">{room.num}</span>
-            <span className="text-xs uppercase bg-green-200 px-2 py-1 rounded">{room.tipo}</span>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-green-800 font-bold flex justify-between items-center px-4">
+            <div>
+              <span className="text-xs text-green-600 block">Habitación</span>
+              <span className="text-2xl font-black">{room.num}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs uppercase bg-green-200 text-green-900 px-2 py-0.5 rounded font-black block">{room.tipo}</span>
+              <span className="text-[10px] text-green-700 font-semibold block mt-0.5">Tasa: 1$ = Bs. {tasaUsd.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Modalidad Selection */}
+          <div className="mb-4">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Modalidad de Hospedaje</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                type="button"
+                onClick={() => handleModalidadChange('4h')}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                  modalidad === '4h' 
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <i className="fa-solid fa-clock mr-1.5"></i> 4 Horas (+4h)
+              </button>
+              <button 
+                type="button"
+                onClick={() => handleModalidadChange('pernocta')}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                  modalidad === 'pernocta' 
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <i className="fa-solid fa-moon mr-1.5"></i> Pernocta (11:00 AM)
+              </button>
+            </div>
           </div>
 
           {/* Intelligent Search */}
           <div className="relative mb-5 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="flex justify-between items-end mb-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase">¿Cliente frecuente?</label>
-              {(dni || nombre || tel) && (
+              <label className="block text-xs font-bold text-slate-500 uppercase">¿Cliente Frecuente?</label>
+              {(ci || nombre || tel) && (
                 <button 
                   type="button" 
-                  onClick={() => { setDni(''); setNombre(''); setTel(''); }} 
+                  onClick={() => { setCi(''); setNombre(''); setTel(''); }} 
                   className="text-[10px] text-blue-500 hover:underline font-bold"
                 >
                   Limpiar datos
@@ -120,21 +180,21 @@ export function AsignarDirectoModal({
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Buscar Titular por Nombre o DNI..." 
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                placeholder="Buscar por Nombre o Cédula (CI)..." 
+                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
               />
-              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
             </div>
             
             {showSuggestions && filteredClientes.length > 0 && (
-              <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto">
+              <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100">
                 {filteredClientes.map(c => (
                   <div 
                     key={c.id} 
                     onClick={() => selectCliente(c)}
-                    className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
+                    className="p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
                   >
-                    <span>{c.nombre} <span className="text-slate-400 font-normal">({c.dni})</span></span>
+                    <span>{c.nombre} <span className="text-slate-400 font-normal">(CI: {c.ci || c.dni})</span></span>
                     <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">{c.visitas} visitas</span>
                   </div>
                 ))}
@@ -145,18 +205,18 @@ export function AsignarDirectoModal({
           <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">DNI Titular</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">CI (Cédula de Identidad)</label>
                 <input 
                   type="text" 
-                  value={dni}
-                  onChange={(e) => setDni(e.target.value)}
+                  value={ci}
+                  onChange={(e) => setCi(e.target.value)}
                   required 
-                  placeholder="Ej. 76543210" 
+                  placeholder="Ej. V-12345678" 
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Titular</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
                 <input 
                   type="text" 
                   value={nombre}
@@ -167,13 +227,13 @@ export function AsignarDirectoModal({
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Celular</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Teléfono / Celular</label>
                 <input 
                   type="text" 
                   value={tel}
                   onChange={(e) => setTel(e.target.value)}
                   required 
-                  placeholder="999888777" 
+                  placeholder="Ej. 0412-1234567" 
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
                 />
               </div>
@@ -182,17 +242,28 @@ export function AsignarDirectoModal({
             {/* Companion section (Conditional) */}
             {hasAcompanante && (
               <div className="border-t border-slate-200 pt-3 mt-4">
-                <p className="text-xs font-bold text-indigo-500 uppercase mb-2 flex items-center gap-1">
-                  <i className="fa-solid fa-user-plus"></i> Datos del Acompañante
-                </p>
-                <div className="grid grid-cols-2 gap-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs font-bold text-indigo-600 uppercase flex items-center gap-1">
+                    <i className="fa-solid fa-user-plus"></i> Datos del Acompañante
+                  </p>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={esMenor}
+                      onChange={(e) => setEsMenor(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                    />
+                    <span className="text-[10px] font-bold text-indigo-700">Es Menor de Edad (Sin recargo)</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3 bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DNI Acompañante</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI Acompañante</label>
                     <input 
                       type="text" 
-                      value={dniAcomp}
-                      onChange={(e) => setDniAcomp(e.target.value)}
-                      placeholder="DNI (Opcional)" 
+                      value={ciAcomp}
+                      onChange={(e) => setCiAcomp(e.target.value)}
+                      placeholder="CI (Opcional)" 
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
                     />
                   </div>
@@ -211,23 +282,26 @@ export function AsignarDirectoModal({
             )}
 
             {/* Payment Section */}
-            <div className="border-t border-slate-200 pt-3 mt-4">
-              <p className="text-xs font-bold text-[#c5920c] uppercase mb-2 flex items-center gap-1">
+            <div className="border-t border-slate-200 pt-3 mt-4 space-y-3">
+              <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
                 <i className="fa-solid fa-wallet"></i> Detalle de Cobro Inmediato
               </p>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto a Cobrar (S/)</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto ($ USD)</label>
                   <input 
                     type="number" 
                     value={monto}
                     onChange={(e) => setMonto(e.target.value)}
                     placeholder="0.00" 
-                    step="0.01" 
+                    step="0.50" 
                     min="0" 
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                   />
+                  <span className="block text-[10px] font-black text-emerald-700 mt-1">
+                    = Bs. {montoVes}
+                  </span>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
@@ -237,33 +311,31 @@ export function AsignarDirectoModal({
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Tarjeta">Tarjeta</option>
-                    <option value="Transferencia">Transferencia / Yape</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Comprobante</label>
-                  <select 
-                    value={comprobante}
-                    onChange={(e) => setComprobante(e.target.value)}
-                    required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
-                  >
-                    <option value="Boleta">Boleta</option>
-                    <option value="Factura">Factura</option>
-                    <option value="Ticket Interno">Ticket Interno</option>
+                    <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Punto de Venta">Punto de Venta</option>
+                    <option value="Divisas Dólares">Divisas Dólares</option>
+                    <option value="Binance">Binance</option>
                   </select>
                 </div>
               </div>
-            </div>
 
-            <button 
-              type="submit" 
-              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors mt-4"
-            >
-              Registrar Ingreso (Check-In)
-            </button>
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={onClose}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md"
+                >
+                  Confirmar Check-In
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       </div>

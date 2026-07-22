@@ -84,7 +84,14 @@ export async function initDb() {
 
     CREATE TABLE IF NOT EXISTS tarifas (
       tipo TEXT PRIMARY KEY,
-      precio_diario REAL NOT NULL
+      precio_4h_usd REAL NOT NULL DEFAULT 0,
+      precio_pernocta_usd REAL NOT NULL DEFAULT 0,
+      precio_hora_extra_usd REAL NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS configuracion (
+      clave TEXT PRIMARY KEY,
+      valor TEXT NOT NULL
     );
   `);
 
@@ -205,16 +212,50 @@ export async function initDb() {
     [JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion'])]
   );
 
-  // Seed tarifas (v2 - Fase 2)
-  const countRates = await db.get('SELECT COUNT(*) as count FROM tarifas');
-  if (countRates.count === 0) {
-    console.log('Seeding default room rates...');
-    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Simple', 80.00)");
-    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Doble', 120.00)");
-    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Matrimonial', 150.00)");
-    await db.run("INSERT INTO tarifas (tipo, precio_diario) VALUES ('Suite', 250.00)");
-    console.log('Seeding default room rates finished.');
+  // Seed configuracion (v3 - Fase 1) - Tasa del Día USD/VES
+  const tasaConfig = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+  if (!tasaConfig) {
+    await db.run("INSERT INTO configuracion (clave, valor) VALUES ('tasa_usd', '50.00')");
   }
+
+  // Migraciones y Upsert para Tarifas Oficiales (v3 - Fase 1)
+  try {
+    await db.run("ALTER TABLE tarifas ADD COLUMN precio_4h_usd REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    await db.run("ALTER TABLE tarifas ADD COLUMN precio_pernocta_usd REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    await db.run("ALTER TABLE tarifas ADD COLUMN precio_hora_extra_usd REAL DEFAULT 0");
+  } catch (e) {}
+
+  await db.run(`
+    INSERT INTO tarifas (tipo, precio_diario, precio_4h_usd, precio_pernocta_usd, precio_hora_extra_usd) 
+    VALUES ('Matrimonial', 10.00, 10.00, 20.00, 2.50)
+    ON CONFLICT(tipo) DO UPDATE SET 
+      precio_4h_usd = 10.00, 
+      precio_pernocta_usd = 20.00, 
+      precio_hora_extra_usd = 2.50
+  `);
+
+  await db.run(`
+    INSERT INTO tarifas (tipo, precio_diario, precio_4h_usd, precio_pernocta_usd, precio_hora_extra_usd) 
+    VALUES ('Mini Suite', 14.00, 14.00, 24.00, 3.00)
+    ON CONFLICT(tipo) DO UPDATE SET 
+      precio_4h_usd = 14.00, 
+      precio_pernocta_usd = 24.00, 
+      precio_hora_extra_usd = 3.00
+  `);
+
+  // Actualizar categorías de habitaciones existentes a los tipos oficiales
+  await db.run("UPDATE habitaciones SET tipo = 'Matrimonial' WHERE tipo IN ('Simple', 'Doble')");
+  await db.run("UPDATE habitaciones SET tipo = 'Mini Suite' WHERE tipo = 'Suite'");
+
+  // Migraciones autocurativas para la tabla clientes (ci)
+  try {
+    await db.run("ALTER TABLE clientes ADD COLUMN ci TEXT");
+  } catch (e) {}
+  await db.run("UPDATE clientes SET ci = dni WHERE ci IS NULL OR ci = ''");
 
   // Seed productos (v2 - Fase 2)
   const countProducts = await db.get('SELECT COUNT(*) as count FROM productos');

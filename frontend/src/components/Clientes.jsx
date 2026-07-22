@@ -6,26 +6,27 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
 
   // Form states for registering a new client
   const [nombre, setNombre] = useState('');
-  const [dni, setDni] = useState('');
+  const [ci, setCi] = useState('');
   const [tel, setTel] = useState('');
 
   const filteredClientes = clientes.filter(c => 
     c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.dni.includes(searchTerm) ||
+    (c.ci && c.ci.includes(searchTerm)) ||
+    (c.dni && c.dni.includes(searchTerm)) ||
     (c.tel && c.tel.includes(searchTerm))
   );
 
   const handleOpenModal = () => {
     setNombre('');
-    setDni('');
+    setCi('');
     setTel('');
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nombre.trim() || !dni.trim()) {
-      alert('⚠️ El nombre y el DNI son obligatorios.');
+    if (!nombre.trim() || !ci.trim()) {
+      alert('⚠️ El nombre y la Cédula (CI) son obligatorios.');
       return;
     }
 
@@ -38,7 +39,8 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
         },
         body: JSON.stringify({
           nombre: nombre.trim(),
-          dni: dni.trim(),
+          dni: ci.trim(),
+          ci: ci.trim(),
           tel: tel.trim()
         })
       });
@@ -58,8 +60,8 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
     <div className="space-y-6 fade-in">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-lg font-black text-slate-800">Clientes Registrados</h2>
-          <p className="text-slate-500 text-xs mt-1">Directorio de huéspedes frecuentes y control CRM.</p>
+          <h2 className="text-lg font-black text-slate-800">Clientes Registrados (CRM)</h2>
+          <p className="text-slate-500 text-xs mt-1">Directorio de huéspedes frecuentes por Cédula de Identidad (CI).</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative w-full sm:w-64">
@@ -67,7 +69,7 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por Nombre, DNI o Celular..."
+              placeholder="Buscar por Nombre, CI o Celular..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
             />
             <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
@@ -102,7 +104,7 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
                       {c.nombre}
                     </h4>
                     <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                      DNI: {c.dni}
+                      CI: {c.ci || c.dni}
                     </p>
                   </div>
                 </div>
@@ -156,12 +158,12 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Documento (DNI / Cédula)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cédula de Identidad (CI)</label>
                 <input 
                   type="text" 
-                  value={dni}
-                  onChange={(e) => setDni(e.target.value)}
-                  placeholder="Ej: 76543210"
+                  value={ci}
+                  onChange={(e) => setCi(e.target.value)}
+                  placeholder="Ej: V-12345678"
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   required
                 />
@@ -173,7 +175,7 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
                   type="text" 
                   value={tel}
                   onChange={(e) => setTel(e.target.value)}
-                  placeholder="Ej: 999888777"
+                  placeholder="Ej: 0412-1234567"
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-semibold"
                 />
               </div>

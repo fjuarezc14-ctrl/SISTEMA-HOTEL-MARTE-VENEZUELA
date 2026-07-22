@@ -61,7 +61,8 @@ export default function App() {
     caja: [],
     consumos: [],
     productos: [],
-    tarifas: []
+    tarifas: [],
+    configuracion: { tasa_usd: '50.00' }
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
@@ -72,6 +73,8 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isDetalleOcupadaOpen, setIsDetalleOcupadaOpen] = useState(false);
   const [isCheckinExitosoOpen, setIsCheckinExitosoOpen] = useState(false);
+  const [isTasaModalOpen, setIsTasaModalOpen] = useState(false);
+  const [tasaInput, setTasaInput] = useState('');
   
   // Selected entities for modals
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -561,7 +564,37 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-55">
         {/* TOPBAR */}
         <header className="bg-white px-8 py-5 flex justify-between items-center shadow-sm shrink-0 border-b border-slate-200 sticky top-0 z-30">
-          <h1 className="text-2xl font-black text-slate-800">{getTabTitle()}</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-black text-slate-800">{getTabTitle()}</h1>
+            
+            {/* Tasa del Día USD/VES Badge */}
+            <div 
+              onClick={() => {
+                if (user.permisos.includes('configuracion')) {
+                  const val = prompt('💡 Ingrese la nueva Tasa de Cambio del Día (1 USD = Bs.):', appState.configuracion?.tasa_usd || '50.00');
+                  if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) {
+                    authFetch('/api/configuracion', {
+                      method: 'PUT',
+                      body: JSON.stringify({ tasa_usd: parseFloat(val) })
+                    }).then(() => fetchState());
+                  }
+                }
+              }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all ${
+                user.permisos.includes('configuracion') 
+                  ? 'cursor-pointer hover:bg-amber-100 bg-amber-50 border-amber-300 text-amber-900 shadow-sm' 
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+              title={user.permisos.includes('configuracion') ? "Haga clic para cambiar la Tasa del Día" : "Tasa de Cambio del Día"}
+            >
+              <i className="fa-solid fa-money-bill-transfer text-emerald-600 font-bold"></i>
+              <span>Tasa del Día: <strong className="text-emerald-700 font-black">1 USD = Bs. {appState.configuracion?.tasa_usd || '50.00'}</strong></span>
+              {user.permisos.includes('configuracion') && (
+                <i className="fa-solid fa-pen text-[10px] text-amber-700 ml-1"></i>
+              )}
+            </div>
+          </div>
+
           <div className="flex gap-3">
             {user.permisos.includes('reservas') && (
               <button 
@@ -641,6 +674,7 @@ export default function App() {
         isOpen={isAsignarDirectoOpen}
         room={selectedRoom}
         clientes={appState.clientes}
+        configuracion={appState.configuracion}
         onClose={() => setIsAsignarDirectoOpen(false)}
         onSubmit={handleCheckinDirectoSubmit}
       />

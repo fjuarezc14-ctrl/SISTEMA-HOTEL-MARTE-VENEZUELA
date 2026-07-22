@@ -261,45 +261,105 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const productos = await db.all('SELECT * FROM productos');
     const tarifas = await db.all('SELECT * FROM tarifas');
 
-    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas });
+    const configuracionList = await db.all('SELECT * FROM configuracion');
+    const configuracion = {};
+    configuracionList.forEach(c => { configuracion[c.clave] = c.valor; });
+
+    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas, configuracion });
   } catch (error) {
     console.error('Error fetching state:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// 2. POST /api/checkin-directo - Process immediate walk-in check-in
-app.post('/api/checkin-directo', requireAuth, async (req, res) => {
-  const { dni, nombre, tel, numHabitacion, nomAcomp, dniAcomp, monto, metodo, comprobante } = req.body;
+// GET /api/configuracion - Obtener la configuración del sistema (Tasa del Día, etc.)
+app.get('/api/configuracion', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM configuracion');
+    const config = {};
+    list.forEach(item => { config[item.clave] = item.valor; });
+    res.json(config);
+  } catch (error) {
+    console.error('Error fetching config:', error);
+    res.status(500).json({ error: 'Error al obtener la configuración.' });
+  }
+});
 
-  if (!dni || !nombre || !tel || !numHabitacion) {
-    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+// PUT /api/configuracion - Actualizar Tasa del Día o parámetros (v3 - Fase 1)
+app.put('/api/configuracion', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere permiso de configuración.' });
+  }
+  const { tasa_usd } = req.body;
+  try {
+    if (tasa_usd !== undefined) {
+      const val = parseFloat(tasa_usd);
+      if (isNaN(val) || val <= 0) {
+        return res.status(400).json({ error: 'La Tasa del Día debe ser un número mayor a cero.' });
+      }
+      await db.run(
+        "INSERT INTO configuracion (clave, valor) VALUES ('tasa_usd', ?) ON CONFLICT(clave) DO UPDATE SET valor = ?",
+        [val.toFixed(2), val.toFixed(2)]
+      );
+    }
+    res.json({ success: true, message: 'Configuración actualizada de forma exitosa.' });
+  } catch (error) {
+    console.error('Error updating config:', error);
+    res.status(500).json({ error: 'Error al actualizar configuración.' });
+  }
+});
+
+// Helper: Calcular hora de salida según modalidad (4 Horas o Pernocta 11:00 AM)
+function calcularHoraSalida(modalidad) {
+  if (modalidad === 'pernocta') {
+    return '11:00 AM (Mañana)';
+  }
+  const now = new Date();
+  const future = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  const hh = String(future.getHours()).padStart(2, '0');
+  const mm = String(future.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+// 2. POST /api/checkin-directo - Process immediate walk-in check-in (v3 - Fase 1)
+app.post('/api/checkin-directo', requireAuth, async (req, res) => {
+  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor } = req.body;
+  const numDoc = (ci || dni || '').trim();
+
+  if (!numDoc || !nombre || !tel || !numHabitacion) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios (CI/Documento, Nombre, Teléfono, Habitación).' });
   }
 
   try {
     // 1. Check if client exists, otherwise create
-    let cliente = await db.get('SELECT * FROM clientes WHERE dni = ?', [dni]);
+    let cliente = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
     const clientId = cliente ? cliente.id : 'c_' + Date.now();
     
     if (!cliente) {
       await db.run(
-        'INSERT INTO clientes (id, nombre, dni, tel, visitas) VALUES (?, ?, ?, ?, ?)',
-        [clientId, nombre.trim(), dni.trim(), tel.trim(), 1]
+        'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas) VALUES (?, ?, ?, ?, ?, ?)',
+        [clientId, nombre.trim(), numDoc, numDoc, tel.trim(), 1]
       );
     } else {
       await db.run(
-        'UPDATE clientes SET visitas = visitas + 1, nombre = ?, tel = ? WHERE id = ?',
-        [nombre.trim(), tel.trim(), clientId]
+        'UPDATE clientes SET visitas = visitas + 1, nombre = ?, tel = ?, ci = ? WHERE id = ?',
+        [nombre.trim(), tel.trim(), numDoc, clientId]
       );
     }
 
-    // 2. Update room status to Ocupada
+    // 2. Calculate Checkout Time (4 Hours vs Pernocta 11:00 AM)
+    const salidaCalculada = calcularHoraSalida(modalidad);
     const formattedName = formatGuestName(nombre);
+    let acompText = nomAcomp ? nomAcomp.trim() : '';
+    if (esMenor) {
+      acompText += ' (Menor de edad - Sin recargo)';
+    }
+
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = '12:00' 
+       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ? 
        WHERE num = ?`,
-      [formattedName, nomAcomp ? nomAcomp.trim() : '', getHoraActual(), numHabitacion]
+      [formattedName, acompText, getHoraActual(), salidaCalculada, numHabitacion]
     );
 
     // 3. Register transaction in Cash register if amount > 0
@@ -311,9 +371,9 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
         [
           transactionId, 
           'Ingreso', 
-          `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante}`, 
+          `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidad === 'pernocta' ? 'Pernocta' : '4 Horas'}] - ${comprobante || 'Sin Comprobante'}`, 
           finalMonto, 
-          metodo, 
+          metodo || 'Efectivo Bolívares', 
           getHoraActual(),
           req.user.id,
           req.user.nombre
@@ -321,7 +381,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: 'Check-in directo registrado correctamente' });
+    res.json({ success: true, message: 'Check-in directo registrado correctamente.' });
   } catch (error) {
     console.error('Error processing walk-in check-in:', error);
     res.status(500).json({ error: 'Internal server error' });
