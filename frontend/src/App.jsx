@@ -605,7 +605,10 @@ export default function App() {
               {activeTab === 'caja' && user.permisos.includes('caja') && (
                 <Caja 
                   caja={appState.caja} 
+                  token={token}
+                  currentUser={user}
                   onCajaMovimiento={handleCajaMovimiento}
+                  onStateChange={fetchState}
                 />
               )}
               {activeTab === 'clientes' && user.permisos.includes('clientes') && (

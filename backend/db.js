@@ -51,7 +51,9 @@ export async function initDb() {
       concepto TEXT NOT NULL,
       monto REAL NOT NULL,
       metodo TEXT NOT NULL,
-      hora TEXT NOT NULL
+      hora TEXT NOT NULL,
+      usuarioId TEXT,
+      usuarioNombre TEXT
     );
 
     CREATE TABLE IF NOT EXISTS consumos (
@@ -257,6 +259,14 @@ export async function initDb() {
       [formattedName, resv.numHabitacion]
     );
   }
+
+  // Migraciones autocurativas para la tabla caja (v2 - Fase 5)
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN usuarioId TEXT");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN usuarioNombre TEXT");
+  } catch (e) { /* Columna ya existe */ }
 
   return db;
 }

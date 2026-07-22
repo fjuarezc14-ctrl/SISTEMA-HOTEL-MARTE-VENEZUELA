@@ -304,14 +304,16 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     if (finalMonto > 0) {
       const transactionId = 't_' + Date.now();
       await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           transactionId, 
           'Ingreso', 
           `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante}`, 
           finalMonto, 
           metodo, 
-          getHoraActual()
+          getHoraActual(),
+          req.user.id,
+          req.user.nombre
         ]
       );
     }
@@ -368,14 +370,16 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
     if (finalMonto > 0) {
       const transactionId = 't_' + Date.now();
       await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           transactionId,
           'Ingreso',
           `Cobro Adelanto Reserva Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante}`,
           finalMonto,
           metodo,
-          getHoraActual()
+          getHoraActual(),
+          req.user.id,
+          req.user.nombre
         ]
       );
     }
@@ -453,14 +457,16 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     if (finalPenalidad > 0) {
       const transactionId = 't_pen_' + Date.now();
       await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           transactionId,
           'Ingreso',
           `Penalidad Check-Out Hab ${numHabitacion} - ${detallePenalidad || 'Incumplimiento de checklist'}`,
           finalPenalidad,
           metodo,
-          getHoraActual()
+          getHoraActual(),
+          req.user.id,
+          req.user.nombre
         ]
       );
     }
@@ -470,14 +476,16 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     if (finalHab > 0) {
       const transactionId = 't_hab_' + Date.now();
       await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           transactionId,
           'Ingreso',
           `Cobro Saldo Pendiente Hab ${numHabitacion} (${huespedNombre})`,
           finalHab,
           metodo,
-          getHoraActual()
+          getHoraActual(),
+          req.user.id,
+          req.user.nombre
         ]
       );
     }
@@ -487,14 +495,16 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     if (finalConsumos > 0) {
       const transactionId = 't_cns_' + Date.now();
       await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           transactionId,
           'Ingreso',
           `Cobro Consumos Extras Hab ${numHabitacion} (${huespedNombre})`,
           finalConsumos,
           metodo,
-          getHoraActual()
+          getHoraActual(),
+          req.user.id,
+          req.user.nombre
         ]
       );
     }
@@ -520,14 +530,42 @@ app.post('/api/caja', requireAuth, async (req, res) => {
   try {
     const transactionId = 't_' + Date.now();
     await db.run(
-      'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)',
-      [transactionId, tipo, concepto.trim(), parseFloat(monto), metodo, getHoraActual()]
+      'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [transactionId, tipo, concepto.trim(), parseFloat(monto), metodo, getHoraActual(), req.user.id, req.user.nombre]
     );
 
     res.json({ success: true, message: 'Movimiento de caja registrado' });
   } catch (error) {
     console.error('Error logging manual transaction:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/caja/cierre-turno - Registrar el resumen del Cierre de Turno por Usuario (v2 - Fase 5)
+app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
+  const { totalEfectivo, totalTarjeta, totalOtros, totalEgresos, saldoNeto } = req.body;
+  try {
+    const transactionId = 't_cierre_' + Date.now();
+    const concepto = `CIERRE DE TURNO (${req.user.nombre}) - Efectivo: S/${parseFloat(totalEfectivo || 0).toFixed(2)}, Tarjeta: S/${parseFloat(totalTarjeta || 0).toFixed(2)}, Egresos: S/${parseFloat(totalEgresos || 0).toFixed(2)}`;
+    
+    await db.run(
+      'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        transactionId,
+        'Cierre',
+        concepto,
+        parseFloat(saldoNeto || 0),
+        'Cierre Turno',
+        getHoraActual(),
+        req.user.id,
+        req.user.nombre
+      ]
+    );
+
+    res.json({ success: true, message: 'Cierre de turno registrado en la caja correctamente.' });
+  } catch (error) {
+    console.error('Error registrando cierre de turno:', error);
+    res.status(500).json({ error: 'Error al registrar el cierre de turno.' });
   }
 });
 
