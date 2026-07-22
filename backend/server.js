@@ -4,7 +4,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 import { initDb } from './db.js';
+
+dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'superSecretMarteHotel2026';
 
