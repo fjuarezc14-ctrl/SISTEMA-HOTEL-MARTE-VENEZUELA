@@ -560,23 +560,46 @@ app.get('/api/consumos/:numHabitacion', requireAuth, async (req, res) => {
   }
 });
 
-// 9. POST /api/consumos - Agregar un consumo a una habitación (Fase 5)
+// 9. POST /api/consumos - Agregar un consumo a una habitación (v2 - Fase 4: Bloqueado por catálogo y descuento de stock)
 app.post('/api/consumos', requireAuth, async (req, res) => {
-  const { numHabitacion, concepto, monto, cantidad } = req.body;
-  if (!numHabitacion || !concepto || !monto) {
+  const { numHabitacion, concepto, monto, cantidad, productoId } = req.body;
+  if (!numHabitacion || !concepto || monto === undefined) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
   try {
-    const id = 'cns_' + Date.now();
     const cant = parseInt(cantidad) || 1;
-    
-    // Obtener la hora actual en formato HH:MM
+    let finalMonto = parseFloat(monto);
+    let catalogProduct = null;
+
+    // Buscar si el consumo pertenece al catálogo de productos
+    if (productoId) {
+      catalogProduct = await db.get('SELECT * FROM productos WHERE id = ?', [productoId]);
+    } else {
+      catalogProduct = await db.get('SELECT * FROM productos WHERE LOWER(nombre) = LOWER(?)', [concepto.trim()]);
+    }
+
+    if (catalogProduct) {
+      // 1. Bloquear al precio de venta oficial del catálogo
+      finalMonto = catalogProduct.precio_venta;
+
+      // 2. Validar disponibilidad de stock
+      if (catalogProduct.stock < cant) {
+        return res.status(400).json({ 
+          error: `Stock insuficiente para "${catalogProduct.nombre}". Quedan ${catalogProduct.stock} unidad(es) en inventario.` 
+        });
+      }
+
+      // 3. Descontar el stock en la base de datos
+      await db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [cant, catalogProduct.id]);
+    }
+
+    const id = 'cns_' + Date.now();
     const now = new Date();
     const fecha = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     
     await db.run(
       'INSERT INTO consumos (id, numHabitacion, concepto, monto, cantidad, fecha) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, numHabitacion, concepto.trim(), parseFloat(monto), cant, fecha]
+      [id, numHabitacion, catalogProduct ? catalogProduct.nombre : concepto.trim(), finalMonto, cant, fecha]
     );
     res.json({ success: true, message: 'Consumo registrado correctamente' });
   } catch (error) {
@@ -585,11 +608,19 @@ app.post('/api/consumos', requireAuth, async (req, res) => {
   }
 });
 
-// 10. DELETE /api/consumos/:id - Eliminar un consumo por ID (Fase 5)
+// 10. DELETE /api/consumos/:id - Eliminar un consumo por ID y devolver stock al catálogo
 app.delete('/api/consumos/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    await db.run('DELETE FROM consumos WHERE id = ?', [id]);
+    const consumo = await db.get('SELECT * FROM consumos WHERE id = ?', [id]);
+    if (consumo) {
+      // Verificar si el consumo pertenecía a un producto del catálogo para devolver el stock
+      const catalogProduct = await db.get('SELECT id FROM productos WHERE LOWER(nombre) = LOWER(?)', [consumo.concepto.trim()]);
+      if (catalogProduct) {
+        await db.run('UPDATE productos SET stock = stock + ? WHERE id = ?', [consumo.cantidad, catalogProduct.id]);
+      }
+      await db.run('DELETE FROM consumos WHERE id = ?', [id]);
+    }
     res.json({ success: true, message: 'Consumo eliminado correctamente' });
   } catch (error) {
     console.error('Error deleting consumo:', error);

@@ -878,15 +878,29 @@ export function DetalleHabitacionOcupadaModal({
   const [monto, setMonto] = useState('');
   const [cantidad, setCantidad] = useState(1);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   const filteredProducts = productos.filter(p => 
     p.nombre.toLowerCase().includes(concepto.toLowerCase())
   );
 
   const handleSelectProduct = (prod) => {
+    setSelectedProduct(prod);
     setConcepto(prod.nombre);
     setMonto(prod.precio_venta.toString());
     setShowDropdown(false);
+  };
+
+  const handleConceptoChange = (val) => {
+    setConcepto(val);
+    setShowDropdown(true);
+    const match = productos.find(p => p.nombre.toLowerCase() === val.trim().toLowerCase());
+    if (match) {
+      setSelectedProduct(match);
+      setMonto(match.precio_venta.toString());
+    } else {
+      setSelectedProduct(null);
+    }
   };
 
   if (!isOpen || !room) return null;
@@ -898,16 +912,23 @@ export function DetalleHabitacionOcupadaModal({
     e.preventDefault();
     if (!concepto.trim() || !monto || parseFloat(monto) <= 0) return;
 
+    if (selectedProduct && selectedProduct.stock < (parseInt(cantidad) || 1)) {
+      alert(`⚠️ Stock insuficiente para "${selectedProduct.nombre}". Solo quedan ${selectedProduct.stock} unidades en inventario.`);
+      return;
+    }
+
     onAddConsumo({
       numHabitacion: room.num,
       concepto: concepto.trim(),
       monto: parseFloat(monto),
-      cantidad: parseInt(cantidad) || 1
+      cantidad: parseInt(cantidad) || 1,
+      productoId: selectedProduct?.id
     });
 
     setConcepto('');
     setMonto('');
     setCantidad(1);
+    setSelectedProduct(null);
   };
 
   const handleCheckoutClick = () => {
@@ -983,18 +1004,22 @@ export function DetalleHabitacionOcupadaModal({
             {showDropdown && (
               <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
             )}
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest relative z-20">
-              Registrar Nuevo Cargo
-            </p>
+            <div className="flex justify-between items-center relative z-20">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Registrar Nuevo Cargo
+              </p>
+              {selectedProduct && (
+                <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">
+                  <i className="fa-solid fa-lock text-[9px] mr-1"></i>Precio Bloqueado por Catálogo
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 relative z-20">
               <div className="sm:col-span-2 relative">
                 <input 
                   type="text" 
                   value={concepto}
-                  onChange={(e) => {
-                    setConcepto(e.target.value);
-                    setShowDropdown(true);
-                  }}
+                  onChange={(e) => handleConceptoChange(e.target.value)}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Detalle (Ej: Gaseosa, Cerveza, Bar)" 
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium relative z-30"
@@ -1009,8 +1034,13 @@ export function DetalleHabitacionOcupadaModal({
                         onClick={() => handleSelectProduct(prod)}
                         className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 transition-colors flex justify-between items-center font-bold"
                       >
-                        <span className="text-slate-800">{prod.nombre}</span>
-                        <span className="text-[#c5920c]">S/ {prod.precio_venta.toFixed(2)}</span>
+                        <div>
+                          <span className="text-slate-800 block">{prod.nombre}</span>
+                          <span className={prod.stock <= 5 ? "text-rose-600 text-[10px] font-black" : "text-slate-400 text-[10px]"}>
+                            Stock: {prod.stock} unidades
+                          </span>
+                        </div>
+                        <span className="text-[#c5920c] font-black">S/ {prod.precio_venta.toFixed(2)}</span>
                       </button>
                     ))}
                   </div>
@@ -1024,7 +1054,11 @@ export function DetalleHabitacionOcupadaModal({
                   placeholder="Precio S/" 
                   step="0.10"
                   min="0.10"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+                  readOnly={!!selectedProduct}
+                  title={selectedProduct ? "El precio está fijado por el catálogo de productos" : ""}
+                  className={`w-full px-3 py-2 rounded-lg border text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-bold ${
+                    selectedProduct ? 'bg-slate-100 text-slate-600 border-slate-300 cursor-not-allowed' : 'bg-white border-slate-300'
+                  }`}
                   required
                 />
               </div>
@@ -1038,6 +1072,11 @@ export function DetalleHabitacionOcupadaModal({
                   className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold text-center"
                   required
                 />
+                {selectedProduct && (
+                  <span className="text-[10px] text-slate-400 font-bold ml-1">
+                    (Disp: {selectedProduct.stock})
+                  </span>
+                )}
               </div>
               <div className="flex justify-end">
                 <button 
