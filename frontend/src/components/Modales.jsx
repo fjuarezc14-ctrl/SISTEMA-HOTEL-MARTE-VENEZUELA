@@ -344,60 +344,79 @@ export function AsignarDirectoModal({
 }
 
 // ==========================================
-// 2. MODAL: NUEVA RESERVA
+// 2. MODAL: NUEVA RESERVA (v3 - Fase 2)
 // ==========================================
 export function NuevaReservaModal({ 
   isOpen, 
   habitaciones, 
   clientes, 
+  configuracion,
+  tarifas,
   onClose, 
   onSubmit 
 }) {
   const [selectedHabNum, setSelectedHabNum] = useState('');
   const [selectedHabTipo, setSelectedHabTipo] = useState('');
-  const [dni, setDni] = useState('');
+  const [ci, setCi] = useState('');
   const [nombre, setNombre] = useState('');
   const [tel, setTel] = useState('');
   const [hora, setHora] = useState('');
   const [nomAcomp, setNomAcomp] = useState('');
-  const [dniAcomp, setDniAcomp] = useState('');
+  const [ciAcomp, setCiAcomp] = useState('');
   const [monto, setMonto] = useState('');
-  const [metodo, setMetodo] = useState('Efectivo');
-  const [comprobante, setComprobante] = useState('Boleta');
+  const [metodo, setMetodo] = useState('Efectivo Bolívares');
+  const [comprobante, setComprobante] = useState('Nota de Venta');
+  const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredClientes, setFilteredClientes] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Filter free rooms
-  const freeRooms = habitaciones.filter(h => h.estado === 'Libre');
+  const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
+
+  // Filter free rooms by category
+  const freeRooms = habitaciones.filter(h => {
+    if (h.estado !== 'Libre') return false;
+    if (categoriaFiltro === 'Todas') return true;
+    return h.tipo === categoriaFiltro;
+  });
 
   useEffect(() => {
     if (isOpen) {
       setSelectedHabNum('');
       setSelectedHabTipo('');
-      setDni('');
+      setCi('');
       setNombre('');
       setTel('');
+      setNomAcomp('');
+      setCiAcomp('');
+      setMonto('');
+      setMetodo('Efectivo Bolívares');
+      setComprobante('Nota de Venta');
+      setSearchQuery('');
+      setCategoriaFiltro('Todas');
+      setShowSuggestions(false);
+      
       // Set current time as default
       const now = new Date();
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
       setHora(`${hh}:${mm}`);
-      setNomAcomp('');
-      setDniAcomp('');
-      setMonto('');
-      setMetodo('Efectivo');
-      setComprobante('Boleta');
-      setSearchQuery('');
-      setShowSuggestions(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const hasAcompanante = ['Doble', 'Matrimonial', 'Suite'].includes(selectedHabTipo);
+  const hasAcompanante = ['Doble', 'Matrimonial', 'Mini Suite', 'Suite'].includes(selectedHabTipo);
+
+  const getPernoctaPrice = (roomType) => {
+    const tarifa = tarifas?.find(t => t.tipo === roomType);
+    if (tarifa) {
+      return parseFloat(tarifa.precio_pernocta_usd || tarifa.precio_diario || 20);
+    }
+    return roomType === 'Mini Suite' ? 24 : 20;
+  };
 
   const selectRoom = (num, tipo) => {
     setSelectedHabNum(num);
@@ -409,7 +428,8 @@ export function NuevaReservaModal({
     if (val.trim().length > 1) {
       const filtered = clientes.filter(c => 
         c.nombre.toLowerCase().includes(val.toLowerCase()) || 
-        c.dni.includes(val)
+        (c.ci && c.ci.includes(val)) ||
+        (c.dni && c.dni.includes(val))
       );
       setFilteredClientes(filtered);
       setShowSuggestions(true);
@@ -420,26 +440,40 @@ export function NuevaReservaModal({
   };
 
   const selectCliente = (c) => {
-    setDni(c.dni);
+    const doc = c.ci || c.dni || '';
+    setCi(doc);
     setNombre(c.nombre);
     setTel(c.tel);
     setShowSuggestions(false);
     setSearchQuery('');
   };
 
+  const handleCiChange = (val) => {
+    setCi(val);
+    const found = clientes.find(c => 
+      (c.ci && c.ci.trim() === val.trim()) || 
+      (c.dni && c.dni.trim() === val.trim())
+    );
+    if (found) {
+      setNombre(found.nombre);
+      setTel(found.tel || '');
+    }
+  };
+
   const handleFormSubmit = (e) => {
     e.preventDefault();
     if (!selectedHabNum) {
-      alert("¡Debe seleccionar una habitación en el mapa visual!");
+      alert("¡Debe seleccionar una habitación libre!");
       return;
     }
     onSubmit({
       numHabitacion: selectedHabNum,
-      dni,
-      nombre,
-      tel,
-      nomAcomp: hasAcompanante ? nomAcomp : '',
-      dniAcomp: hasAcompanante ? dniAcomp : '',
+      ci: ci.trim(),
+      dni: ci.trim(),
+      nombre: nombre.trim(),
+      tel: tel.trim(),
+      nomAcomp: hasAcompanante ? nomAcomp.trim() : '',
+      ciAcomp: hasAcompanante ? ciAcomp.trim() : '',
       hora,
       monto: parseFloat(monto) || 0,
       metodo,
@@ -447,12 +481,17 @@ export function NuevaReservaModal({
     });
   };
 
+  const selectedRoomPriceUSD = selectedHabNum ? getPernoctaPrice(selectedHabTipo) : 0;
+  const selectedRoomPriceVES = (selectedRoomPriceUSD * tasaUsd).toFixed(2);
+  const adelantoNum = parseFloat(monto) || 0;
+  const adelantoVES = (adelantoNum * tasaUsd).toFixed(2);
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh]">
         <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
-            <i className="fa-solid fa-phone text-blue-500 mr-2"></i> Reservar Habitación
+            <i className="fa-solid fa-phone text-blue-500 mr-2"></i> Reservar Habitación (Solo Pernocta)
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
             <i className="fa-solid fa-xmark text-xl"></i>
@@ -460,41 +499,74 @@ export function NuevaReservaModal({
         </div>
 
         <div className="overflow-y-auto pr-2 flex-1 space-y-5">
-          {/* Room Selector */}
+          {/* Room Selector with category filter */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
-              1. Seleccione Habitación (Solo Libres)
-            </label>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase">
+                1. Seleccione Habitación (Solo Libres)
+              </label>
+              <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
+                {['Todas', 'Matrimonial', 'Mini Suite'].map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoriaFiltro(cat)}
+                    className={`px-2 py-1 rounded ${
+                      categoriaFiltro === cat ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {freeRooms.length === 0 ? (
-              <p className="text-xs text-red-500 font-bold py-2">No hay habitaciones libres en este momento.</p>
+              <p className="text-xs text-red-500 font-bold py-2 bg-red-50 rounded-lg text-center border border-red-100">
+                No hay habitaciones libres en esta categoría en este momento.
+              </p>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-36 overflow-y-auto p-1 border border-slate-100 rounded-xl bg-slate-50/50">
                 {freeRooms.map(h => (
                   <div 
                     key={h.num} 
                     onClick={() => selectRoom(h.num, h.tipo)} 
-                    className={`hab-selectable border rounded-lg p-2 text-center shadow-sm ${
+                    className={`hab-selectable border rounded-xl p-2 text-center shadow-sm transition-all ${
                       selectedHabNum === h.num 
                         ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-500' 
-                        : 'bg-white border-slate-300 hover:bg-slate-50'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <span className="block font-black text-slate-700 text-lg">{h.num}</span>
-                    <span className="block text-[9px] uppercase font-bold text-slate-500">{h.tipo}</span>
+                    <span className="block font-black text-slate-700 text-base">{h.num}</span>
+                    <span className="block text-[8px] uppercase font-black text-slate-400 truncate">{h.tipo}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
+          {selectedHabNum && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex justify-between items-center text-blue-900 font-bold">
+              <div>
+                <span className="text-[10px] text-blue-600 block">Habitación Seleccionada</span>
+                <span className="text-lg font-black">{selectedHabNum} ({selectedHabTipo})</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-blue-600 block">Tarifa Pernocta</span>
+                <span className="text-base font-black text-blue-800">${selectedRoomPriceUSD} USD</span>
+                <span className="block text-[10px] text-blue-600 font-medium">~ Bs. {selectedRoomPriceVES}</span>
+              </div>
+            </div>
+          )}
+
           {/* Client Search */}
           <div className="relative bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="flex justify-between items-end mb-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase">2. Buscar Cliente (Titular)</label>
-              {(dni || nombre || tel) && (
+              <label className="block text-xs font-bold text-slate-500 uppercase">2. Buscar Cliente Frecuente</label>
+              {(ci || nombre || tel) && (
                 <button 
                   type="button" 
-                  onClick={() => { setDni(''); setNombre(''); setTel(''); }} 
+                  onClick={() => { setCi(''); setNombre(''); setTel(''); }} 
                   className="text-[10px] text-blue-500 hover:underline font-bold"
                 >
                   Limpiar datos
@@ -506,21 +578,21 @@ export function NuevaReservaModal({
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Buscar por Nombre o DNI..." 
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                placeholder="Buscar por Nombre o CI..." 
+                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white"
               />
-              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
             </div>
             
             {showSuggestions && filteredClientes.length > 0 && (
-              <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto">
+              <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100">
                 {filteredClientes.map(c => (
                   <div 
                     key={c.id} 
                     onClick={() => selectCliente(c)}
-                    className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
+                    className="p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
                   >
-                    <span>{c.nombre} <span className="text-slate-400 font-normal">({c.dni})</span></span>
+                    <span>{c.nombre} <span className="text-slate-400 font-normal">(CI: {c.ci || c.dni})</span></span>
                     <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">{c.visitas} visitas</span>
                   </div>
                 ))}
@@ -531,14 +603,14 @@ export function NuevaReservaModal({
           <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">DNI Titular</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">CI (Cédula)</label>
                 <input 
                   type="text" 
-                  value={dni}
-                  onChange={(e) => setDni(e.target.value)}
+                  value={ci}
+                  onChange={(e) => handleCiChange(e.target.value)}
                   required 
-                  placeholder="DNI del titular" 
-                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
+                  placeholder="Ej: V-12345678" 
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
                 />
               </div>
               <div className="col-span-2 sm:col-span-1">
@@ -548,29 +620,29 @@ export function NuevaReservaModal({
                   value={hora}
                   onChange={(e) => setHora(e.target.value)}
                   required 
-                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Titular</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
                 <input 
                   type="text" 
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   required 
-                  placeholder="Nombre completo" 
-                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
+                  placeholder="Nombre completo del huésped" 
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Celular</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Celular / Teléfono</label>
                 <input 
                   type="text" 
                   value={tel}
                   onChange={(e) => setTel(e.target.value)}
                   required 
-                  placeholder="999..." 
-                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
+                  placeholder="Ej: 0412-1234567" 
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
                 />
               </div>
             </div>
@@ -578,17 +650,17 @@ export function NuevaReservaModal({
             {/* Companion section (Conditional) */}
             {hasAcompanante && (
               <div className="border-t border-slate-200 pt-3 mt-4">
-                <p className="text-xs font-bold text-indigo-500 uppercase mb-2 flex items-center gap-1">
+                <p className="text-xs font-bold text-indigo-600 uppercase mb-2 flex items-center gap-1">
                   <i className="fa-solid fa-user-plus"></i> Datos del Acompañante
                 </p>
-                <div className="grid grid-cols-2 gap-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                <div className="grid grid-cols-2 gap-3 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DNI Acompañante</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI Acompañante</label>
                     <input 
                       type="text" 
-                      value={dniAcomp}
-                      onChange={(e) => setDniAcomp(e.target.value)}
-                      placeholder="DNI" 
+                      value={ciAcomp}
+                      onChange={(e) => setCiAcomp(e.target.value)}
+                      placeholder="CI (Opcional)" 
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
                     />
                   </div>
@@ -607,23 +679,26 @@ export function NuevaReservaModal({
             )}
 
             {/* Deposit Payment Details */}
-            <div className="border-t border-slate-200 pt-3 mt-4">
-              <p className="text-xs font-bold text-[#c5920c] uppercase mb-2 flex items-center gap-1">
+            <div className="border-t border-slate-200 pt-3 mt-4 space-y-3">
+              <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
                 <i className="fa-solid fa-wallet"></i> Pago de Reserva / Adelanto
               </p>
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto a Cobrar (S/)</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto Adelanto ($ USD)</label>
                   <input 
                     type="number" 
                     value={monto}
                     onChange={(e) => setMonto(e.target.value)}
                     placeholder="0.00" 
-                    step="0.01" 
+                    step="0.50" 
                     min="0" 
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                   />
+                  <span className="block text-[10px] font-black text-emerald-700 mt-1">
+                    = Bs. {adelantoVES}
+                  </span>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
@@ -633,9 +708,11 @@ export function NuevaReservaModal({
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Tarjeta">Tarjeta</option>
-                    <option value="Transferencia">Transferencia / Yape</option>
+                    <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Punto de Venta">Punto de Venta</option>
+                    <option value="Divisas Dólares">Divisas Dólares</option>
+                    <option value="Binance">Binance</option>
                   </select>
                 </div>
                 <div className="col-span-2">
@@ -646,21 +723,109 @@ export function NuevaReservaModal({
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
-                    <option value="Boleta">Boleta</option>
+                    <option value="Nota de Venta">Nota de Venta</option>
                     <option value="Factura">Factura</option>
                     <option value="Ticket Interno">Ticket Interno</option>
                   </select>
                 </div>
               </div>
-            </div>
 
-            <button 
-              type="submit" 
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors mt-2"
-            >
-              Confirmar Reserva
-            </button>
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={onClose}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs"
+                >
+                  Confirmar Reserva
+                </button>
+              </div>
+            </div>
           </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 2.5. MODAL: ACCIONES DE RESERVA (v3 - Fase 2)
+// ==========================================
+export function AccionesReservaModal({
+  isOpen,
+  room,
+  reserva,
+  onClose,
+  onCheckinReserva,
+  onAlquilerTemporal
+}) {
+  if (!isOpen || !room || !reserva) return null;
+
+  // Calculate if renting for 4 hours is permitted
+  const [rh, rm] = (reserva.hora || '12:00').split(':').map(Number);
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const reservaMinutes = rh * 60 + rm;
+  const diffMinutes = reservaMinutes - currentMinutes;
+
+  const canRent = diffMinutes >= 300; // 5 hours margin (4h check-in + 1h buffer)
+  const diffHours = (diffMinutes / 60).toFixed(1);
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in flex flex-col space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 className="text-md font-bold text-slate-800">
+            <i className="fa-solid fa-calendar-check text-blue-500 mr-2"></i> Habitación {room.num} - Reservada
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+          <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Reserva Activa Hoy</p>
+          <h4 className="text-sm font-black text-slate-800">{reserva.cliente?.nombre || 'Huésped'}</h4>
+          <div className="text-xs text-slate-600 font-semibold space-y-1">
+            <div><span className="text-slate-400">CI / Documento:</span> {reserva.cliente?.ci || reserva.cliente?.dni || 'N/A'}</div>
+            <div><span className="text-slate-400">Hora de Llegada:</span> {reserva.hora}</div>
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2">
+          <button
+            onClick={() => {
+              onCheckinReserva(room.num);
+              onClose();
+            }}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md flex items-center justify-center gap-2"
+          >
+            <i className="fa-solid fa-key"></i> Check-In de Huésped Reservado
+          </button>
+
+          {canRent ? (
+            <button
+              onClick={() => {
+                onAlquilerTemporal(room);
+                onClose();
+              }}
+              className="w-full bg-[#c5920c] hover:bg-[#b08107] text-white font-bold py-2.5 rounded-xl transition-all text-xs shadow-md flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-clock"></i> Registrar Alquiler 4 Horas
+            </button>
+          ) : (
+            <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-center">
+              <span className="text-[10px] font-black uppercase text-rose-800 block">Alquiler Temporal Bloqueado</span>
+              <span className="text-[10px] text-rose-700 font-semibold leading-tight block mt-0.5">
+                Margen insuficiente ({diffHours}h restantes). Se requiere al menos 5.0h para margen de limpieza.
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>

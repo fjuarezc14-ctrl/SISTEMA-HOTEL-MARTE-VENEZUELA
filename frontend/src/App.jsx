@@ -11,7 +11,8 @@ import {
   NuevaReservaModal, 
   CheckinExitosoModal, 
   CheckoutModal,
-  DetalleHabitacionOcupadaModal
+  DetalleHabitacionOcupadaModal,
+  AccionesReservaModal
 } from './components/Modales';
 
 export default function App() {
@@ -75,6 +76,8 @@ export default function App() {
   const [isCheckinExitosoOpen, setIsCheckinExitosoOpen] = useState(false);
   const [isTasaModalOpen, setIsTasaModalOpen] = useState(false);
   const [tasaInput, setTasaInput] = useState('');
+  const [isAccionesReservaOpen, setIsAccionesReservaOpen] = useState(false);
+  const [selectedReserva, setSelectedReserva] = useState(null);
   
   // Selected entities for modals
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -154,9 +157,16 @@ export default function App() {
       setSelectedRoom(room);
       setIsDetalleOcupadaOpen(true);
     } else if (room.estado === 'Reservada') {
-      const confirmCheckin = window.confirm(`¿Confirmar Check-In para la reserva de la Habitación ${room.num}?`);
-      if (confirmCheckin) {
-        handleCheckinReserva(room.num);
+      const reserva = appState.reservas.find(r => r.numHabitacion === room.num);
+      if (reserva) {
+        setSelectedRoom(room);
+        setSelectedReserva(reserva);
+        setIsAccionesReservaOpen(true);
+      } else {
+        const confirmCheckin = window.confirm(`¿Confirmar Check-In para la reserva de la Habitación ${room.num}?`);
+        if (confirmCheckin) {
+          handleCheckinReserva(room.num);
+        }
       }
     } else if (room.estado === 'Limpieza') {
       const confirmClean = window.confirm(`¿La limpieza de la Habitación ${room.num} ha terminado?`);
@@ -164,6 +174,11 @@ export default function App() {
         handleLimpiezaTerminada(room.num);
       }
     }
+  };
+
+  const handleAlquilerTemporal = (room) => {
+    setSelectedRoom(room);
+    setIsAsignarDirectoOpen(true);
   };
 
   // API Call: Walk-in Check-in
@@ -683,8 +698,19 @@ export default function App() {
         isOpen={isNuevaReservaOpen}
         habitaciones={appState.habitaciones}
         clientes={appState.clientes}
+        configuracion={appState.configuracion}
+        tarifas={appState.tarifas}
         onClose={() => setIsNuevaReservaOpen(false)}
         onSubmit={handleReservarSubmit}
+      />
+
+      <AccionesReservaModal 
+        isOpen={isAccionesReservaOpen}
+        room={selectedRoom}
+        reserva={selectedReserva}
+        onClose={() => setIsAccionesReservaOpen(false)}
+        onCheckinReserva={handleCheckinReserva}
+        onAlquilerTemporal={handleAlquilerTemporal}
       />
 
       <CheckinExitosoModal 

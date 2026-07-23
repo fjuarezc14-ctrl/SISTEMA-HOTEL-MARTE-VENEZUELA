@@ -234,7 +234,7 @@ app.get('/api/state', requireAuth, async (req, res) => {
     
     // Joint query to fetch reservation details along with the client's information
     const reservasRaw = await db.all(`
-      SELECT r.*, c.nombre as clienteNombre, c.dni as clienteDni, c.tel as clienteTel, c.visitas as clienteVisitas
+      SELECT r.*, c.nombre as clienteNombre, c.dni as clienteDni, c.ci as clienteCi, c.tel as clienteTel, c.visitas as clienteVisitas
       FROM reservas r
       JOIN clientes c ON r.clienteId = c.id
     `);
@@ -250,6 +250,7 @@ app.get('/api/state', requireAuth, async (req, res) => {
         id: r.clienteId,
         nombre: r.clienteNombre,
         dni: r.clienteDni,
+        ci: r.clienteCi || r.clienteDni,
         tel: r.clienteTel,
         visitas: r.clienteVisitas
       }
@@ -390,26 +391,27 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
 
 // 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
 app.post('/api/reservar', requireAuth, async (req, res) => {
-  const { numHabitacion, dni, nombre, tel, nomAcomp, dniAcomp, hora, monto, metodo, comprobante } = req.body;
+  const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante } = req.body;
+  const numDoc = (ci || dni || '').trim();
 
-  if (!numHabitacion || !dni || !nombre || !tel || !hora) {
-    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  if (!numHabitacion || !numDoc || !nombre || !tel || !hora) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios (CI/DNI, Nombre, Teléfono, Hora, Habitación).' });
   }
 
   try {
-    // 1. Check/Create guest
-    let cliente = await db.get('SELECT * FROM clientes WHERE dni = ?', [dni]);
+    // 1. Check/Create guest using CI/DNI
+    let cliente = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
     const clientId = cliente ? cliente.id : 'c_' + Date.now();
 
     if (!cliente) {
       await db.run(
-        'INSERT INTO clientes (id, nombre, dni, tel, visitas) VALUES (?, ?, ?, ?, ?)',
-        [clientId, nombre.trim(), dni.trim(), tel.trim(), 0]
+        'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas) VALUES (?, ?, ?, ?, ?, ?)',
+        [clientId, nombre.trim(), numDoc, numDoc, tel.trim(), 0]
       );
     } else {
       await db.run(
-        'UPDATE clientes SET nombre = ?, tel = ? WHERE id = ?',
-        [nombre.trim(), tel.trim(), clientId]
+        'UPDATE clientes SET nombre = ?, tel = ?, ci = ? WHERE id = ?',
+        [nombre.trim(), tel.trim(), numDoc, clientId]
       );
     }
 
@@ -437,9 +439,9 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
         [
           transactionId,
           'Ingreso',
-          `Cobro Adelanto Reserva Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante}`,
+          `Cobro Adelanto Reserva Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante || 'Sin Comprobante'}`,
           finalMonto,
-          metodo,
+          metodo || 'Efectivo Bolívares',
           getHoraActual(),
           req.user.id,
           req.user.nombre
@@ -472,10 +474,10 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     // Increment guest visits
     await db.run('UPDATE clientes SET visitas = visitas + 1 WHERE id = ?', [reserva.clienteId]);
 
-    // Update room status to Ocupada
+    // Update room status to Ocupada with Pernocta checkout time (11:00 AM)
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = '12:00' 
+       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = '11:00 AM (Mañana)' 
        WHERE num = ?`,
       [reserva.nombreAcomp || '', getHoraActual(), numHabitacion]
     );
@@ -483,7 +485,7 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     // Delete reservation
     await db.run('DELETE FROM reservas WHERE id = ?', [reserva.id]);
 
-    res.json({ success: true, message: 'Check-In de reserva procesado correctamente' });
+    res.json({ success: true, message: 'Check-In de reserva procesado correctamente.' });
   } catch (error) {
     console.error('Error confirming reservation check-in:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -632,7 +634,7 @@ app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
   }
 });
 
-// 7. POST /api/limpieza-terminada - Change room status from Limpieza to Libre
+// 7. POST /api/limpieza-terminada - Change room status from Limpieza to Libre (or Reservada if there is a pending reservation)
 app.post('/api/limpieza-terminada', requireAuth, async (req, res) => {
   const { numHabitacion } = req.body;
 
@@ -641,8 +643,26 @@ app.post('/api/limpieza-terminada', requireAuth, async (req, res) => {
   }
 
   try {
-    await db.run(`UPDATE habitaciones SET estado = 'Libre' WHERE num = ? AND estado = 'Limpieza'`, [numHabitacion]);
-    res.json({ success: true, message: `Habitación ${numHabitacion} ahora está libre` });
+    const reservation = await db.get('SELECT * FROM reservas WHERE numHabitacion = ?', [numHabitacion]);
+    let nextStatus = 'Libre';
+    let huespedName = '';
+
+    if (reservation) {
+      nextStatus = 'Reservada';
+      const cliente = await db.get('SELECT nombre FROM clientes WHERE id = ?', [reservation.clienteId]);
+      if (cliente) {
+        huespedName = formatGuestName(cliente.nombre);
+      }
+    }
+
+    await db.run(
+      `UPDATE habitaciones 
+       SET estado = ?, huesped = ? 
+       WHERE num = ? AND estado = 'Limpieza'`, 
+      [nextStatus, huespedName, numHabitacion]
+    );
+
+    res.json({ success: true, message: `Habitación ${numHabitacion} ahora está ${nextStatus.toLowerCase()}` });
   } catch (error) {
     console.error('Error completing room cleaning:', error);
     res.status(500).json({ error: 'Internal server error' });
