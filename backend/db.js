@@ -72,7 +72,21 @@ export async function initDb() {
       password_hash TEXT NOT NULL,
       nombre TEXT NOT NULL,
       rol TEXT NOT NULL,
-      permisos TEXT NOT NULL
+      permisos TEXT NOT NULL,
+      activo INTEGER DEFAULT 1,
+      hora_inicio TEXT DEFAULT '',
+      hora_fin TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      usuario_id TEXT NOT NULL,
+      usuario_nombre TEXT NOT NULL,
+      rol TEXT NOT NULL,
+      accion TEXT NOT NULL,
+      detalle TEXT,
+      fecha_hora TEXT NOT NULL,
+      ip TEXT
     );
 
     CREATE TABLE IF NOT EXISTS productos (
@@ -206,10 +220,16 @@ export async function initDb() {
     );
   }
 
+  // Migraciones autocurativas para la tabla usuarios (v3 - Fase 3)
+  try { await db.run("ALTER TABLE usuarios ADD COLUMN activo INTEGER DEFAULT 1"); } catch (e) {}
+  try { await db.run("ALTER TABLE usuarios ADD COLUMN hora_inicio TEXT DEFAULT ''"); } catch (e) {}
+  try { await db.run("ALTER TABLE usuarios ADD COLUMN hora_fin TEXT DEFAULT ''"); } catch (e) {}
+  await db.run("UPDATE usuarios SET activo = 1 WHERE activo IS NULL");
+
   // Ensure default admin u_admin always has the full set of permissions including new modules
   await db.run(
     "UPDATE usuarios SET permisos = ? WHERE id = 'u_admin'",
-    [JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion'])]
+    [JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion', 'usuarios', 'audit_logs'])]
   );
 
   // Seed configuracion (v3 - Fase 1) - Tasa del Día USD/VES

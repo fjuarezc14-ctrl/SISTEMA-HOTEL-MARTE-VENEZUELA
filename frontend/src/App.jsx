@@ -521,10 +521,10 @@ export default function App() {
             </>
           )}
 
-          {(user.rol === 'Administrador' || user.permisos.includes('configuracion')) && (
+          {(user.rol === 'Administrador' || user.rol === 'Supervisor' || user.permisos.includes('configuracion') || user.permisos.includes('audit_logs')) && (
             <>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Administración</p>
-              {user.rol === 'Administrador' && (
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Administración & Auditoría</p>
+              {(user.rol === 'Administrador' || user.rol === 'Supervisor' || user.permisos.includes('audit_logs')) && (
                 <button 
                   onClick={() => setActiveTab('usuarios')} 
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -533,7 +533,7 @@ export default function App() {
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <i className="fa-solid fa-user-gear w-5"></i> Personal y Roles
+                  <i className="fa-solid fa-user-gear w-5"></i> Personal & Auditoría
                 </button>
               )}
               
@@ -666,7 +666,7 @@ export default function App() {
                   onStateChange={fetchState}
                 />
               )}
-              {activeTab === 'usuarios' && user.rol === 'Administrador' && (
+              {activeTab === 'usuarios' && (user.rol === 'Administrador' || user.rol === 'Supervisor' || user.permisos.includes('audit_logs')) && (
                 <Usuarios 
                   token={token}
                   currentUser={user}

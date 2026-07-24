@@ -48,13 +48,27 @@ function formatGuestName(fullName) {
   return `${firstInitial} ${rest}`.trim();
 }
 
+// Helper: Registrar evento en la bitácora de auditoría (v3 - Fase 3)
+async function registrarAuditoria(usuarioId, usuarioNombre, rol, accion, detalle = '', ip = '') {
+  try {
+    const id = 'aud_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const fecha_hora = new Date().toISOString();
+    await db.run(
+      `INSERT INTO audit_logs (id, usuario_id, usuario_nombre, rol, accion, detalle, fecha_hora, ip)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, usuarioId || 'sistema', usuarioNombre || 'Sistema', rol || 'Sistema', accion, detalle, fecha_hora, ip]
+    );
+  } catch (err) {
+    console.error('Error registrando auditoría:', err);
+  }
+}
+
 // ====================================================
-// SEGURIDAD Y AUTH MIDDLEWARE (v2 - Fase 1)
+// SEGURIDAD Y AUTH MIDDLEWARE (v2 - Fase 1 & v3 - Fase 3)
 // ====================================================
 const requireAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log('requireAuth failed: missing or invalid authorization header prefix');
     return res.status(401).json({ error: 'No autorizado. Falta token.' });
   }
 
@@ -62,25 +76,29 @@ const requireAuth = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Validate if user exists in database (Immediate session revocation on user deletion)
-    const user = await db.get('SELECT id, username, nombre, rol, permisos FROM usuarios WHERE id = ?', [decoded.id]);
+    // Validate if user exists and is active (Immediate session revocation)
+    const user = await db.get('SELECT id, username, nombre, rol, permisos, activo, hora_inicio, hora_fin FROM usuarios WHERE id = ?', [decoded.id]);
     if (!user) {
-      console.log(`requireAuth failed: user ID "${decoded.id}" not found in SQLite database`);
       return res.status(401).json({ error: 'Usuario no encontrado o sesión revocada.' });
+    }
+
+    if (user.activo === 0) {
+      return res.status(401).json({ error: 'Cuenta de usuario desactivada. Contacte al Administrador.' });
     }
     
     req.user = user;
     req.user.permisos = JSON.parse(user.permisos || '[]');
     next();
   } catch (error) {
-    console.log('requireAuth failed: jwt.verify error:', error.message);
     return res.status(401).json({ error: 'Token inválido o expirado.' });
   }
 };
 
-// POST /api/auth/login - Autenticar usuario y firmar token
+// POST /api/auth/login - Autenticar usuario, validar horario/activo y firmar token (v3 - Fase 3)
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
+  const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+
   if (!username || !password) {
     return res.status(400).json({ error: 'Debe ingresar usuario y contraseña.' });
   }
@@ -91,12 +109,39 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
     }
 
+    if (user.activo === 0) {
+      await registrarAuditoria(user.id, user.nombre, user.rol, 'Acceso Denegado', 'Intento de ingreso con cuenta desactivada', clientIp);
+      return res.status(403).json({ error: 'Cuenta de usuario desactivada. Contacte al Administrador.' });
+    }
+
     const isValidPassword = bcrypt.compareSync(password, user.password_hash);
     if (!isValidPassword) {
+      await registrarAuditoria(user.id, user.nombre, user.rol, 'Acceso Denegado', 'Contraseña incorrecta', clientIp);
       return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
     }
 
+    // Work schedule restriction for non-Admin users
+    if (user.rol !== 'Administrador' && user.hora_inicio && user.hora_fin) {
+      const now = new Date();
+      const currentStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+      const isOvernight = user.hora_inicio > user.hora_fin;
+      let isAllowed = false;
+      if (!isOvernight) {
+        isAllowed = currentStr >= user.hora_inicio && currentStr <= user.hora_fin;
+      } else {
+        isAllowed = currentStr >= user.hora_inicio || currentStr <= user.hora_fin;
+      }
+      if (!isAllowed) {
+        await registrarAuditoria(user.id, user.nombre, user.rol, 'Acceso Denegado', `Fuera de horario laboral asignado (${user.hora_inicio} - ${user.hora_fin})`, clientIp);
+        return res.status(403).json({ 
+          error: `Acceso denegado: Fuera de su horario laboral asignado (${user.hora_inicio} - ${user.hora_fin}).` 
+        });
+      }
+    }
+
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '24h' });
+
+    await registrarAuditoria(user.id, user.nombre, user.rol, 'Inicio de Sesión', 'Autenticación exitosa', clientIp);
 
     res.json({
       token,
@@ -105,7 +150,10 @@ app.post('/api/auth/login', async (req, res) => {
         username: user.username,
         nombre: user.nombre,
         rol: user.rol,
-        permisos: JSON.parse(user.permisos || '[]')
+        permisos: JSON.parse(user.permisos || '[]'),
+        activo: user.activo !== undefined ? user.activo : 1,
+        hora_inicio: user.hora_inicio || '',
+        hora_fin: user.hora_fin || ''
       }
     });
   } catch (error) {
@@ -120,9 +168,12 @@ app.get('/api/usuarios', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Administrador.' });
   }
   try {
-    const users = await db.all('SELECT id, username, nombre, rol, permisos FROM usuarios');
+    const users = await db.all('SELECT id, username, nombre, rol, permisos, activo, hora_inicio, hora_fin FROM usuarios');
     const parsedUsers = users.map(u => ({
       ...u,
+      activo: u.activo !== undefined ? u.activo : 1,
+      hora_inicio: u.hora_inicio || '',
+      hora_fin: u.hora_fin || '',
       permisos: JSON.parse(u.permisos || '[]')
     }));
     res.json(parsedUsers);
@@ -137,7 +188,7 @@ app.post('/api/usuarios', requireAuth, async (req, res) => {
   if (req.user.rol !== 'Administrador') {
     return res.status(403).json({ error: 'Acceso denegado.' });
   }
-  const { username, password, nombre, rol, permisos } = req.body;
+  const { username, password, nombre, rol, permisos, activo, hora_inicio, hora_fin } = req.body;
   if (!username || !password || !nombre || !rol || !permisos) {
     return res.status(400).json({ error: 'Faltan campos obligatorios.' });
   }
@@ -151,11 +202,14 @@ app.post('/api/usuarios', requireAuth, async (req, res) => {
     const id = 'u_' + Date.now();
     const hash = bcrypt.hashSync(password, 10);
     const permsStr = JSON.stringify(permisos);
+    const userActivo = activo !== undefined ? (activo ? 1 : 0) : 1;
 
     await db.run(
-      'INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, username, hash, nombre, rol, permsStr]
+      'INSERT INTO usuarios (id, username, password_hash, nombre, rol, permisos, activo, hora_inicio, hora_fin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, username.trim(), hash, nombre.trim(), rol, permsStr, userActivo, hora_inicio || '', hora_fin || '']
     );
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Crear Usuario', `Usuario ${username} (${rol}) creado`, req.ip);
 
     res.json({ success: true, message: 'Usuario creado correctamente.' });
   } catch (error) {
@@ -170,30 +224,34 @@ app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado.' });
   }
   const { id } = req.params;
-  const { nombre, rol, permisos, password } = req.body;
+  const { nombre, rol, permisos, password, activo, hora_inicio, hora_fin } = req.body;
 
   if (id === 'u_admin') {
     return res.status(400).json({ error: 'El administrador por defecto es inmutable y no puede modificarse.' });
   }
 
   try {
-    const user = await db.get('SELECT id FROM usuarios WHERE id = ?', [id]);
+    const user = await db.get('SELECT id, username FROM usuarios WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
 
+    const userActivo = activo !== undefined ? (activo ? 1 : 0) : 1;
+
     if (password) {
       const hash = bcrypt.hashSync(password, 10);
       await db.run(
-        'UPDATE usuarios SET nombre = ?, rol = ?, permisos = ?, password_hash = ? WHERE id = ?',
-        [nombre, rol, JSON.stringify(permisos), hash, id]
+        'UPDATE usuarios SET nombre = ?, rol = ?, permisos = ?, password_hash = ?, activo = ?, hora_inicio = ?, hora_fin = ? WHERE id = ?',
+        [nombre.trim(), rol, JSON.stringify(permisos), hash, userActivo, hora_inicio || '', hora_fin || '', id]
       );
     } else {
       await db.run(
-        'UPDATE usuarios SET nombre = ?, rol = ?, permisos = ? WHERE id = ?',
-        [nombre, rol, JSON.stringify(permisos), id]
+        'UPDATE usuarios SET nombre = ?, rol = ?, permisos = ?, activo = ?, hora_inicio = ?, hora_fin = ? WHERE id = ?',
+        [nombre.trim(), rol, JSON.stringify(permisos), userActivo, hora_inicio || '', hora_fin || '', id]
       );
     }
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Editar Usuario', `Usuario ${user.username} actualizado`, req.ip);
 
     res.json({ success: true, message: 'Usuario actualizado correctamente.' });
   } catch (error) {
@@ -202,7 +260,43 @@ app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/usuarios/:id - Eliminar usuario (Solo Admin - Cierre de sesion inmediato en todos los disp.)
+// PUT /api/usuarios/:id/toggle-activo - Cambiar estado activo/inactivo (Solo Admin)
+app.put('/api/usuarios/:id/toggle-activo', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+  const { id } = req.params;
+
+  if (id === 'u_admin') {
+    return res.status(400).json({ error: 'El administrador por defecto no puede desactivarse.' });
+  }
+
+  try {
+    const user = await db.get('SELECT id, username, activo FROM usuarios WHERE id = ?', [id]);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    const newStatus = user.activo === 1 ? 0 : 1;
+    await db.run('UPDATE usuarios SET activo = ? WHERE id = ?', [newStatus, id]);
+
+    await registrarAuditoria(
+      req.user.id, 
+      req.user.nombre, 
+      req.user.rol, 
+      'Cambiar Estado Usuario', 
+      `Usuario ${user.username} ${newStatus === 1 ? 'activado' : 'desactivado'}`, 
+      req.ip
+    );
+
+    res.json({ success: true, message: `Usuario ${newStatus === 1 ? 'activado' : 'desactivado'} correctamente.`, activo: newStatus });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al cambiar estado de usuario' });
+  }
+});
+
+// DELETE /api/usuarios/:id - Eliminar usuario (Solo Admin)
 app.delete('/api/usuarios/:id', requireAuth, async (req, res) => {
   if (req.user.rol !== 'Administrador') {
     return res.status(403).json({ error: 'Acceso denegado.' });
@@ -214,16 +308,33 @@ app.delete('/api/usuarios/:id', requireAuth, async (req, res) => {
   }
 
   try {
-    const user = await db.get('SELECT id FROM usuarios WHERE id = ?', [id]);
+    const user = await db.get('SELECT id, username FROM usuarios WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
 
     await db.run('DELETE FROM usuarios WHERE id = ?', [id]);
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Eliminar Usuario', `Usuario ${user.username} eliminado`, req.ip);
+
     res.json({ success: true, message: 'Usuario eliminado correctamente. Todas sus sesiones han sido revocadas.' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al eliminar usuario' });
+  }
+});
+
+// GET /api/audit-logs - Listar bitácora de auditoría (v3 - Fase 3)
+app.get('/api/audit-logs', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador' && req.user.rol !== 'Supervisor' && !req.user.permisos.includes('audit_logs')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requieren permisos de auditoría.' });
+  }
+  try {
+    const logs = await db.all('SELECT * FROM audit_logs ORDER BY fecha_hora DESC LIMIT 150');
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
+    res.status(500).json({ error: 'Error al obtener bitácora de auditoría.' });
   }
 });
 
@@ -302,6 +413,7 @@ app.put('/api/configuracion', requireAuth, async (req, res) => {
         "INSERT INTO configuracion (clave, valor) VALUES ('tasa_usd', ?) ON CONFLICT(clave) DO UPDATE SET valor = ?",
         [val.toFixed(2), val.toFixed(2)]
       );
+      await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Tasa del Día', `Actualizada Tasa del Día a 1 USD = Bs. ${val.toFixed(2)}`, req.ip);
     }
     res.json({ success: true, message: 'Configuración actualizada de forma exitosa.' });
   } catch (error) {
