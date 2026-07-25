@@ -98,6 +98,7 @@ export async function initDb() {
 
     CREATE TABLE IF NOT EXISTS tarifas (
       tipo TEXT PRIMARY KEY,
+      precio_diario REAL NOT NULL DEFAULT 0,
       precio_4h_usd REAL NOT NULL DEFAULT 0,
       precio_pernocta_usd REAL NOT NULL DEFAULT 0,
       precio_hora_extra_usd REAL NOT NULL DEFAULT 0
