@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 
-export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, onStateChange }) {
+export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, onCajaMovimiento, onStateChange }) {
   const [tipo, setTipo] = useState('Ingreso');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
-  const [metodo, setMetodo] = useState('Efectivo');
+  const [metodo, setMetodo] = useState('Efectivo Bolívares');
 
   // Filter state ('all' vs 'mine')
   const [filterMode, setFilterMode] = useState('all');
@@ -18,7 +18,7 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
     ? caja.filter(t => t.usuarioId === currentUser.id)
     : caja;
 
-  // Calculate totals for displayed movements
+  // Calculate totals for displayed movements ($ USD and Bs. VES)
   const totalIngresos = displayedCaja
     .filter(t => t.tipo === 'Ingreso')
     .reduce((sum, t) => sum + parseFloat(t.monto), 0);
@@ -29,26 +29,27 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
 
   const saldoNeto = totalIngresos - totalEgresos;
 
-  // Shift calculation for current logged in user
+  // Shift calculation for current logged in user (by official 5 payment methods)
   const myMovements = currentUser ? caja.filter(t => t.usuarioId === currentUser.id) : caja;
-  const myEfectivo = myMovements
-    .filter(t => t.tipo === 'Ingreso' && t.metodo === 'Efectivo')
-    .reduce((sum, t) => sum + parseFloat(t.monto), 0);
+  
+  const getMethodTotal = (methodName) => {
+    return myMovements
+      .filter(t => t.tipo === 'Ingreso' && (t.metodo === methodName || (methodName === 'Efectivo Bolívares' && t.metodo === 'Efectivo')))
+      .reduce((sum, t) => sum + parseFloat(t.monto), 0);
+  };
 
-  const myTarjeta = myMovements
-    .filter(t => t.tipo === 'Ingreso' && t.metodo === 'Tarjeta')
-    .reduce((sum, t) => sum + parseFloat(t.monto), 0);
-
-  const myOtros = myMovements
-    .filter(t => t.tipo === 'Ingreso' && t.metodo !== 'Efectivo' && t.metodo !== 'Tarjeta')
-    .reduce((sum, t) => sum + parseFloat(t.monto), 0);
+  const myEfectivoVES = getMethodTotal('Efectivo Bolívares');
+  const myPagoMovil = getMethodTotal('Pago Móvil');
+  const myPuntoVenta = getMethodTotal('Punto de Venta');
+  const myDivisasUSD = getMethodTotal('Divisas Dólares');
+  const myBinance = getMethodTotal('Binance');
 
   const myEgresos = myMovements
     .filter(t => t.tipo === 'Egreso')
     .reduce((sum, t) => sum + parseFloat(t.monto), 0);
 
-  const myNetoEfectivo = myEfectivo - myEgresos;
-  const myNetoTotal = (myEfectivo + myTarjeta + myOtros) - myEgresos;
+  const myTotalIngresos = myEfectivoVES + myPagoMovil + myPuntoVenta + myDivisasUSD + myBinance;
+  const mySaldoNeto = myTotalIngresos - myEgresos;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -75,18 +76,18 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          totalEfectivo: myEfectivo,
-          totalTarjeta: myTarjeta,
-          totalOtros: myOtros,
+          totalEfectivo: myEfectivoVES,
+          totalTarjeta: myPuntoVenta,
+          totalOtros: myPagoMovil + myDivisasUSD + myBinance,
           totalEgresos: myEgresos,
-          saldoNeto: myNetoTotal
+          saldoNeto: mySaldoNeto
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al registrar cierre de turno');
 
-      alert('✅ Cierre de turno registrado con éxito en el flujo de caja.');
+      alert('✅ Cierre de turno registrado con éxito en la caja del sistema.');
       setIsCierreModalOpen(false);
       if (onStateChange) onStateChange();
     } catch (err) {
@@ -101,8 +102,8 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
       {/* Action Header & Shift Control */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-lg font-black text-slate-800">Control de Caja & Auditoría</h2>
-          <p className="text-xs text-slate-500 font-medium">Trazabilidad de movimientos en efectivo, tarjetas y cierres de turno.</p>
+          <h2 className="text-lg font-black text-slate-800">Control de Caja & Auditoría Financiera</h2>
+          <p className="text-xs text-slate-500 font-medium">Trazabilidad en USD y Bolívares (VES), desglose de pagos y cierres de turno.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="bg-slate-100 p-1 rounded-xl flex text-xs font-bold text-slate-600 border border-slate-200">
@@ -123,7 +124,7 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
             onClick={() => setIsCierreModalOpen(true)}
             className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-1.5 shrink-0"
           >
-            <i className="fa-solid fa-lock"></i> Cerrar Turno
+            <i className="fa-solid fa-lock"></i> Arqueo & Cierre de Turno
           </button>
         </div>
       </div>
@@ -136,7 +137,8 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase">Total Ingresos ({filterMode === 'mine' ? 'Mi Turno' : 'General'})</p>
-            <p className="text-2xl font-black text-green-600">S/ {totalIngresos.toFixed(2)}</p>
+            <p className="text-2xl font-black text-green-600">${totalIngresos.toFixed(2)} USD</p>
+            <span className="text-[10px] text-slate-400 font-bold block">~ Bs. {(totalIngresos * tasaUsd).toFixed(2)}</span>
           </div>
         </div>
 
@@ -146,7 +148,8 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase">Total Egresos ({filterMode === 'mine' ? 'Mi Turno' : 'General'})</p>
-            <p className="text-2xl font-black text-rose-600">S/ {totalEgresos.toFixed(2)}</p>
+            <p className="text-2xl font-black text-rose-600">${totalEgresos.toFixed(2)} USD</p>
+            <span className="text-[10px] text-slate-400 font-bold block">~ Bs. {(totalEgresos * tasaUsd).toFixed(2)}</span>
           </div>
         </div>
 
@@ -156,7 +159,8 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase">Saldo Neto en Caja</p>
-            <p className="text-2xl font-black text-slate-800">S/ {saldoNeto.toFixed(2)}</p>
+            <p className="text-2xl font-black text-slate-800">${saldoNeto.toFixed(2)} USD</p>
+            <span className="text-[10px] text-amber-700 font-bold block">~ Bs. {(saldoNeto * tasaUsd).toFixed(2)}</span>
           </div>
         </div>
       </div>
@@ -183,40 +187,46 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
                     <th className="p-4">Concepto / Detalle</th>
                     <th className="p-4">Responsable</th>
                     <th className="p-4 text-center">Tipo</th>
-                    <th className="p-4 text-center">Método</th>
-                    <th className="p-4 text-right pr-6">Monto</th>
+                    <th className="p-4 text-center">Método de Pago</th>
+                    <th className="p-4 text-right pr-6">Monto ($ USD / Bs)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {displayedCaja.map(t => (
-                    <tr key={t.id} className="hover:bg-slate-50/50">
-                      <td className="p-4 pl-6 text-slate-400 font-semibold">{t.hora}</td>
-                      <td className="p-4 font-bold text-slate-800">{t.concepto}</td>
-                      <td className="p-4 text-xs font-semibold text-slate-600">
-                        <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-md border border-slate-200">
-                          <i className="fa-solid fa-user-check text-[10px] text-slate-400 mr-1"></i>
-                          {t.usuarioNombre || 'Sistema'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className={`inline-block text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${
-                          t.tipo === 'Ingreso' 
-                            ? 'bg-green-100 text-green-800' 
-                            : t.tipo === 'Egreso'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
+                  {displayedCaja.map(t => {
+                    const montoUsdVal = parseFloat(t.monto) || 0;
+                    const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
+
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50/50">
+                        <td className="p-4 pl-6 text-slate-400 font-semibold">{t.hora}</td>
+                        <td className="p-4 font-bold text-slate-800 max-w-xs truncate" title={t.concepto}>{t.concepto}</td>
+                        <td className="p-4 text-xs font-semibold text-slate-600">
+                          <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-md border border-slate-200">
+                            <i className="fa-solid fa-user-check text-[10px] text-slate-400 mr-1"></i>
+                            {t.usuarioNombre || 'Sistema'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-block text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${
+                            t.tipo === 'Ingreso' 
+                              ? 'bg-green-100 text-green-800' 
+                              : t.tipo === 'Egreso'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {t.tipo}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center text-slate-700 font-bold text-xs">{t.metodo || 'Efectivo Bolívares'}</td>
+                        <td className={`p-4 text-right pr-6 font-black ${
+                          t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
                         }`}>
-                          {t.tipo}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center text-slate-500 font-semibold text-xs">{t.metodo}</td>
-                      <td className={`p-4 text-right pr-6 font-black ${
-                        t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
-                      }`}>
-                        {t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : ''} S/ {parseFloat(t.monto).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                          {t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : ''} ${montoUsdVal.toFixed(2)} USD
+                          <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {montoVesVal}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -262,18 +272,23 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                  Monto (S/)
+                  Monto ($ USD)
                 </label>
                 <input 
                   type="number" 
                   value={monto}
                   onChange={(e) => setMonto(e.target.value)}
                   placeholder="0.00" 
-                  step="0.01" 
+                  step="0.50" 
                   min="0.1" 
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold" 
                   required
                 />
+                {monto && !isNaN(parseFloat(monto)) && (
+                  <span className="block text-[10px] font-bold text-amber-700 mt-1">
+                    = Bs. {(parseFloat(monto) * tasaUsd).toFixed(2)}
+                  </span>
+                )}
               </div>
               
               <div>
@@ -283,12 +298,14 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
                 <select 
                   value={metodo}
                   onChange={(e) => setMetodo(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   required
                 >
-                  <option value="Efectivo">Efectivo</option>
-                  <option value="Tarjeta">Tarjeta (Crédito/Débito)</option>
-                  <option value="Transferencia">Transferencia / Yape</option>
+                  <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                  <option value="Pago Móvil">Pago Móvil</option>
+                  <option value="Punto de Venta">Punto de Venta</option>
+                  <option value="Divisas Dólares">Divisas Dólares</option>
+                  <option value="Binance">Binance</option>
                 </select>
               </div>
             </div>
@@ -306,7 +323,7 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
       {/* CIERRE DE TURNO MODAL */}
       {isCierreModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in space-y-5">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <i className="fa-solid fa-calculator text-amber-500"></i> Cierre y Arqueo de Turno
@@ -316,54 +333,88 @@ export default function Caja({ caja = [], token, currentUser, onCajaMovimiento, 
               </button>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cajero Responsable</p>
               <p className="text-base font-black text-slate-800">{currentUser ? currentUser.nombre : 'Usuario en Sesión'}</p>
               <p className="text-xs text-slate-500 font-semibold">Rol: {currentUser ? currentUser.rol : 'Staff'}</p>
             </div>
 
-            {/* Shift Balance Summary Breakdown */}
-            <div className="space-y-2.5 text-xs font-semibold text-slate-700">
+            {/* Shift Balance Summary Breakdown by Official Venezuelan Payment Methods */}
+            <div className="space-y-2 text-xs font-semibold text-slate-700">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">
-                Desglose de Cobros del Turno
+                Desglose por Métodos de Pago del Turno
               </p>
               
               <div className="flex justify-between items-center py-1">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-money-bill-wave text-green-600"></i> Cobros en Efectivo:
+                  <i className="fa-solid fa-money-bill-wave text-emerald-600"></i> Efectivo Bolívares:
                 </span>
-                <span className="font-black text-slate-800">S/ {myEfectivo.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="font-black text-slate-800 block">${myEfectivoVES.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myEfectivoVES * tasaUsd).toFixed(2)}</span>
+                </div>
               </div>
 
-              <div className="flex justify-between items-center py-1">
+              <div className="flex justify-between items-center py-1 border-t border-slate-100 pt-1">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-credit-card text-blue-600"></i> Cobros en Tarjeta:
+                  <i className="fa-solid fa-mobile-screen-button text-purple-600"></i> Pago Móvil:
                 </span>
-                <span className="font-black text-slate-800">S/ {myTarjeta.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="font-black text-slate-800 block">${myPagoMovil.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myPagoMovil * tasaUsd).toFixed(2)}</span>
+                </div>
               </div>
 
-              <div className="flex justify-between items-center py-1">
+              <div className="flex justify-between items-center py-1 border-t border-slate-100 pt-1">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-mobile-screen text-purple-600"></i> Cobros Yape / Otros:
+                  <i className="fa-solid fa-credit-card text-blue-600"></i> Punto de Venta:
                 </span>
-                <span className="font-black text-slate-800">S/ {myOtros.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="font-black text-slate-800 block">${myPuntoVenta.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myPuntoVenta * tasaUsd).toFixed(2)}</span>
+                </div>
               </div>
 
-              <div className="flex justify-between items-center py-1 text-rose-600 border-t border-slate-100 pt-2">
+              <div className="flex justify-between items-center py-1 border-t border-slate-100 pt-1">
                 <span className="flex items-center gap-2">
+                  <i className="fa-solid fa-[#c5920c] fa-dollar-sign text-amber-600"></i> Divisas Dólares:
+                </span>
+                <div className="text-right">
+                  <span className="font-black text-slate-800 block">${myDivisasUSD.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myDivisasUSD * tasaUsd).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-t border-slate-100 pt-1">
+                <span className="flex items-center gap-2">
+                  <i className="fa-solid fa-coins text-amber-500"></i> Binance Crypto:
+                </span>
+                <div className="text-right">
+                  <span className="font-black text-slate-800 block">${myBinance.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myBinance * tasaUsd).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center py-1 text-rose-600 border-t border-slate-200 pt-2">
+                <span className="flex items-center gap-2 font-bold">
                   <i className="fa-solid fa-arrow-down-short-wide"></i> Total Egresos Registrados:
                 </span>
-                <span className="font-black">- S/ {myEgresos.toFixed(2)}</span>
+                <span className="font-black">- ${myEgresos.toFixed(2)} USD</span>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex justify-between items-center mt-3">
+              <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex justify-between items-center mt-3 shadow-sm">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-amber-800 block">Efectivo en Caja A Entregar</span>
-                  <span className="text-xs text-amber-700 font-semibold">(Ingresos Efectivo - Egresos)</span>
+                  <span className="text-[10px] font-black uppercase text-amber-800 block">Total Saldo Neto Turno</span>
+                  <span className="text-[10px] text-amber-700 font-semibold">(Ingresos Totales - Egresos)</span>
                 </div>
-                <span className="text-xl font-black text-amber-900">
-                  S/ {myNetoEfectivo.toFixed(2)}
-                </span>
+                <div className="text-right">
+                  <span className="text-xl font-black text-amber-900 block">
+                    ${mySaldoNeto.toFixed(2)} USD
+                  </span>
+                  <span className="text-xs font-bold text-amber-700 block">
+                    ~ Bs. {(mySaldoNeto * tasaUsd).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
 

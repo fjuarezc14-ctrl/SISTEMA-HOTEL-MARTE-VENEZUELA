@@ -340,12 +340,26 @@ export default function App() {
     }
   };
 
+  const canAccessTab = (tabName) => {
+    if (!user) return false;
+    if (user.rol === 'Administrador') return true;
+    const perms = user.permisos || [];
+    if (tabName === 'tienda') {
+      return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
+    }
+    if (tabName === 'usuarios') {
+      return user.rol === 'Administrador' || user.rol === 'Supervisor' || perms.includes('audit_logs');
+    }
+    return perms.includes(tabName);
+  };
+
   // Self-healing permission redirect (v2 - Fase 1)
   useEffect(() => {
     if (user) {
-      const perms = user.permisos || [];
-      if (perms.length > 0 && !perms.includes(activeTab) && activeTab !== 'usuarios') {
-        setActiveTab(perms[0]);
+      if (!canAccessTab(activeTab)) {
+        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
+        const firstAvailable = availableTabs.find(t => canAccessTab(t));
+        if (firstAvailable) setActiveTab(firstAvailable);
       }
     }
   }, [user]);
@@ -455,7 +469,7 @@ export default function App() {
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-2 px-2">Operaciones</p>
           )}
           
-          {user.permisos.includes('dashboard') && (
+          {canAccessTab('dashboard') && (
             <button 
               onClick={() => setActiveTab('dashboard')} 
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -468,7 +482,7 @@ export default function App() {
             </button>
           )}
           
-          {user.permisos.includes('habitaciones') && (
+          {canAccessTab('habitaciones') && (
             <button 
               onClick={() => setActiveTab('habitaciones')} 
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -481,7 +495,7 @@ export default function App() {
             </button>
           )}
 
-          {user.permisos.includes('reservas') && (
+          {canAccessTab('reservas') && (
             <button 
               onClick={() => setActiveTab('reservas')} 
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -494,7 +508,7 @@ export default function App() {
             </button>
           )}
 
-          {user.permisos.includes('caja') && (
+          {canAccessTab('caja') && (
             <button 
               onClick={() => setActiveTab('caja')} 
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -507,7 +521,7 @@ export default function App() {
             </button>
           )}
 
-          {user.permisos.includes('tienda') && (
+          {canAccessTab('tienda') && (
             <button 
               onClick={() => setActiveTab('tienda')} 
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -520,7 +534,7 @@ export default function App() {
             </button>
           )}
 
-          {user.permisos.includes('clientes') && (
+          {canAccessTab('clientes') && (
             <>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Fidelización & CRM</p>
               <button 
@@ -536,10 +550,10 @@ export default function App() {
             </>
           )}
 
-          {(user.rol === 'Administrador' || user.rol === 'Supervisor' || user.permisos.includes('configuracion') || user.permisos.includes('audit_logs')) && (
+          {(canAccessTab('usuarios') || canAccessTab('configuracion')) && (
             <>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Administración & Auditoría</p>
-              {(user.rol === 'Administrador' || user.rol === 'Supervisor' || user.permisos.includes('audit_logs')) && (
+              {canAccessTab('usuarios') && (
                 <button 
                   onClick={() => setActiveTab('usuarios')} 
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -552,7 +566,7 @@ export default function App() {
                 </button>
               )}
               
-              {user.permisos.includes('configuracion') && (
+              {canAccessTab('configuracion') && (
                 <button 
                   onClick={() => setActiveTab('configuracion')} 
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -600,7 +614,7 @@ export default function App() {
             {/* Tasa del Día USD/VES Badge */}
             <div 
               onClick={() => {
-                if (user.permisos.includes('configuracion')) {
+                if (canAccessTab('configuracion')) {
                   const val = prompt('💡 Ingrese la nueva Tasa de Cambio del Día (1 USD = Bs.):', appState.configuracion?.tasa_usd || '50.00');
                   if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) {
                     authFetch('/api/configuracion', {
@@ -611,22 +625,22 @@ export default function App() {
                 }
               }}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all ${
-                user.permisos.includes('configuracion') 
+                canAccessTab('configuracion') 
                   ? 'cursor-pointer hover:bg-amber-100 bg-amber-50 border-amber-300 text-amber-900 shadow-sm' 
                   : 'bg-slate-50 border-slate-200 text-slate-700'
               }`}
-              title={user.permisos.includes('configuracion') ? "Haga clic para cambiar la Tasa del Día" : "Tasa de Cambio del Día"}
+              title={canAccessTab('configuracion') ? "Haga clic para cambiar la Tasa del Día" : "Tasa de Cambio del Día"}
             >
               <i className="fa-solid fa-money-bill-transfer text-emerald-600 font-bold"></i>
               <span>Tasa del Día: <strong className="text-emerald-700 font-black">1 USD = Bs. {appState.configuracion?.tasa_usd || '50.00'}</strong></span>
-              {user.permisos.includes('configuracion') && (
+              {canAccessTab('configuracion') && (
                 <i className="fa-solid fa-pen text-[10px] text-amber-700 ml-1"></i>
               )}
             </div>
           </div>
 
           <div className="flex gap-3">
-            {user.permisos.includes('reservas') && (
+            {canAccessTab('reservas') && (
               <button 
                 onClick={() => setIsNuevaReservaOpen(true)}
                 className="bg-[#c5920c] hover:bg-[#b08107] text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-md transition-colors flex items-center gap-2"
@@ -645,7 +659,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              {activeTab === 'dashboard' && user.permisos.includes('dashboard') && (
+              {activeTab === 'dashboard' && canAccessTab('dashboard') && (
                 <Dashboard 
                   habitaciones={appState.habitaciones} 
                   reservas={appState.reservas}
@@ -653,28 +667,29 @@ export default function App() {
                   onCheckinReserva={handleCheckinReserva}
                 />
               )}
-              {activeTab === 'habitaciones' && user.permisos.includes('habitaciones') && (
+              {activeTab === 'habitaciones' && canAccessTab('habitaciones') && (
                 <Habitaciones 
                   habitaciones={appState.habitaciones} 
                   onRoomClick={handleRoomClick}
                 />
               )}
-              {activeTab === 'reservas' && user.permisos.includes('reservas') && (
+              {activeTab === 'reservas' && canAccessTab('reservas') && (
                 <Reservas 
                   reservas={appState.reservas} 
                   onCheckinReserva={handleCheckinReserva}
                 />
               )}
-              {activeTab === 'caja' && user.permisos.includes('caja') && (
+              {activeTab === 'caja' && canAccessTab('caja') && (
                 <Caja 
                   caja={appState.caja} 
                   token={token}
                   currentUser={user}
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onCajaMovimiento={handleCajaMovimiento}
                   onStateChange={fetchState}
                 />
               )}
-              {activeTab === 'tienda' && user.permisos.includes('tienda') && (
+              {activeTab === 'tienda' && canAccessTab('tienda') && (
                 <Tienda 
                   productos={appState.productos}
                   clientes={appState.clientes}
@@ -684,7 +699,7 @@ export default function App() {
                   onStateChange={fetchState}
                 />
               )}
-              {activeTab === 'clientes' && user.permisos.includes('clientes') && (
+              {activeTab === 'clientes' && canAccessTab('clientes') && (
                 <Clientes 
                   clientes={appState.clientes} 
                   token={token}
@@ -692,13 +707,13 @@ export default function App() {
                   onStateChange={fetchState}
                 />
               )}
-              {activeTab === 'usuarios' && (user.rol === 'Administrador' || user.rol === 'Supervisor' || user.permisos.includes('audit_logs')) && (
+              {activeTab === 'usuarios' && canAccessTab('usuarios') && (
                 <Usuarios 
                   token={token}
                   currentUser={user}
                 />
               )}
-              {activeTab === 'configuracion' && user.permisos.includes('configuracion') && (
+              {activeTab === 'configuracion' && canAccessTab('configuracion') && (
                 <Configuracion 
                   token={token}
                   appState={appState}

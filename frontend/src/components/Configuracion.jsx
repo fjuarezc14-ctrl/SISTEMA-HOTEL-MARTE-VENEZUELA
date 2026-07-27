@@ -150,7 +150,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
                 <div className="my-3">
                   {isEditing ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-black text-slate-600">S/</span>
+                      <span className="text-sm font-black text-slate-600">$ USD</span>
                       <input 
                         type="number"
                         value={ratePrice}
@@ -162,8 +162,8 @@ export default function Configuracion({ token, appState, onStateChange }) {
                     </div>
                   ) : (
                     <div className="text-2xl font-black text-slate-800">
-                      S/ {rate.precio_diario.toFixed(2)}
-                      <span className="text-[10px] text-slate-400 font-bold block mt-1">POR NOCHE</span>
+                      ${rate.precio_diario.toFixed(2)} USD
+                      <span className="text-[10px] text-slate-400 font-bold block mt-1">POR PERNOCTA / TARIFA</span>
                     </div>
                   )}
                 </div>
@@ -236,7 +236,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
                 {productos.map(prod => (
                   <tr key={prod.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-3.5 pl-4 font-black text-slate-800">{prod.nombre}</td>
-                    <td className="py-3.5 text-right font-black text-slate-800">S/ {prod.precio_venta.toFixed(2)}</td>
+                    <td className="py-3.5 text-right font-black text-slate-800">${prod.precio_venta.toFixed(2)} USD</td>
                     <td className="py-3.5 text-center font-black">{prod.stock} uds.</td>
                     <td className="py-3.5 text-center">
                       {prod.stock <= 5 ? (
@@ -300,7 +300,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Precio de Venta (S/)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Precio de Venta ($ USD)</label>
                   <input 
                     type="number" 
                     value={prodPrecio}
