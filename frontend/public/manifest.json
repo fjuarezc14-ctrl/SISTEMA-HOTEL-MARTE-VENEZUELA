@@ -1,0 +1,21 @@
+{
+  "short_name": "Hotel Marte",
+  "name": "Hotel Marte PMS - Gestión Hotelera",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#ff331f",
+  "display": "standalone",
+  "orientation": "portrait"
+}

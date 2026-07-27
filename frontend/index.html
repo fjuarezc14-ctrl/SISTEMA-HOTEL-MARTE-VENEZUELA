@@ -2,12 +2,18 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Hotel Marte - Sistema de Gestión Hotelera (PMS)</title>
-    <meta name="description" content="Sistema PMS profesional de gestión hotelera para el Hotel Marte. Control de recepciones, reservas, habitaciones, caja y base de datos de huéspedes frecuentes." />
-    <meta name="keywords" content="hotel marte, pms hotel, sistema hotelero, recepcion hotel, gestion de habitaciones, control de caja" />
-    <meta name="author" content="Hotel Marte" />
+    <meta name="description" content="Sistema PMS profesional de gestión hotelera para el Hotel Marte." />
+    <meta name="theme-color" content="#ff331f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Hotel Marte" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    
     <!-- FontAwesome icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
     <!-- Google Fonts Inter -->
@@ -16,7 +22,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   </head>
   <body class="bg-slate-50 font-sans text-slate-800 h-screen flex overflow-hidden">
-    <div id="root" class="flex flex-row w-full h-full overflow-hidden"></div>
+    <div id="root" class="flex flex-col md:flex-row w-full h-full overflow-hidden"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+        });
+      }
+    </script>
   </body>
 </html>
