@@ -954,19 +954,25 @@ export function CheckinExitosoModal({
 // ==========================================
 // 4. MODAL: CHECK-OUT
 // ==========================================
+import { getStayExpirationStatus } from '../utils/timeHelper';
+
 export function CheckoutModal({ 
   isOpen, 
   room, 
   consumos = [],
   configuracion,
   tablaDanos = [],
+  tarifas = [],
   onClose, 
   onSubmit 
 }) {
   const [sabanas, setSabanas] = useState(true);
   const [control, setControl] = useState(true);
   const [danos, setDanos] = useState(true);
-  const [selectedDanosIds, setSelectedDanosIds] = useState([]);
+  
+  // Custom price mapping for selected damage items: { [id]: priceNumber }
+  const [selectedDanosPrices, setSelectedDanosPrices] = useState({});
+  
   const [penalidadManual, setPenalidadManual] = useState('');
   const [detallePenalidad, setDetallePenalidad] = useState('');
   const [montoHabitacion, setMontoHabitacion] = useState('0.00');
@@ -979,12 +985,22 @@ export function CheckoutModal({
   const roomConsumos = room ? consumos.filter(c => c.numHabitacion === room.num) : [];
   const totalConsumos = roomConsumos.reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
 
+  // Compute stay overtime extra charge
+  const expirationStatus = room ? getStayExpirationStatus(room.salida) : null;
+  const isExpired = expirationStatus?.isExpired && expirationStatus?.minutesOverdue > 0;
+  const hoursOverdue = isExpired ? Math.ceil(expirationStatus.minutesOverdue / 60) : 0;
+  
+  // Find hourly rate for room type
+  const roomTarifa = room ? tarifas.find(t => t.tipo === room.tipo) : null;
+  const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || 3.00) : 3.00;
+  const montoHorasExtras = isExpired ? hoursOverdue * hourlyRate : 0;
+
   useEffect(() => {
     if (isOpen) {
       setSabanas(true);
       setControl(true);
       setDanos(true);
-      setSelectedDanosIds([]);
+      setSelectedDanosPrices({});
       setPenalidadManual('');
       setDetallePenalidad('');
       setMontoHabitacion('0.00');
@@ -995,39 +1011,60 @@ export function CheckoutModal({
 
   if (!isOpen || !room) return null;
 
-  // Toggle a damage item selection
+  // Toggle or update custom damage price
   const handleToggleDanoItem = (danoItem) => {
-    setSelectedDanosIds(prev => {
-      const exists = prev.includes(danoItem.id);
-      const nextIds = exists ? prev.filter(id => id !== danoItem.id) : [...prev, danoItem.id];
-
+    setSelectedDanosPrices(prev => {
+      const nextMap = { ...prev };
+      if (danoItem.id in nextMap) {
+        delete nextMap[danoItem.id];
+      } else {
+        nextMap[danoItem.id] = parseFloat(danoItem.precio_usd) || 0;
+      }
+      
       // Auto update detail text
-      const selectedItems = tablaDanos.filter(d => nextIds.includes(d.id));
-      const detailsText = selectedItems.map(d => d.concepto).join(', ');
+      const selectedItems = tablaDanos.filter(d => d.id in nextMap);
+      const detailsText = selectedItems.map(d => `${d.concepto} ($${(nextMap[d.id] || 0).toFixed(2)})`).join(', ');
       setDetallePenalidad(detailsText);
 
-      return nextIds;
+      return nextMap;
     });
   };
 
-  // Penalties calculation
-  const selectedDanosItems = tablaDanos.filter(d => selectedDanosIds.includes(d.id));
-  const montoDanosTabla = selectedDanosItems.reduce((s, d) => s + (parseFloat(d.precio_usd) || 0), 0);
+  const handleCustomPriceChange = (danoItem, newPriceStr) => {
+    const val = parseFloat(newPriceStr) || 0;
+    setSelectedDanosPrices(prev => {
+      const nextMap = { ...prev, [danoItem.id]: val };
+      
+      const selectedItems = tablaDanos.filter(d => d.id in nextMap);
+      const detailsText = selectedItems.map(d => `${d.concepto} ($${(nextMap[d.id] || 0).toFixed(2)})`).join(', ');
+      setDetallePenalidad(detailsText);
 
-  const showPenalidadInput = !sabanas || !control || !danos || selectedDanosIds.length > 0;
+      return nextMap;
+    });
+  };
+
+  // Penalties & total calculation
+  const selectedDanoIds = Object.keys(selectedDanosPrices);
+  const montoDanosTabla = Object.values(selectedDanosPrices).reduce((s, p) => s + (parseFloat(p) || 0), 0);
+
+  const showPenalidadInput = !sabanas || !control || !danos || selectedDanoIds.length > 0;
   
   const finalPenalidad = showPenalidadInput 
     ? (montoDanosTabla > 0 ? montoDanosTabla : (parseFloat(penalidadManual) || 0))
     : 0;
 
   const finalHab = parseFloat(montoHabitacion) || 0;
-  const totalCobrar = finalHab + totalConsumos + (vetarCliente ? 0 : finalPenalidad);
+  const totalCobrar = finalHab + totalConsumos + montoHorasExtras + (vetarCliente ? 0 : finalPenalidad);
   const totalCobrarVes = (totalCobrar * tasaUsd).toFixed(2);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
     
     let finalDetalle = detallePenalidad.trim();
+    if (montoHorasExtras > 0) {
+      const overNote = `Horas extras por tiempo excedido (${expirationStatus.minutesOverdue}m = ${hoursOverdue}h): +$${montoHorasExtras.toFixed(2)} USD`;
+      finalDetalle = finalDetalle ? `${overNote}. ${finalDetalle}` : overNote;
+    }
     
     if (showPenalidadInput && !finalDetalle) {
       const details = [];
@@ -1039,7 +1076,7 @@ export function CheckoutModal({
 
     onSubmit({
       numHabitacion: room.num,
-      penalidad: vetarCliente ? 0 : finalPenalidad,
+      penalidad: (vetarCliente ? 0 : finalPenalidad) + montoHorasExtras,
       detallePenalidad: finalDetalle,
       montoConsumos: totalConsumos,
       montoHabitacion: finalHab,
@@ -1047,7 +1084,7 @@ export function CheckoutModal({
       vetarCliente,
       clienteId: room.clienteId,
       clienteCi: room.clienteCi,
-      montoDeuda: finalPenalidad,
+      montoDeuda: finalPenalidad + montoHorasExtras,
       motivoVeto: finalDetalle || 'Incidencia de daños en Check-Out'
     });
   };
@@ -1064,11 +1101,27 @@ export function CheckoutModal({
           </button>
         </div>
 
-        <div className="text-center mb-5 shrink-0">
+        <div className="text-center mb-4 shrink-0">
           <p className="text-xs font-bold text-slate-400 uppercase mb-1">Habitación / Titular</p>
           <div className="text-2xl font-black text-slate-800 mb-1">{room.num}</div>
           <p className="text-sm font-bold text-blue-600">{room.huesped}</p>
         </div>
+
+        {/* Automatic Expiration / Overtime Warning Banner */}
+        {isExpired && (
+          <div className="bg-rose-50 border-2 border-rose-400 p-3.5 rounded-xl text-rose-900 mb-4 shrink-0 shadow-sm animate-pulse flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <i className="fa-solid fa-clock-rotate-left text-lg text-rose-600"></i>
+              <div>
+                <span className="block font-black text-rose-800">🔴 TIEMPO EXCEDIDO: {expirationStatus.minutesOverdue} MIN</span>
+                <span className="text-[10px] text-rose-600">Recargo de {hoursOverdue} hr(s) extra (${hourlyRate.toFixed(2)}/h)</span>
+              </div>
+            </div>
+            <span className="text-sm font-black bg-rose-600 text-white px-2.5 py-1 rounded-lg">
+              +$ {montoHorasExtras.toFixed(2)} USD
+            </span>
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="space-y-4 flex-1">
           {/* Billing breakdown */}
@@ -1096,6 +1149,13 @@ export function CheckoutModal({
                 <span>Consumos Extras Cargados:</span>
                 <span className="text-slate-800">$ {totalConsumos.toFixed(2)} USD</span>
               </div>
+
+              {montoHorasExtras > 0 && (
+                <div className="flex justify-between items-center text-rose-600 border-t border-slate-100 pt-2">
+                  <span>Recargo por Horas Extras Excedidas:</span>
+                  <span className="font-black">+$ {montoHorasExtras.toFixed(2)} USD</span>
+                </div>
+              )}
 
               {showPenalidadInput && (
                 <div className="flex justify-between items-center text-rose-600 border-t border-slate-100 pt-2">
@@ -1167,34 +1227,67 @@ export function CheckoutModal({
             </div>
           </div>
 
-          {/* Tabla Oficial de Daños Selector (v4 - Fase 4) */}
+          {/* Tabla Oficial de Daños Selector & Custom Live Price Adjuster */}
           <div className="bg-amber-50/60 border border-amber-200 p-3.5 rounded-xl space-y-3">
             <div className="flex justify-between items-center border-b border-amber-200/60 pb-2">
               <label className="text-xs font-black text-amber-900 uppercase flex items-center gap-1.5">
                 <i className="fa-solid fa-triangle-exclamation text-amber-600"></i> Selector de Tabla de Daños
               </label>
-              {selectedDanosIds.length > 0 && (
+              {selectedDanoIds.length > 0 && (
                 <span className="text-[10px] font-black bg-amber-600 text-white px-2 py-0.5 rounded-full">
-                  +{selectedDanosIds.length} ítem(s) (${montoDanosTabla.toFixed(2)} USD)
+                  +{selectedDanoIds.length} ítem(s) (${montoDanosTabla.toFixed(2)} USD)
                 </span>
               )}
             </div>
 
-            <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
               {tablaDanos.map(d => {
-                const isSelected = selectedDanosIds.includes(d.id);
+                const isSelected = d.id in selectedDanosPrices;
+                const currentPrice = selectedDanosPrices[d.id] !== undefined ? selectedDanosPrices[d.id] : d.precio_usd;
+                const isCotizable = d.tipo_tarifa === 'cotizable';
+
                 return (
                   <div
                     key={d.id}
-                    onClick={() => handleToggleDanoItem(d)}
-                    className={`p-2 rounded-lg border text-xs cursor-pointer flex justify-between items-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-xs transition-all ${
                       isSelected
-                        ? 'bg-amber-600 text-white border-amber-700 font-bold shadow-sm'
+                        ? 'bg-amber-600 text-white border-amber-700 shadow-sm'
                         : 'bg-white text-slate-700 border-amber-200/80 hover:bg-amber-100/50'
                     }`}
                   >
-                    <span className="truncate pr-2">{d.concepto}</span>
-                    <span className="font-black shrink-0">${d.precio_usd.toFixed(2)} USD</span>
+                    <div className="flex justify-between items-center">
+                      <label 
+                        onClick={() => handleToggleDanoItem(d)}
+                        className="flex items-center gap-2 cursor-pointer font-bold truncate flex-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded text-amber-800 focus:ring-amber-500"
+                        />
+                        <span className="truncate">{d.concepto}</span>
+                      </label>
+
+                      {/* Fixed vs Cotizable price input */}
+                      {isSelected && isCotizable ? (
+                        <div className="flex items-center gap-1 ml-2 bg-amber-700 p-1 rounded-lg text-white" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[10px] font-black">$ USD</span>
+                          <input
+                            type="number"
+                            step="1.00"
+                            min="0"
+                            value={currentPrice}
+                            onChange={(e) => handleCustomPriceChange(d, e.target.value)}
+                            className="w-16 px-1.5 py-0.5 text-xs font-black text-slate-900 bg-white rounded outline-none text-center"
+                          />
+                        </div>
+                      ) : (
+                        <span className="font-black shrink-0 ml-2">
+                          ${d.precio_usd.toFixed(2)} USD {d.tipo_tarifa === 'fija' ? '(Fija)' : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}

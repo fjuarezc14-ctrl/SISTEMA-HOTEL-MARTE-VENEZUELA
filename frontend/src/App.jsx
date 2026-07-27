@@ -883,6 +883,7 @@ export default function App() {
         consumos={appState.consumos}
         configuracion={appState.configuracion}
         tablaDanos={appState.tablaDanos || []}
+        tarifas={appState.tarifas || []}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
       />
