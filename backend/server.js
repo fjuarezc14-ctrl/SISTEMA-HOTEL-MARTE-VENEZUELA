@@ -555,6 +555,82 @@ app.put('/api/configuracion', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/habitaciones - Crear/Agregar nueva habitación al hotel
+app.post('/api/habitaciones', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere permiso de configuración o Administrador.' });
+  }
+
+  const { num, tipo } = req.body;
+  if (!num || !tipo) {
+    return res.status(400).json({ error: 'Debe ingresar el número y tipo de habitación.' });
+  }
+
+  const numTrim = String(num).trim();
+  try {
+    const existing = await db.get('SELECT num FROM habitaciones WHERE num = ?', [numTrim]);
+    if (existing) {
+      return res.status(400).json({ error: `La habitación número ${numTrim} ya existe en el sistema.` });
+    }
+
+    await db.run(
+      'INSERT INTO habitaciones (num, tipo, estado, huesped, acomp, ingreso, salida) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [numTrim, tipo, 'Libre', '', '', '', '']
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Agregar Habitación',
+      `Habitación #${numTrim} (${tipo}) creada en estado Libre`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Habitación #${numTrim} agregada exitosamente.` });
+  } catch (error) {
+    console.error('Error adding room:', error);
+    res.status(500).json({ error: 'Error al agregar habitación.' });
+  }
+});
+
+// DELETE /api/habitaciones/:num - Eliminar habitación si está en estado Libre
+app.delete('/api/habitaciones/:num', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere permiso de configuración o Administrador.' });
+  }
+
+  const { num } = req.params;
+  try {
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [num]);
+    if (!room) {
+      return res.status(404).json({ error: 'Habitación no encontrada.' });
+    }
+
+    if (room.estado !== 'Libre') {
+      return res.status(400).json({ 
+        error: `No se puede eliminar la Habitación #${num} porque está en estado "${room.estado}". Debe estar en estado Libre.` 
+      });
+    }
+
+    await db.run('DELETE FROM habitaciones WHERE num = ?', [num]);
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Eliminar Habitación',
+      `Habitación #${num} eliminada del sistema`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Habitación #${num} eliminada exitosamente.` });
+  } catch (error) {
+    console.error('Error deleting room:', error);
+    res.status(500).json({ error: 'Error al eliminar habitación.' });
+  }
+});
+
 // Helper: Calcular hora de salida según modalidad (4 Horas o Pernocta 11:00 AM)
 function calcularHoraSalida(modalidad) {
   if (modalidad === 'pernocta') {

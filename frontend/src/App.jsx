@@ -345,8 +345,13 @@ export default function App() {
   const canAccessTab = (tabName) => {
     if (!user) return false;
     if (user.rol === 'Administrador') return true;
-    if (tabName === 'tickets' || tabName === 'entregaTurnos') return true;
     const perms = user.permisos || [];
+    if (tabName === 'tickets') {
+      return perms.includes('tickets') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Limpieza' || user.rol === 'Camarero';
+    }
+    if (tabName === 'entregaTurnos') {
+      return perms.includes('entregaTurnos') || user.rol === 'Supervisor' || user.rol === 'Recepcionista';
+    }
     if (tabName === 'tienda') {
       return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
     }

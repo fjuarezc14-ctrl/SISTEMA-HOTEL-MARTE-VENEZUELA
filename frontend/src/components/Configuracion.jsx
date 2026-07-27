@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export default function Configuracion({ token, appState, onStateChange }) {
-  const { productos = [], tarifas = [] } = appState;
+  const { productos = [], tarifas = [], habitaciones = [] } = appState;
 
   // Products states
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -13,6 +13,12 @@ export default function Configuracion({ token, appState, onStateChange }) {
   // Rates edit state
   const [editingRateType, setEditingRateType] = useState(null);
   const [ratePrice, setRatePrice] = useState('');
+
+  // Room Management states
+  const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
+  const [roomNum, setRoomNum] = useState('');
+  const [roomTipo, setRoomTipo] = useState('Matrimonial');
+  const [isSubmittingRoom, setIsSubmittingRoom] = useState(false);
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -117,9 +123,119 @@ export default function Configuracion({ token, appState, onStateChange }) {
     }
   };
 
+  // Add Room Submit
+  const handleAddRoomSubmit = async (e) => {
+    e.preventDefault();
+    if (!roomNum.trim()) return;
+
+    setIsSubmittingRoom(true);
+    try {
+      const res = await fetch('/api/habitaciones', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          num: roomNum.trim(),
+          tipo: roomTipo
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al agregar habitación');
+
+      alert(`✅ Habitación #${roomNum.trim()} creada exitosamente.`);
+      setIsRoomModalOpen(false);
+      setRoomNum('');
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    } finally {
+      setIsSubmittingRoom(false);
+    }
+  };
+
+  // Delete Room Action
+  const handleDeleteRoom = async (num, estado) => {
+    if (estado !== 'Libre') {
+      alert(`⚠️ No se puede eliminar la Habitación #${num} porque está en estado "${estado}". Debe estar Libre.`);
+      return;
+    }
+
+    const confirmDelete = window.confirm(`¿Está seguro de ELIMINAR la Habitación #${num} del hotel de forma permanente?`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`/api/habitaciones/${num}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar habitación');
+
+      alert(`✅ Habitación #${num} eliminada correctamente.`);
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    }
+  };
+
   return (
     <div className="space-y-8 fade-in">
-      {/* 1. SECCIÓN TARIFAS DE HABITACIONES */}
+      {/* 1. SECCIÓN GESTIÓN DE HABITACIONES (AGREGAR / ELIMINAR HABITACIONES) */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
+          <div>
+            <h2 className="text-lg font-black text-slate-800">
+              <i className="fa-solid fa-door-open text-[#ff331f] mr-2"></i> Gestión de Habitaciones del Hotel
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">Cree nuevas habitaciones o elimine habitaciones fuera de servicio.</p>
+          </div>
+          <button 
+            onClick={() => {
+              setRoomNum('');
+              setRoomTipo('Matrimonial');
+              setIsRoomModalOpen(true);
+            }}
+            className="bg-[#ff331f] hover:bg-[#e02816] text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-plus"></i> Agregar Habitación
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {habitaciones.map(h => (
+            <div key={h.num} className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-col justify-between hover:shadow-sm transition-all relative">
+              <div className="flex justify-between items-start">
+                <span className="text-lg font-black text-slate-800">Hab. {h.num}</span>
+                <button
+                  onClick={() => handleDeleteRoom(h.num, h.estado)}
+                  className="text-slate-300 hover:text-rose-600 p-1 transition-colors"
+                  title={`Eliminar Habitación ${h.num}`}
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-slate-500 block">{h.tipo}</span>
+                <span className={`inline-block text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
+                  h.estado === 'Libre' ? 'bg-green-100 text-green-800' :
+                  h.estado === 'Ocupada' ? 'bg-rose-100 text-rose-800' :
+                  h.estado === 'Limpieza' ? 'bg-blue-100 text-blue-800' :
+                  'bg-amber-100 text-amber-800'
+                }`}>
+                  {h.estado}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. SECCIÓN TARIFAS DE HABITACIONES */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="border-b border-slate-100 pb-3 mb-5">
           <h2 className="text-lg font-black text-slate-800">
@@ -135,7 +251,8 @@ export default function Configuracion({ token, appState, onStateChange }) {
               Simple: 'fa-solid fa-person text-[#ff331f]',
               Doble: 'fa-solid fa-user-group text-blue-600',
               Matrimonial: 'fa-solid fa-heart text-rose-500',
-              Suite: 'fa-solid fa-crown text-amber-500'
+              Suite: 'fa-solid fa-crown text-amber-500',
+              'Mini Suite': 'fa-solid fa-crown text-amber-500'
             };
 
             return (
@@ -199,7 +316,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
         </div>
       </div>
 
-      {/* 2. SECCIÓN CATÁLOGO DE PRODUCTOS (INVENTARIO) */}
+      {/* 3. SECCIÓN CATÁLOGO DE PRODUCTOS (INVENTARIO) */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
           <div>
@@ -270,6 +387,69 @@ export default function Configuracion({ token, appState, onStateChange }) {
           </div>
         )}
       </div>
+
+      {/* CREATE ROOM MODAL */}
+      {isRoomModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-door-open text-[#ff331f]"></i> Agregar Nueva Habitación
+              </h3>
+              <button onClick={() => setIsRoomModalOpen(false)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleAddRoomSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Número de Habitación</label>
+                <input 
+                  type="text" 
+                  value={roomNum}
+                  onChange={(e) => setRoomNum(e.target.value)}
+                  placeholder="Ej: 111, 112, 201"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm font-black outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Habitación</label>
+                <select
+                  value={roomTipo}
+                  onChange={(e) => setRoomTipo(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                >
+                  <option value="Matrimonial">Matrimonial ($10 / $20 USD)</option>
+                  <option value="Mini Suite">Mini Suite ($14 / $24 USD)</option>
+                </select>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsRoomModalOpen(false)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSubmittingRoom}
+                  className="flex-1 bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md"
+                >
+                  {isSubmittingRoom ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
+                  ) : (
+                    'Guardar Habitación'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* CREATE / EDIT PRODUCT MODAL */}
       {isProductModalOpen && (

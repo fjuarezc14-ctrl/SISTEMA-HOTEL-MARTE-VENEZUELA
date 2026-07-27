@@ -23,6 +23,8 @@ export default function Usuarios({ token, currentUser }) {
     dashboard: true,
     habitaciones: true,
     reservas: true,
+    tickets: true,
+    entregaTurnos: true,
     caja: true,
     tienda: true,
     clientes: true,
@@ -82,6 +84,8 @@ export default function Usuarios({ token, currentUser }) {
       dashboard: false,
       habitaciones: false,
       reservas: false,
+      tickets: false,
+      entregaTurnos: false,
       caja: false,
       tienda: false,
       clientes: false,
@@ -89,19 +93,12 @@ export default function Usuarios({ token, currentUser }) {
       audit_logs: false
     };
 
-    if (selectedRol === 'Administrador') {
+    if (selectedRol === 'Administrador' || selectedRol === 'Supervisor') {
       preset.dashboard = true;
       preset.habitaciones = true;
       preset.reservas = true;
-      preset.caja = true;
-      preset.tienda = true;
-      preset.clientes = true;
-      preset.configuracion = true;
-      preset.audit_logs = true;
-    } else if (selectedRol === 'Supervisor') {
-      preset.dashboard = true;
-      preset.habitaciones = true;
-      preset.reservas = true;
+      preset.tickets = true;
+      preset.entregaTurnos = true;
       preset.caja = true;
       preset.tienda = true;
       preset.clientes = true;
@@ -111,18 +108,21 @@ export default function Usuarios({ token, currentUser }) {
       preset.dashboard = true;
       preset.habitaciones = true;
       preset.reservas = true;
+      preset.tickets = true;
+      preset.entregaTurnos = true;
       preset.caja = true;
       preset.tienda = true;
       preset.clientes = true;
     } else if (selectedRol === 'Limpieza') {
       preset.dashboard = true;
       preset.habitaciones = true;
+      preset.tickets = true;
     } else if (selectedRol === 'Camarero') {
       preset.dashboard = true;
       preset.habitaciones = true;
       preset.tienda = true;
+      preset.tickets = true;
     }
-
     setPermisos(preset);
   };
 
@@ -156,14 +156,17 @@ export default function Usuarios({ token, currentUser }) {
       dashboard: false,
       habitaciones: false,
       reservas: false,
+      tickets: false,
+      entregaTurnos: false,
       caja: false,
+      tienda: false,
       clientes: false,
       configuracion: false,
       audit_logs: false
     };
     if (user.permisos && Array.isArray(user.permisos)) {
       user.permisos.forEach(p => {
-        if (p in permMap) permMap[p] = true;
+        permMap[p] = true;
       });
     }
     setPermisos(permMap);
@@ -656,6 +659,24 @@ export default function Usuarios({ token, currentUser }) {
                       className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
                     />
                     Módulo de Reservas
+                  </label>
+                  <label className="flex items-center gap-3 chk-label cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={permisos.tickets}
+                      onChange={() => handlePermissionChange('tickets')}
+                      className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
+                    />
+                    Tickets & Incidencias Internas
+                  </label>
+                  <label className="flex items-center gap-3 chk-label cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={permisos.entregaTurnos}
+                      onChange={() => handlePermissionChange('entregaTurnos')}
+                      className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
+                    />
+                    Entrega y Recepción de Turno
                   </label>
                   <label className="flex items-center gap-3 chk-label cursor-pointer">
                     <input 
