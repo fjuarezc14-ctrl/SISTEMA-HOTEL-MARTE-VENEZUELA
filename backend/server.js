@@ -1047,6 +1047,50 @@ app.post('/api/caja', requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/caja/:id/validar - Toggle/Validar pago digital por Administrador/Supervisor (v4 - Fase 1)
+app.put('/api/caja/:id/validar', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const clientIp = req.ip || req.socket.remoteAddress || '';
+
+  if (req.user.rol !== 'Administrador' && req.user.rol !== 'Supervisor') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Administrador o Supervisor para validar pagos.' });
+  }
+
+  try {
+    const txn = await db.get('SELECT * FROM caja WHERE id = ?', [id]);
+    if (!txn) {
+      return res.status(404).json({ error: 'Transacción de caja no encontrada.' });
+    }
+
+    const nuevoEstado = txn.validado === 1 ? 0 : 1;
+    const fechaValidacion = nuevoEstado === 1 ? new Date().toISOString() : '';
+    const validadorNombre = nuevoEstado === 1 ? req.user.nombre : '';
+
+    await db.run(
+      'UPDATE caja SET validado = ?, fecha_validacion = ?, usuario_validador_nombre = ? WHERE id = ?',
+      [nuevoEstado, fechaValidacion, validadorNombre, id]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      nuevoEstado === 1 ? 'Validar Pago Digital' : 'Desmarcar Validación Pago',
+      `Transacción #${id} (${txn.metodo} - $${txn.monto}) ${nuevoEstado === 1 ? 'validada tras revisión bancaria' : 'marcada como pendiente'}`,
+      clientIp
+    );
+
+    res.json({ 
+      success: true, 
+      validado: nuevoEstado, 
+      message: nuevoEstado === 1 ? 'Pago digital validado exitosamente.' : 'Validación del pago removida.' 
+    });
+  } catch (error) {
+    console.error('Error al validar pago:', error);
+    res.status(500).json({ error: 'Error al procesar la validación del pago.' });
+  }
+});
+
 // POST /api/caja/cierre-turno - Registrar el resumen del Cierre de Turno por Usuario (v2 - Fase 5)
 app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
   const { totalEfectivo, totalTarjeta, totalOtros, totalEgresos, saldoNeto } = req.body;

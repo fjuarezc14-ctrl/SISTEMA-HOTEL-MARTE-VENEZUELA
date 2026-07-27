@@ -351,12 +351,21 @@ export async function initDb() {
     );
   }
 
-  // Migraciones autocurativas para la tabla caja (v2 - Fase 5)
+  // Migraciones autocurativas para la tabla caja (v2 - Fase 5 & v4 - Fase 1)
   try {
     await db.run("ALTER TABLE caja ADD COLUMN usuarioId TEXT");
   } catch (e) { /* Columna ya existe */ }
   try {
     await db.run("ALTER TABLE caja ADD COLUMN usuarioNombre TEXT");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN validado INTEGER DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN fecha_validacion TEXT DEFAULT ''");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN usuario_validador_nombre TEXT DEFAULT ''");
   } catch (e) { /* Columna ya existe */ }
 
   return db;
