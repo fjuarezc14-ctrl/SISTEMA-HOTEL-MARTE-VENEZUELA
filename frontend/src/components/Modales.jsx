@@ -21,7 +21,7 @@ export function AsignarDirectoModal({
   const [modalidad, setModalidad] = useState('4h');
   const [esMenor, setEsMenor] = useState(false);
   const [monto, setMonto] = useState('10');
-  const [metodo, setMetodo] = useState('Efectivo Bolívares');
+  const [metodo, setMetodo] = useState('Efectivo (Bs)');
   const [comprobante, setComprobante] = useState('Nota de Venta');
   
   // Search state
@@ -40,7 +40,7 @@ export function AsignarDirectoModal({
       setCiAcomp('');
       setModalidad('4h');
       setEsMenor(false);
-      setMetodo('Efectivo Bolívares');
+      setMetodo('Efectivo (Bs)');
       setComprobante('Nota de Venta');
       setSearchQuery('');
       setShowSuggestions(false);
@@ -342,11 +342,11 @@ export function AsignarDirectoModal({
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
-                    <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                    <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                     <option value="Pago Móvil">Pago Móvil</option>
                     <option value="Punto de Venta">Punto de Venta</option>
-                    <option value="Divisas Dólares">Divisas Dólares</option>
-                    <option value="Binance">Binance</option>
+                    <option value="Efectivo ($)">Efectivo ($)</option>
+                    <option value="Zelle">Zelle</option>
                   </select>
                 </div>
               </div>
@@ -400,7 +400,7 @@ export function NuevaReservaModal({
   const [nomAcomp, setNomAcomp] = useState('');
   const [ciAcomp, setCiAcomp] = useState('');
   const [monto, setMonto] = useState('');
-  const [metodo, setMetodo] = useState('Efectivo Bolívares');
+  const [metodo, setMetodo] = useState('Efectivo (Bs)');
   const [comprobante, setComprobante] = useState('Nota de Venta');
   const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
   
@@ -428,7 +428,7 @@ export function NuevaReservaModal({
       setNomAcomp('');
       setCiAcomp('');
       setMonto('');
-      setMetodo('Efectivo Bolívares');
+      setMetodo('Efectivo (Bs)');
       setComprobante('Nota de Venta');
       setSearchQuery('');
       setCategoriaFiltro('Todas');
@@ -773,11 +773,11 @@ export function NuevaReservaModal({
                     required 
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   >
-                    <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                    <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                     <option value="Pago Móvil">Pago Móvil</option>
                     <option value="Punto de Venta">Punto de Venta</option>
-                    <option value="Divisas Dólares">Divisas Dólares</option>
-                    <option value="Binance">Binance</option>
+                    <option value="Efectivo ($)">Efectivo ($)</option>
+                    <option value="Zelle">Zelle</option>
                   </select>
                 </div>
                 <div className="col-span-2">
@@ -968,7 +968,7 @@ export function CheckoutModal({
   const [penalidad, setPenalidad] = useState('');
   const [detallePenalidad, setDetallePenalidad] = useState('');
   const [montoHabitacion, setMontoHabitacion] = useState('0.00');
-  const [metodoPago, setMetodoPago] = useState('Efectivo Bolívares');
+  const [metodoPago, setMetodoPago] = useState('Efectivo (Bs)');
   const [vetarCliente, setVetarCliente] = useState(false);
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
@@ -985,7 +985,7 @@ export function CheckoutModal({
       setPenalidad('');
       setDetallePenalidad('');
       setMontoHabitacion('0.00');
-      setMetodoPago('Efectivo Bolívares');
+      setMetodoPago('Efectivo (Bs)');
       setVetarCliente(false);
     }
   }, [isOpen]);
@@ -1101,11 +1101,11 @@ export function CheckoutModal({
               className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
               required
             >
-              <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+              <option value="Efectivo (Bs)">Efectivo (Bs)</option>
               <option value="Pago Móvil">Pago Móvil</option>
               <option value="Punto de Venta">Punto de Venta</option>
-              <option value="Divisas Dólares">Divisas Dólares</option>
-              <option value="Binance">Binance</option>
+              <option value="Efectivo ($)">Efectivo ($)</option>
+              <option value="Zelle">Zelle</option>
             </select>
           </div>
 
@@ -1310,7 +1310,7 @@ export function DetalleHabitacionOcupadaModal({
                 <i className="fa-solid fa-mug-hot text-[#c5920c] mr-1"></i> Consumos y Cargos Extra
               </p>
               <span className="bg-[#c5920c] text-white text-xs font-black px-2.5 py-0.5 rounded-lg">
-                Total: S/ {totalConsumos.toFixed(2)}
+                Total: $USD  {totalConsumos.toFixed(2)}
               </span>
             </div>
 
@@ -1328,7 +1328,7 @@ export function DetalleHabitacionOcupadaModal({
                       <span className="text-slate-400 font-medium">({c.fecha})</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-slate-800">S/ {(c.monto * c.cantidad).toFixed(2)}</span>
+                      <span className="text-slate-800">$ {(c.monto * c.cantidad).toFixed(2)}</span>
                       <button 
                         onClick={() => onDeleteConsumo(c.id)}
                         className="text-slate-400 hover:text-rose-500 transition-colors"
@@ -1384,7 +1384,7 @@ export function DetalleHabitacionOcupadaModal({
                             Stock: {prod.stock} unidades
                           </span>
                         </div>
-                        <span className="text-[#c5920c] font-black">S/ {prod.precio_venta.toFixed(2)}</span>
+                        <span className="text-[#c5920c] font-black">$ {prod.precio_venta.toFixed(2)}</span>
                       </button>
                     ))}
                   </div>
@@ -1395,7 +1395,7 @@ export function DetalleHabitacionOcupadaModal({
                   type="number" 
                   value={monto}
                   onChange={(e) => setMonto(e.target.value)}
-                  placeholder="Precio S/" 
+                  placeholder="Precio $" 
                   step="0.10"
                   min="0.10"
                   readOnly={!!selectedProduct}
@@ -1452,3 +1452,4 @@ export function DetalleHabitacionOcupadaModal({
     </div>
   );
 }
+

@@ -219,7 +219,7 @@ export async function initDb() {
         adminPassHash,
         'Administrador Root',
         'Administrador',
-        JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion'])
+        JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'tienda', 'clientes', 'configuracion'])
       ]
     );
   } else {
@@ -253,8 +253,9 @@ export async function initDb() {
   // Ensure default admin u_admin always has the full set of permissions including new modules
   await db.run(
     "UPDATE usuarios SET permisos = ? WHERE id = 'u_admin'",
-    [JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'clientes', 'configuracion', 'usuarios', 'audit_logs'])]
+    [JSON.stringify(['dashboard', 'habitaciones', 'reservas', 'caja', 'tienda', 'clientes', 'configuracion', 'usuarios', 'audit_logs'])]
   );
+
 
   // Seed configuracion (v3 - Fase 1) - Tasa del Día USD/VES
   const tasaConfig = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");

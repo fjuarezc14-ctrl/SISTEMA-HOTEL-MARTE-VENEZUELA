@@ -4,7 +4,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const [tipo, setTipo] = useState('Ingreso');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
-  const [metodo, setMetodo] = useState('Efectivo Bolívares');
+  const [metodo, setMetodo] = useState('Efectivo (Bs)');
 
   // Filter state ('all' vs 'mine')
   const [filterMode, setFilterMode] = useState('all');
@@ -34,21 +34,21 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   
   const getMethodTotal = (methodName) => {
     return myMovements
-      .filter(t => t.tipo === 'Ingreso' && (t.metodo === methodName || (methodName === 'Efectivo Bolívares' && t.metodo === 'Efectivo')))
+      .filter(t => t.tipo === 'Ingreso' && (t.metodo === methodName || (methodName === 'Efectivo (Bs)' && t.metodo === 'Efectivo')))
       .reduce((sum, t) => sum + parseFloat(t.monto), 0);
   };
 
-  const myEfectivoVES = getMethodTotal('Efectivo Bolívares');
+  const myEfectivoVES = getMethodTotal('Efectivo (Bs)');
   const myPagoMovil = getMethodTotal('Pago Móvil');
   const myPuntoVenta = getMethodTotal('Punto de Venta');
-  const myDivisasUSD = getMethodTotal('Divisas Dólares');
-  const myBinance = getMethodTotal('Binance');
+  const myDivisasUSD = getMethodTotal('Efectivo ($)');
+  const myZelle = getMethodTotal('Zelle');
 
   const myEgresos = myMovements
     .filter(t => t.tipo === 'Egreso')
     .reduce((sum, t) => sum + parseFloat(t.monto), 0);
 
-  const myTotalIngresos = myEfectivoVES + myPagoMovil + myPuntoVenta + myDivisasUSD + myBinance;
+  const myTotalIngresos = myEfectivoVES + myPagoMovil + myPuntoVenta + myDivisasUSD + myZelle;
   const mySaldoNeto = myTotalIngresos - myEgresos;
 
   const handleSubmit = (e) => {
@@ -78,7 +78,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
         body: JSON.stringify({
           totalEfectivo: myEfectivoVES,
           totalTarjeta: myPuntoVenta,
-          totalOtros: myPagoMovil + myDivisasUSD + myBinance,
+          totalOtros: myPagoMovil + myDivisasUSD + myZelle,
           totalEgresos: myEgresos,
           saldoNeto: mySaldoNeto
         })
@@ -217,7 +217,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                             {t.tipo}
                           </span>
                         </td>
-                        <td className="p-4 text-center text-slate-700 font-bold text-xs">{t.metodo || 'Efectivo Bolívares'}</td>
+                        <td className="p-4 text-center text-slate-700 font-bold text-xs">{t.metodo || 'Efectivo (Bs)'}</td>
                         <td className={`p-4 text-right pr-6 font-black ${
                           t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
                         }`}>
@@ -301,11 +301,11 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                   required
                 >
-                  <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                  <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                   <option value="Pago Móvil">Pago Móvil</option>
                   <option value="Punto de Venta">Punto de Venta</option>
-                  <option value="Divisas Dólares">Divisas Dólares</option>
-                  <option value="Binance">Binance</option>
+                  <option value="Efectivo ($)">Efectivo ($)</option>
+                  <option value="Zelle">Zelle</option>
                 </select>
               </div>
             </div>
@@ -347,7 +347,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
               
               <div className="flex justify-between items-center py-1">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-money-bill-wave text-emerald-600"></i> Efectivo Bolívares:
+                  <i className="fa-solid fa-money-bill-wave text-emerald-600"></i> Efectivo (Bs):
                 </span>
                 <div className="text-right">
                   <span className="font-black text-slate-800 block">${myEfectivoVES.toFixed(2)} USD</span>
@@ -377,7 +377,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
 
               <div className="flex justify-between items-center py-1 border-t border-slate-100 pt-1">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-[#c5920c] fa-dollar-sign text-amber-600"></i> Divisas Dólares:
+                  <i className="fa-solid fa-[#c5920c] fa-dollar-sign text-amber-600"></i> Efectivo ($):
                 </span>
                 <div className="text-right">
                   <span className="font-black text-slate-800 block">${myDivisasUSD.toFixed(2)} USD</span>
@@ -387,11 +387,11 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
 
               <div className="flex justify-between items-center py-1 border-t border-slate-100 pt-1">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-coins text-amber-500"></i> Binance Crypto:
+                  <i className="fa-solid fa-coins text-amber-500"></i> Zelle:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myBinance.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myBinance * tasaUsd).toFixed(2)}</span>
+                  <span className="font-black text-slate-800 block">${myZelle.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myZelle * tasaUsd).toFixed(2)}</span>
                 </div>
               </div>
 
@@ -447,3 +447,4 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
     </div>
   );
 }
+

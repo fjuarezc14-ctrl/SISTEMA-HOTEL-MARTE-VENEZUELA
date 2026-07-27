@@ -15,7 +15,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const [selectedClient, setSelectedClient] = useState(null);
   const [isPayDebtOpen, setIsPayDebtOpen] = useState(false);
   const [montoPago, setMontoPago] = useState('');
-  const [metodoPago, setMetodoPago] = useState('Efectivo Bolívares');
+  const [metodoPago, setMetodoPago] = useState('Efectivo (Bs)');
 
   // Manual Veto modal state
   const [isVetoModalOpen, setIsVetoModalOpen] = useState(false);
@@ -95,7 +95,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const handleOpenPagarDeuda = (client) => {
     setSelectedClient(client);
     setMontoPago(client.monto_deuda_usd || 0);
-    setMetodoPago('Efectivo Bolívares');
+    setMetodoPago('Efectivo (Bs)');
     setIsPayDebtOpen(true);
   };
 
@@ -482,11 +482,11 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
                   onChange={(e) => setMetodoPago(e.target.value)}
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                 >
-                  <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                  <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                   <option value="Pago Móvil">Pago Móvil</option>
                   <option value="Punto de Venta">Punto de Venta</option>
-                  <option value="Divisas Dólares">Divisas Dólares</option>
-                  <option value="Binance">Binance</option>
+                  <option value="Efectivo ($)">Efectivo ($)</option>
+                  <option value="Zelle">Zelle</option>
                 </select>
               </div>
 

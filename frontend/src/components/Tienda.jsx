@@ -11,11 +11,11 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
 
   // Mixed Payment state
   const [tipoPago, setTipoPago] = useState('Unico'); // 'Unico' | 'Mixto'
-  const [metodoUnico, setMetodoUnico] = useState('Efectivo Bolívares');
+  const [metodoUnico, setMetodoUnico] = useState('Efectivo (Bs)');
   
-  // Mixed payment rows: [{ metodo: 'Efectivo Bolívares', monto_usd: 5.00 }]
+  // Mixed payment rows: [{ metodo: 'Efectivo (Bs)', monto_usd: 5.00 }]
   const [pagosMixtos, setPagosMixtos] = useState([
-    { metodo: 'Efectivo Bolívares', monto_usd: '' },
+    { metodo: 'Efectivo (Bs)', monto_usd: '' },
     { metodo: 'Pago Móvil', monto_usd: '' }
   ]);
 
@@ -64,7 +64,7 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
     setClienteNombre('');
     setClienteCi('');
     setPagosMixtos([
-      { metodo: 'Efectivo Bolívares', monto_usd: '' },
+      { metodo: 'Efectivo (Bs)', monto_usd: '' },
       { metodo: 'Pago Móvil', monto_usd: '' }
     ]);
     setErrorMsg('');
@@ -434,11 +434,11 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
                       onChange={(e) => setMetodoUnico(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
                     >
-                      <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                      <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                       <option value="Pago Móvil">Pago Móvil</option>
                       <option value="Punto de Venta">Punto de Venta</option>
-                      <option value="Divisas Dólares">Divisas Dólares</option>
-                      <option value="Binance">Binance</option>
+                      <option value="Efectivo ($)">Efectivo ($)</option>
+                      <option value="Zelle">Zelle</option>
                     </select>
                   </div>
                 )}
@@ -461,11 +461,11 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
                             onChange={(e) => handlePagoRowChange(index, 'metodo', e.target.value)}
                             className="flex-1 px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-amber-500"
                           >
-                            <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                            <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                             <option value="Pago Móvil">Pago Móvil</option>
                             <option value="Punto de Venta">Punto de Venta</option>
-                            <option value="Divisas Dólares">Divisas Dólares</option>
-                            <option value="Binance">Binance</option>
+                            <option value="Efectivo ($)">Efectivo ($)</option>
+                            <option value="Zelle">Zelle</option>
                           </select>
 
                           <div className="w-28 relative">
