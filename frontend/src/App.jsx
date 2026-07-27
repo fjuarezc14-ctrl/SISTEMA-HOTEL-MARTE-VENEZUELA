@@ -7,6 +7,7 @@ import Clientes from './components/Clientes';
 import Tienda from './components/Tienda';
 import Tickets from './components/Tickets';
 import EntregaTurnos from './components/EntregaTurnos';
+import InventarioLenceria from './components/InventarioLenceria';
 import Usuarios from './components/Usuarios';
 import Configuracion from './components/Configuracion';
 import { 
@@ -352,6 +353,9 @@ export default function App() {
     if (tabName === 'entregaTurnos') {
       return perms.includes('entregaTurnos') || user.rol === 'Supervisor' || user.rol === 'Recepcionista';
     }
+    if (tabName === 'inventarioLenceria') {
+      return perms.includes('inventarioLenceria') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Limpieza';
+    }
     if (tabName === 'tienda') {
       return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
     }
@@ -365,7 +369,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       if (!canAccessTab(activeTab)) {
-        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
+        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'inventarioLenceria', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
         const firstAvailable = availableTabs.find(t => canAccessTab(t));
         if (firstAvailable) setActiveTab(firstAvailable);
       }
@@ -380,6 +384,7 @@ export default function App() {
       reservas: 'Historial de Reservas',
       tickets: 'Tickets & Incidencias Internas',
       entregaTurnos: 'Entrega y Recepción de Turno',
+      inventarioLenceria: 'Inventario de Lencería & Equipamiento Fijo',
       caja: 'Control de Caja y Cobros habituales',
       tienda: 'Tienda & Market (Venta Directa POS)',
       clientes: 'Directorio de Clientes VIP',
@@ -555,6 +560,19 @@ export default function App() {
                   {(appState.entregaTurnos || []).filter(t => t.estado === 'Pendiente Confirmación').length}
                 </span>
               )}
+            </button>
+          )}
+
+          {canAccessTab('inventarioLenceria') && (
+            <button 
+              onClick={() => setActiveTab('inventarioLenceria')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'inventarioLenceria'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-boxes-stacked w-5"></i> Lencería & Equipamiento
             </button>
           )}
 
@@ -749,6 +767,16 @@ export default function App() {
                   token={token}
                   currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
+                  onStateChange={fetchState}
+                />
+              )}
+              {activeTab === 'inventarioLenceria' && canAccessTab('inventarioLenceria') && (
+                <InventarioLenceria 
+                  inventarioLenceria={appState.inventarioLenceria || []}
+                  inventarioHabitaciones={appState.inventarioHabitaciones || []}
+                  habitaciones={appState.habitaciones || []}
+                  token={token}
+                  currentUser={user}
                   onStateChange={fetchState}
                 />
               )}

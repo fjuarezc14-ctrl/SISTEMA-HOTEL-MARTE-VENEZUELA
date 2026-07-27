@@ -148,6 +148,32 @@ export async function initDb() {
       observacionesConfirmacion TEXT DEFAULT '',
       estado TEXT DEFAULT 'Pendiente Confirmación'
     );
+
+    CREATE TABLE IF NOT EXISTS inventario_lenceria (
+      id TEXT PRIMARY KEY,
+      nombre TEXT UNIQUE NOT NULL,
+      cantidad_total INTEGER NOT NULL DEFAULT 0,
+      en_almacen INTEGER NOT NULL DEFAULT 0,
+      en_lavanderia INTEGER NOT NULL DEFAULT 0,
+      en_habitaciones INTEGER NOT NULL DEFAULT 0,
+      de_baja INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS inventario_habitaciones (
+      numHabitacion TEXT PRIMARY KEY,
+      tv TEXT DEFAULT 'Operativo',
+      control_tv TEXT DEFAULT 'Operativo',
+      control_aire TEXT DEFAULT 'Operativo',
+      control_musica TEXT DEFAULT 'Operativo',
+      aire_acondicionado TEXT DEFAULT 'Operativo',
+      nevera TEXT DEFAULT 'Operativo',
+      espejo TEXT DEFAULT 'Operativo',
+      llave TEXT DEFAULT 'Operativo',
+      poceta TEXT DEFAULT 'Operativo',
+      lavamanos TEXT DEFAULT 'Operativo',
+      ducha TEXT DEFAULT 'Operativo',
+      observaciones TEXT DEFAULT ''
+    );
   `);
 
   // Seed data if empty
@@ -334,6 +360,37 @@ export async function initDb() {
     await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p4', 'Papas Fritas Lays Clásica', 4.00, 25)");
     await db.run("INSERT INTO productos (id, nombre, precio_venta, stock) VALUES ('p5', 'Snack Frito Lays Queso', 4.00, 20)");
     console.log('Seeding default product catalog finished.');
+  }
+
+  // Seed inventario_lenceria (v4 - Fase 3)
+  const countLenceria = await db.get('SELECT COUNT(*) as count FROM inventario_lenceria');
+  if (countLenceria.count === 0) {
+    console.log('Seeding default lenceria inventory...');
+    const defaultLenceria = [
+      { id: 'l1', nombre: 'Sábanas Matrimoniales', cantidad_total: 40, en_almacen: 15, en_lavanderia: 5, en_habitaciones: 20, de_baja: 0 },
+      { id: 'l2', nombre: 'Toallas de Baño / Paños', cantidad_total: 50, en_almacen: 20, en_lavanderia: 10, en_habitaciones: 20, de_baja: 0 },
+      { id: 'l3', nombre: 'Toallas de Mano', cantidad_total: 30, en_almacen: 15, en_lavanderia: 5, en_habitaciones: 10, de_baja: 0 },
+      { id: 'l4', nombre: 'Almohadas', cantidad_total: 25, en_almacen: 5, en_lavanderia: 0, en_habitaciones: 20, de_baja: 0 },
+      { id: 'l5', nombre: 'Protectores de Colchón', cantidad_total: 15, en_almacen: 3, en_lavanderia: 2, en_habitaciones: 10, de_baja: 0 },
+      { id: 'l6', nombre: 'Colchones Matrimoniales/Suite', cantidad_total: 12, en_almacen: 2, en_lavanderia: 0, en_habitaciones: 10, de_baja: 0 }
+    ];
+
+    for (const item of defaultLenceria) {
+      await db.run(
+        `INSERT INTO inventario_lenceria (id, nombre, cantidad_total, en_almacen, en_lavanderia, en_habitaciones, de_baja)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [item.id, item.nombre, item.cantidad_total, item.en_almacen, item.en_lavanderia, item.en_habitaciones, item.de_baja]
+      );
+    }
+  }
+
+  // Auto-sync inventario_habitaciones with all rooms
+  const allRooms = await db.all('SELECT num FROM habitaciones');
+  for (const r of allRooms) {
+    await db.run(
+      `INSERT INTO inventario_habitaciones (numHabitacion) VALUES (?) ON CONFLICT(numHabitacion) DO NOTHING`,
+      [r.num]
+    );
   }
 
   // Sincronizar estados de habitaciones con reservas activas (Autocuración de Consistencia)

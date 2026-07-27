@@ -25,6 +25,7 @@ export default function Usuarios({ token, currentUser }) {
     reservas: true,
     tickets: true,
     entregaTurnos: true,
+    inventarioLenceria: true,
     caja: true,
     tienda: true,
     clientes: true,
@@ -86,6 +87,7 @@ export default function Usuarios({ token, currentUser }) {
       reservas: false,
       tickets: false,
       entregaTurnos: false,
+      inventarioLenceria: false,
       caja: false,
       tienda: false,
       clientes: false,
@@ -99,6 +101,7 @@ export default function Usuarios({ token, currentUser }) {
       preset.reservas = true;
       preset.tickets = true;
       preset.entregaTurnos = true;
+      preset.inventarioLenceria = true;
       preset.caja = true;
       preset.tienda = true;
       preset.clientes = true;
@@ -110,6 +113,7 @@ export default function Usuarios({ token, currentUser }) {
       preset.reservas = true;
       preset.tickets = true;
       preset.entregaTurnos = true;
+      preset.inventarioLenceria = true;
       preset.caja = true;
       preset.tienda = true;
       preset.clientes = true;
@@ -117,6 +121,7 @@ export default function Usuarios({ token, currentUser }) {
       preset.dashboard = true;
       preset.habitaciones = true;
       preset.tickets = true;
+      preset.inventarioLenceria = true;
     } else if (selectedRol === 'Camarero') {
       preset.dashboard = true;
       preset.habitaciones = true;
@@ -158,6 +163,7 @@ export default function Usuarios({ token, currentUser }) {
       reservas: false,
       tickets: false,
       entregaTurnos: false,
+      inventarioLenceria: false,
       caja: false,
       tienda: false,
       clientes: false,
@@ -677,6 +683,15 @@ export default function Usuarios({ token, currentUser }) {
                       className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
                     />
                     Entrega y Recepción de Turno
+                  </label>
+                  <label className="flex items-center gap-3 chk-label cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={permisos.inventarioLenceria}
+                      onChange={() => handlePermissionChange('inventarioLenceria')}
+                      className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
+                    />
+                    Inventario de Lencería & Equipamiento
                   </label>
                   <label className="flex items-center gap-3 chk-label cursor-pointer">
                     <input 

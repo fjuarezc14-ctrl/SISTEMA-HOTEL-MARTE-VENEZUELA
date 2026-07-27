@@ -374,12 +374,27 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const tarifas = await db.all('SELECT * FROM tarifas');
     const tickets = await db.all('SELECT * FROM tickets ORDER BY fechaCreacion DESC');
     const entregaTurnos = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
+    const inventarioLenceria = await db.all('SELECT * FROM inventario_lenceria');
+    const inventarioHabitaciones = await db.all('SELECT * FROM inventario_habitaciones');
 
     const configuracionList = await db.all('SELECT * FROM configuracion');
     const configuracion = {};
     configuracionList.forEach(c => { configuracion[c.clave] = c.valor; });
 
-    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas, configuracion, tickets, entregaTurnos });
+    res.json({ 
+      habitaciones, 
+      reservas, 
+      clientes, 
+      caja, 
+      consumos, 
+      productos, 
+      tarifas, 
+      configuracion, 
+      tickets, 
+      entregaTurnos,
+      inventarioLenceria,
+      inventarioHabitaciones
+    });
   } catch (error) {
     console.error('Error fetching state:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -1204,6 +1219,152 @@ app.get('/api/entrega-turnos', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching entrega_turnos:', error);
     res.status(500).json({ error: 'Error al consultar entregas de turno.' });
+  }
+});
+
+// GET /api/inventario-lenceria - Obtener insumos de textil/lavandería (v4 - Fase 3)
+app.get('/api/inventario-lenceria', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM inventario_lenceria');
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching lenceria:', error);
+    res.status(500).json({ error: 'Error al obtener inventario de lencería.' });
+  }
+});
+
+// POST /api/inventario-lenceria - Registrar nuevo tipo de textil/lencería (v4 - Fase 3)
+app.post('/api/inventario-lenceria', requireAuth, async (req, res) => {
+  const { nombre, cantidad_total, en_almacen, en_lavanderia, en_habitaciones, de_baja } = req.body;
+  if (!nombre) {
+    return res.status(400).json({ error: 'Debe ingresar el nombre del ítem textil.' });
+  }
+  try {
+    const id = 'len_' + Date.now();
+    await db.run(
+      `INSERT INTO inventario_lenceria (id, nombre, cantidad_total, en_almacen, en_lavanderia, en_habitaciones, de_baja)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        nombre.trim(),
+        parseInt(cantidad_total || 0),
+        parseInt(en_almacen || 0),
+        parseInt(en_lavanderia || 0),
+        parseInt(en_habitaciones || 0),
+        parseInt(de_baja || 0)
+      ]
+    );
+    res.json({ success: true, message: 'Ítem de lencería registrado exitosamente.' });
+  } catch (error) {
+    console.error('Error creating lenceria:', error);
+    res.status(500).json({ error: 'Error al registrar ítem de lencería.' });
+  }
+});
+
+// PUT /api/inventario-lenceria/:id - Actualizar distribución o cantidades de lencería (v4 - Fase 3)
+app.put('/api/inventario-lenceria/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { en_almacen, en_lavanderia, en_habitaciones, de_baja } = req.body;
+
+  try {
+    const item = await db.get('SELECT * FROM inventario_lenceria WHERE id = ?', [id]);
+    if (!item) {
+      return res.status(404).json({ error: 'Ítem de lencería no encontrado.' });
+    }
+
+    const alm = en_almacen !== undefined ? parseInt(en_almacen) : item.en_almacen;
+    const lav = en_lavanderia !== undefined ? parseInt(en_lavanderia) : item.en_lavanderia;
+    const hab = en_habitaciones !== undefined ? parseInt(en_habitaciones) : item.en_habitaciones;
+    const baj = de_baja !== undefined ? parseInt(de_baja) : item.de_baja;
+    const total = alm + lav + hab + baj;
+
+    await db.run(
+      `UPDATE inventario_lenceria 
+       SET en_almacen = ?, en_lavanderia = ?, en_habitaciones = ?, de_baja = ?, cantidad_total = ? 
+       WHERE id = ?`,
+      [alm, lav, hab, baj, total, id]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Inventario Lencería',
+      `Actualizada distribución de ${item.nombre}: Almacén ${alm}, Lavandería ${lav}, Habitaciones ${hab}, Baja ${baj}`,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Distribución de lencería actualizada.' });
+  } catch (error) {
+    console.error('Error updating lenceria:', error);
+    res.status(500).json({ error: 'Error al actualizar inventario de lencería.' });
+  }
+});
+
+// GET /api/inventario-habitaciones - Obtener equipamiento fijo por habitación (v4 - Fase 3)
+app.get('/api/inventario-habitaciones', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM inventario_habitaciones');
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching room equipment:', error);
+    res.status(500).json({ error: 'Error al obtener inventario de equipamiento.' });
+  }
+});
+
+// PUT /api/inventario-habitaciones/:numHabitacion - Actualizar estado de equipamiento fijo por habitación (v4 - Fase 3)
+app.put('/api/inventario-habitaciones/:numHabitacion', requireAuth, async (req, res) => {
+  const { numHabitacion } = req.params;
+  const { tv, control_tv, control_aire, control_musica, aire_acondicionado, nevera, espejo, llave, poceta, lavamanos, ducha, observaciones } = req.body;
+
+  try {
+    await db.run(
+      `INSERT INTO inventario_habitaciones (
+        numHabitacion, tv, control_tv, control_aire, control_musica, aire_acondicionado, nevera, espejo, llave, poceta, lavamanos, ducha, observaciones
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(numHabitacion) DO UPDATE SET
+        tv = excluded.tv,
+        control_tv = excluded.control_tv,
+        control_aire = excluded.control_aire,
+        control_musica = excluded.control_musica,
+        aire_acondicionado = excluded.aire_acondicionado,
+        nevera = excluded.nevera,
+        espejo = excluded.espejo,
+        llave = excluded.llave,
+        poceta = excluded.poceta,
+        lavamanos = excluded.lavamanos,
+        ducha = excluded.ducha,
+        observaciones = excluded.observaciones`,
+      [
+        numHabitacion,
+        tv || 'Operativo',
+        control_tv || 'Operativo',
+        control_aire || 'Operativo',
+        control_musica || 'Operativo',
+        aire_acondicionado || 'Operativo',
+        nevera || 'Operativo',
+        espejo || 'Operativo',
+        llave || 'Operativo',
+        poceta || 'Operativo',
+        lavamanos || 'Operativo',
+        ducha || 'Operativo',
+        (observaciones || '').trim()
+      ]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Inventario Equipamiento Habitación',
+      `Actualizado equipamiento de Habitación #${numHabitacion}`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Equipamiento de Hab. #${numHabitacion} actualizado.` });
+  } catch (error) {
+    console.error('Error updating room equipment:', error);
+    res.status(500).json({ error: 'Error al actualizar equipamiento de la habitación.' });
   }
 });
 
