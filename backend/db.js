@@ -30,8 +30,13 @@ export async function initDb() {
       id TEXT PRIMARY KEY,
       nombre TEXT NOT NULL,
       dni TEXT UNIQUE NOT NULL,
+      ci TEXT,
       tel TEXT NOT NULL,
-      visitas INTEGER DEFAULT 0
+      visitas INTEGER DEFAULT 0,
+      vetado INTEGER DEFAULT 0,
+      monto_deuda_usd REAL DEFAULT 0,
+      motivo_veto TEXT DEFAULT '',
+      foto_ci TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS reservas (
@@ -272,11 +277,14 @@ export async function initDb() {
   await db.run("UPDATE habitaciones SET tipo = 'Matrimonial' WHERE tipo IN ('Simple', 'Doble')");
   await db.run("UPDATE habitaciones SET tipo = 'Mini Suite' WHERE tipo = 'Suite'");
 
-  // Migraciones autocurativas para la tabla clientes (ci)
-  try {
-    await db.run("ALTER TABLE clientes ADD COLUMN ci TEXT");
-  } catch (e) {}
+  // Migraciones autocurativas para la tabla clientes (ci, vetado, monto_deuda_usd, motivo_veto, foto_ci) (v3 - Fase 4)
+  try { await db.run("ALTER TABLE clientes ADD COLUMN ci TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE clientes ADD COLUMN vetado INTEGER DEFAULT 0"); } catch (e) {}
+  try { await db.run("ALTER TABLE clientes ADD COLUMN monto_deuda_usd REAL DEFAULT 0"); } catch (e) {}
+  try { await db.run("ALTER TABLE clientes ADD COLUMN motivo_veto TEXT DEFAULT ''"); } catch (e) {}
+  try { await db.run("ALTER TABLE clientes ADD COLUMN foto_ci TEXT DEFAULT ''"); } catch (e) {}
   await db.run("UPDATE clientes SET ci = dni WHERE ci IS NULL OR ci = ''");
+  await db.run("UPDATE clientes SET vetado = 0 WHERE vetado IS NULL");
 
   // Seed productos (v2 - Fase 2)
   const countProducts = await db.get('SELECT COUNT(*) as count FROM productos');

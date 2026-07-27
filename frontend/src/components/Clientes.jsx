@@ -1,26 +1,61 @@
 import React, { useState } from 'react';
 
-export default function Clientes({ clientes = [], token, onStateChange }) {
+export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onStateChange }) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterTab, setFilterTab] = useState('todos'); // 'todos' | 'vetados' | 'vip'
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form states for registering a new client
   const [nombre, setNombre] = useState('');
   const [ci, setCi] = useState('');
   const [tel, setTel] = useState('');
+  const [fotoCi, setFotoCi] = useState('');
 
-  const filteredClientes = clientes.filter(c => 
-    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (c.ci && c.ci.includes(searchTerm)) ||
-    (c.dni && c.dni.includes(searchTerm)) ||
-    (c.tel && c.tel.includes(searchTerm))
-  );
+  // Veto / Debt payment modal state
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [isPayDebtOpen, setIsPayDebtOpen] = useState(false);
+  const [montoPago, setMontoPago] = useState('');
+  const [metodoPago, setMetodoPago] = useState('Efectivo Bolívares');
+
+  // Manual Veto modal state
+  const [isVetoModalOpen, setIsVetoModalOpen] = useState(false);
+  const [vetoMonto, setVetoMonto] = useState('');
+  const [vetoMotivo, setVetoMotivo] = useState('');
+
+  // View CI Photo Modal
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [photoInput, setPhotoInput] = useState('');
+
+  const filteredClientes = clientes.filter(c => {
+    const matchesSearch = 
+      c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.ci && c.ci.includes(searchTerm)) ||
+      (c.dni && c.dni.includes(searchTerm)) ||
+      (c.tel && c.tel.includes(searchTerm));
+
+    if (!matchesSearch) return false;
+
+    if (filterTab === 'vetados') return c.vetado === 1;
+    if (filterTab === 'vip') return c.visitas >= 5;
+    return true;
+  });
 
   const handleOpenModal = () => {
     setNombre('');
     setCi('');
     setTel('');
+    setFotoCi('');
     setIsModalOpen(true);
+  };
+
+  const handleFileUpload = (e, callback) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      callback(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
@@ -41,7 +76,8 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
           nombre: nombre.trim(),
           dni: ci.trim(),
           ci: ci.trim(),
-          tel: tel.trim()
+          tel: tel.trim(),
+          foto_ci: fotoCi
         })
       });
 
@@ -56,27 +92,154 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
     }
   };
 
+  const handleOpenPagarDeuda = (client) => {
+    setSelectedClient(client);
+    setMontoPago(client.monto_deuda_usd || 0);
+    setMetodoPago('Efectivo Bolívares');
+    setIsPayDebtOpen(true);
+  };
+
+  const handleConfirmPagarDeuda = async (e) => {
+    e.preventDefault();
+    if (!selectedClient) return;
+
+    try {
+      const res = await fetch(`/api/clientes/${selectedClient.id}/pagar-deuda`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          monto: parseFloat(montoPago) || 0,
+          metodo: metodoPago
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al cobrar deuda');
+
+      alert(`✅ Deuda cobrada con éxito. El veto para ${selectedClient.nombre} ha sido levantado.`);
+      setIsPayDebtOpen(false);
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    }
+  };
+
+  const handleOpenVetoModal = (client) => {
+    setSelectedClient(client);
+    setVetoMonto(client.monto_deuda_usd || '');
+    setVetoMotivo(client.motivo_veto || '');
+    setIsVetoModalOpen(true);
+  };
+
+  const handleConfirmVeto = async (e) => {
+    e.preventDefault();
+    if (!selectedClient) return;
+
+    try {
+      const isVetado = selectedClient.vetado === 1 ? 0 : 1;
+      const res = await fetch(`/api/clientes/${selectedClient.id}/veto`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          vetado: isVetado,
+          monto_deuda_usd: parseFloat(vetoMonto) || 0,
+          motivo_veto: vetoMotivo.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar veto');
+
+      setIsVetoModalOpen(false);
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    }
+  };
+
+  const handleOpenPhotoModal = (client) => {
+    setSelectedClient(client);
+    setPhotoInput(client.foto_ci || '');
+    setIsPhotoModalOpen(true);
+  };
+
+  const handleSavePhoto = async () => {
+    if (!selectedClient) return;
+    try {
+      const res = await fetch(`/api/clientes/${selectedClient.id}/foto-ci`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ foto_ci: photoInput })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar foto');
+
+      setIsPhotoModalOpen(false);
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    }
+  };
+
   return (
     <div className="space-y-6 fade-in">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-lg font-black text-slate-800">Clientes Registrados (CRM)</h2>
-          <p className="text-slate-500 text-xs mt-1">Directorio de huéspedes frecuentes por Cédula de Identidad (CI).</p>
+          <h2 className="text-lg font-black text-slate-800">Directorio de Clientes (CRM) & Lista Negra</h2>
+          <p className="text-slate-500 text-xs mt-1">Gestión de huéspedes, comprobante de CI y veto preventivo de morosos.</p>
         </div>
+        
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative w-full sm:w-64">
+          {/* Subtab filter */}
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button
+              onClick={() => setFilterTab('todos')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterTab === 'todos' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Todos ({clientes.length})
+            </button>
+            <button
+              onClick={() => setFilterTab('vetados')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterTab === 'vetados' ? 'bg-rose-600 text-white shadow-sm' : 'text-rose-600 hover:bg-rose-50'
+              }`}
+            >
+              <i className="fa-solid fa-[#ff331f] fa-user-slash mr-1"></i>
+              Vetados ({clientes.filter(c => c.vetado === 1).length})
+            </button>
+            <button
+              onClick={() => setFilterTab('vip')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterTab === 'vip' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-600 hover:bg-amber-50'
+              }`}
+            >
+              <i className="fa-solid fa-crown mr-1"></i> VIP
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-56">
             <input 
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por Nombre, CI o Celular..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
+              placeholder="Buscar por Nombre, CI..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
             />
-            <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+            <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
           </div>
+
           <button 
             onClick={handleOpenModal}
-            className="bg-[#ff331f] hover:bg-[#e02816] text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+            className="bg-[#ff331f] hover:bg-[#e02816] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 shrink-0"
           >
             <i className="fa-solid fa-user-plus"></i> Registrar Cliente
           </button>
@@ -85,49 +248,115 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
       
       {filteredClientes.length === 0 ? (
         <div className="bg-white p-12 text-center text-slate-400 rounded-2xl border border-slate-200 text-sm font-medium">
-          {searchTerm ? 'No se encontraron clientes que coincidan con la búsqueda.' : 'No hay clientes registrados en el sistema.'}
+          {searchTerm ? 'No se encontraron clientes que coincidan con la búsqueda.' : 'No hay clientes registrados en esta categoría.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredClientes.map(c => (
-            <div 
-              key={c.id} 
-              className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden"
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xl shrink-0 font-bold">
-                    <i className="fa-solid fa-user"></i>
+          {filteredClientes.map(c => {
+            const isVetado = c.vetado === 1;
+            const debtVes = ((c.monto_deuda_usd || 0) * tasaUsd).toFixed(2);
+
+            return (
+              <div 
+                key={c.id} 
+                className={`bg-white p-5 rounded-2xl shadow-sm border transition-all flex flex-col justify-between relative overflow-hidden ${
+                  isVetado ? 'border-rose-300 bg-rose-50/20' : 'border-slate-200 hover:shadow-md'
+                }`}
+              >
+                {/* Header info */}
+                <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        onClick={() => handleOpenPhotoModal(c)}
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 font-bold cursor-pointer relative overflow-hidden border shadow-sm ${
+                          isVetado ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                        title="Ver / Editar Cédula (CI)"
+                      >
+                        {c.foto_ci ? (
+                          <img src={c.foto_ci} alt="CI Document" className="w-full h-full object-cover" />
+                        ) : (
+                          <i className="fa-solid fa-id-card"></i>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-base font-bold text-slate-800 leading-tight flex items-center gap-1.5">
+                          {c.nombre}
+                        </h4>
+                        <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                          CI: <span className="text-slate-700 font-bold">{c.ci || c.dni}</span>
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {isVetado ? (
+                      <span className="bg-rose-600 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm animate-pulse">
+                        VETADO
+                      </span>
+                    ) : (
+                      <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                        {c.visitas} {c.visitas === 1 ? 'visita' : 'visitas'}
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <h4 className="text-base font-bold text-slate-800 leading-tight">
-                      {c.nombre}
-                    </h4>
-                    <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                      CI: {c.ci || c.dni}
-                    </p>
-                  </div>
+
+                  {/* Veto Debt Banner if active */}
+                  {isVetado && (
+                    <div className="mb-3 bg-rose-100/80 border border-rose-300 p-3 rounded-xl space-y-1">
+                      <div className="flex justify-between items-center text-xs font-black text-rose-800">
+                        <span>Deuda Registrada:</span>
+                        <span className="text-sm font-black text-rose-900">${(c.monto_deuda_usd || 0).toFixed(2)} USD</span>
+                      </div>
+                      <div className="text-[10px] text-rose-700 font-semibold text-right">
+                        ~ Bs. {debtVes}
+                      </div>
+                      {c.motivo_veto && (
+                        <p className="text-[11px] text-rose-900 font-medium pt-1 border-t border-rose-200/60">
+                          <strong className="font-bold">Motivo:</strong> {c.motivo_veto}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
-                <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
-                  {c.visitas} {c.visitas === 1 ? 'visita' : 'visitas'}
-                </span>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500 font-semibold">
-                <span>
-                  <i className="fa-solid fa-phone text-slate-400 mr-1.5"></i>
-                  {c.tel || 'Sin teléfono'}
-                </span>
-                
-                {c.visitas >= 5 && (
-                  <span className="text-amber-500 font-bold flex items-center gap-1">
-                    <i className="fa-solid fa-crown text-amber-400"></i> Cliente VIP
+                {/* Actions footer */}
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-semibold">
+                    <i className="fa-solid fa-phone text-slate-400 mr-1.5"></i>
+                    {c.tel || 'Sin teléfono'}
                   </span>
-                )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleOpenPhotoModal(c)}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors"
+                      title="Adjuntar o ver foto de CI"
+                    >
+                      <i className="fa-solid fa-camera mr-1"></i> CI
+                    </button>
+
+                    {isVetado ? (
+                      <button
+                        onClick={() => handleOpenPagarDeuda(c)}
+                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-colors flex items-center gap-1"
+                      >
+                        <i className="fa-solid fa-[#ff331f] fa-hand-holding-dollar"></i> Cobrar
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenVetoModal(c)}
+                        className="px-2.5 py-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors"
+                        title="Marcar como vetado o registrar incidencia"
+                      >
+                        <i className="fa-solid fa-[#ff331f] fa-user-slash"></i> Vetar
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -180,6 +409,17 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
                 />
               </div>
 
+              {/* Photo Upload Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Foto Cédula de Identidad (CI)</label>
+                <input 
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, setFotoCi)}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                />
+              </div>
+
               <div className="pt-3 border-t border-slate-100 flex gap-3">
                 <button 
                   type="button"
@@ -196,6 +436,190 @@ export default function Clientes({ clientes = [], token, onStateChange }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* COBRAR DEUDA VETO MODAL */}
+      {isPayDebtOpen && selectedClient && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-md font-bold text-slate-800">
+                <i className="fa-solid fa-[#ff331f] fa-hand-holding-dollar text-emerald-600 mr-2"></i> Liquidar Deuda & Levantar Veto
+              </h3>
+              <button onClick={() => setIsPayDebtOpen(false)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl text-xs space-y-1">
+              <div className="font-bold text-slate-800">{selectedClient.nombre}</div>
+              <div className="text-slate-500 font-semibold">CI: {selectedClient.ci || selectedClient.dni}</div>
+              <div className="text-rose-700 font-bold">Motivo Veto: {selectedClient.motivo_veto || 'Sin detalle'}</div>
+            </div>
+
+            <form onSubmit={handleConfirmPagarDeuda} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto a Cobrar ($ USD)</label>
+                <input 
+                  type="number"
+                  step="0.50"
+                  value={montoPago}
+                  onChange={(e) => setMontoPago(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm font-black text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                  required
+                />
+                <span className="block text-[11px] font-bold text-emerald-700 mt-1">
+                  = Bs. {((parseFloat(montoPago) || 0) * tasaUsd).toFixed(2)}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
+                <select 
+                  value={metodoPago}
+                  onChange={(e) => setMetodoPago(e.target.value)}
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                >
+                  <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+                  <option value="Pago Móvil">Pago Móvil</option>
+                  <option value="Punto de Venta">Punto de Venta</option>
+                  <option value="Divisas Dólares">Divisas Dólares</option>
+                  <option value="Binance">Binance</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsPayDebtOpen(false)}
+                  className="flex-1 bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+                >
+                  Cobrar y Desbloquear
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MANUAL VETO MODAL */}
+      {isVetoModalOpen && selectedClient && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-md font-bold text-slate-800">
+                <i className="fa-solid fa-[#ff331f] fa-user-slash text-rose-600 mr-2"></i> Configurar Veto Manual
+              </h3>
+              <button onClick={() => setIsVetoModalOpen(false)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Ajuste el estado de veto y la deuda pendiente para <strong className="text-slate-800">{selectedClient.nombre}</strong>.
+            </p>
+
+            <form onSubmit={handleConfirmVeto} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Deuda Pendiente ($ USD)</label>
+                <input 
+                  type="number"
+                  step="0.50"
+                  value={vetoMonto}
+                  onChange={(e) => setVetoMonto(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Motivo de Veto / Incidencia</label>
+                <textarea 
+                  value={vetoMotivo}
+                  onChange={(e) => setVetoMotivo(e.target.value)}
+                  placeholder="Ej: Daños en toallas o incumplimiento de normas"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium h-20 resize-none"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsVetoModalOpen(false)}
+                  className="flex-1 bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+                >
+                  {selectedClient.vetado === 1 ? 'Actualizar / Quitar Veto' : 'Confirmar Veto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW & EDIT PHOTO CI MODAL */}
+      {isPhotoModalOpen && selectedClient && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-md font-bold text-slate-800">
+                <i className="fa-solid fa-id-card text-blue-600 mr-2"></i> Documento CI: {selectedClient.nombre}
+              </h3>
+              <button onClick={() => setIsPhotoModalOpen(false)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="w-full h-56 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center relative">
+              {photoInput ? (
+                <img src={photoInput} alt="Cédula de Identidad Document" className="w-full h-full object-contain" />
+              ) : (
+                <div className="text-center text-slate-400 p-4">
+                  <i className="fa-solid fa-id-card text-4xl mb-2 block"></i>
+                  <span className="text-xs font-semibold">No se ha adjuntado la imagen de la Cédula (CI).</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase">Cargar Nueva Imagen o Tomar Foto</label>
+              <input 
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileUpload(e, setPhotoInput)}
+                className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setIsPhotoModalOpen(false)}
+                className="flex-1 bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+              >
+                Cerrar
+              </button>
+              <button 
+                type="button"
+                onClick={handleSavePhoto}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+              >
+                Guardar Foto CI
+              </button>
+            </div>
           </div>
         </div>
       )}

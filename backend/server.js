@@ -446,6 +446,15 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   try {
     // 1. Check if client exists, otherwise create
     let cliente = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
+    
+    if (cliente && cliente.vetado === 1 && cliente.monto_deuda_usd > 0) {
+      return res.status(400).json({ 
+        error: `El cliente ${cliente.nombre} (CI: ${cliente.ci || cliente.dni}) se encuentra VETADO por una deuda pendiente de $${cliente.monto_deuda_usd.toFixed(2)} USD. Motivo: ${cliente.motivo_veto || 'Daños en estadía anterior'}`,
+        vetado: true,
+        clienteVetado: cliente
+      });
+    }
+
     const clientId = cliente ? cliente.id : 'c_' + Date.now();
     
     if (!cliente) {
@@ -513,6 +522,15 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
   try {
     // 1. Check/Create guest using CI/DNI
     let cliente = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
+
+    if (cliente && cliente.vetado === 1 && cliente.monto_deuda_usd > 0) {
+      return res.status(400).json({ 
+        error: `El cliente ${cliente.nombre} (CI: ${cliente.ci || cliente.dni}) se encuentra VETADO por una deuda pendiente de $${cliente.monto_deuda_usd.toFixed(2)} USD. Motivo: ${cliente.motivo_veto || 'Daños en estadía anterior'}`,
+        vetado: true,
+        clienteVetado: cliente
+      });
+    }
+
     const clientId = cliente ? cliente.id : 'c_' + Date.now();
 
     if (!cliente) {
@@ -604,9 +622,21 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
   }
 });
 
-// 5. POST /api/checkout - Procesar check-out de la habitación (Fase 6)
+// 5. POST /api/checkout - Process guest check-out and send room to cleaning (v3 - Fase 4)
 app.post('/api/checkout', requireAuth, async (req, res) => {
-  const { numHabitacion, penalidad, detallePenalidad, montoConsumos, montoHabitacion, metodoPago } = req.body;
+  const { 
+    numHabitacion, 
+    penalidad, 
+    metodoPago, 
+    montoHabitacion, 
+    montoConsumos, 
+    detallePenalidad,
+    vetarCliente,
+    clienteId,
+    clienteCi,
+    montoDeuda,
+    motivoVeto
+  } = req.body;
 
   if (!numHabitacion) {
     return res.status(400).json({ error: 'Falta número de habitación' });
@@ -619,7 +649,7 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     }
 
     const huespedNombre = room.huesped || 'Huésped';
-    const metodo = metodoPago || 'Efectivo';
+    const metodo = metodoPago || 'Efectivo Bolívares';
 
     // 1. Update room status to Limpieza
     await db.run(
@@ -629,23 +659,55 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
       [numHabitacion]
     );
 
-    // 2. Register penalty in Caja if penalty > 0
-    const finalPenalidad = parseFloat(penalidad) || 0;
-    if (finalPenalidad > 0) {
-      const transactionId = 't_pen_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Penalidad Check-Out Hab ${numHabitacion} - ${detallePenalidad || 'Incumplimiento de checklist'}`,
-          finalPenalidad,
-          metodo,
-          getHoraActual(),
+    // 2. Process Veto if requested
+    if (vetarCliente) {
+      const debtAmount = parseFloat(montoDeuda) || parseFloat(penalidad) || 0;
+      const vetoReason = motivoVeto || detallePenalidad || 'Incidencia no saldada en Check-Out';
+      
+      let targetClient = null;
+      if (clienteId) {
+        targetClient = await db.get('SELECT * FROM clientes WHERE id = ?', [clienteId]);
+      } else if (clienteCi) {
+        targetClient = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [clienteCi, clienteCi]);
+      }
+      
+      if (!targetClient && huespedNombre) {
+        targetClient = await db.get('SELECT * FROM clientes WHERE nombre LIKE ?', [`%${huespedNombre}%`]);
+      }
+
+      if (targetClient) {
+        await db.run(
+          'UPDATE clientes SET vetado = 1, monto_deuda_usd = ?, motivo_veto = ? WHERE id = ?',
+          [debtAmount, vetoReason, targetClient.id]
+        );
+        await registrarAuditoria(
           req.user.id,
-          req.user.nombre
-        ]
-      );
+          req.user.nombre,
+          req.user.rol,
+          'Cliente Vetado',
+          `Cliente ${targetClient.nombre} (CI: ${targetClient.ci || targetClient.dni}) fue VETADO por deuda de $${debtAmount} USD en Hab. ${numHabitacion}. Motivo: ${vetoReason}`,
+          req.ip
+        );
+      }
+    } else {
+      // Register penalty in Caja if penalty paid > 0
+      const finalPenalidad = parseFloat(penalidad) || 0;
+      if (finalPenalidad > 0) {
+        const transactionId = 't_pen_' + Date.now();
+        await db.run(
+          'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            transactionId,
+            'Ingreso',
+            `Penalidad Check-Out Hab ${numHabitacion} - ${detallePenalidad || 'Incumplimiento de checklist'}`,
+            finalPenalidad,
+            metodo,
+            getHoraActual(),
+            req.user.id,
+            req.user.nombre
+          ]
+        );
+      }
     }
 
     // 3. Register room balance payment in Caja if > 0
@@ -689,10 +751,113 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     // 5. Delete all consumptions of the room
     await db.run('DELETE FROM consumos WHERE numHabitacion = ?', [numHabitacion]);
 
-    res.json({ success: true, message: 'Check-Out finalizado correctamente. Habitación enviada a limpieza y consumos liquidados.' });
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Check-Out Realizado', `Check-Out Hab. ${numHabitacion} (${huespedNombre})`, req.ip);
+
+    res.json({ success: true, message: 'Check-Out finalizado correctamente. Habitación enviada a limpieza.' });
   } catch (error) {
-    console.error('Error performing checkout:', error);
+    console.error('Error processing checkout:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/clientes/:id/pagar-deuda - Cobrar deuda pendiente y levantar veto (v3 - Fase 4)
+app.post('/api/clientes/:id/pagar-deuda', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { monto, metodo } = req.body;
+  try {
+    const client = await db.get('SELECT * FROM clientes WHERE id = ?', [id]);
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente no encontrado.' });
+    }
+    const montoCobrado = parseFloat(monto) || client.monto_deuda_usd || 0;
+    
+    if (montoCobrado > 0) {
+      const transactionId = 't_deuda_' + Date.now();
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          transactionId,
+          'Ingreso',
+          `Cobro Deuda Pendiente Veto - Cliente: ${client.nombre} (CI: ${client.ci || client.dni})`,
+          montoCobrado,
+          metodo || 'Efectivo Bolívares',
+          getHoraActual(),
+          req.user.id,
+          req.user.nombre
+        ]
+      );
+    }
+
+    await db.run(
+      'UPDATE clientes SET vetado = 0, monto_deuda_usd = 0, motivo_veto = "" WHERE id = ?',
+      [id]
+    );
+
+    await registrarAuditoria(
+      req.user.id, 
+      req.user.nombre, 
+      req.user.rol, 
+      'Deuda Veto Liquidada', 
+      `Deuda de $${montoCobrado} USD cobrada a ${client.nombre} (CI: ${client.ci || client.dni}). Veto levantado.`, 
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Deuda cobrada con éxito. Veto levantado.' });
+  } catch (error) {
+    console.error('Error pagando deuda:', error);
+    res.status(500).json({ error: 'Error al procesar pago de deuda.' });
+  }
+});
+
+// PUT /api/clientes/:id/foto-ci - Actualizar foto de Cédula de Identidad (v3 - Fase 4)
+app.put('/api/clientes/:id/foto-ci', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { foto_ci } = req.body;
+  try {
+    const client = await db.get('SELECT id, nombre FROM clientes WHERE id = ?', [id]);
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente no encontrado.' });
+    }
+    await db.run('UPDATE clientes SET foto_ci = ? WHERE id = ?', [foto_ci || '', id]);
+    
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Foto CI Actualizada', `Foto de CI actualizada para cliente ${client.nombre}`, req.ip);
+
+    res.json({ success: true, message: 'Foto de Cédula de Identidad actualizada correctamente.' });
+  } catch (error) {
+    console.error('Error updating foto_ci:', error);
+    res.status(500).json({ error: 'Error al actualizar foto de Cédula.' });
+  }
+});
+
+// PUT /api/clientes/:id/veto - Actualizar estado de veto manualmente (v3 - Fase 4)
+app.put('/api/clientes/:id/veto', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { vetado, monto_deuda_usd, motivo_veto } = req.body;
+  try {
+    const client = await db.get('SELECT id, nombre, ci, dni FROM clientes WHERE id = ?', [id]);
+    if (!client) {
+      return res.status(404).json({ error: 'Cliente no encontrado.' });
+    }
+    const isVetado = vetado ? 1 : 0;
+    const debt = parseFloat(monto_deuda_usd) || 0;
+    await db.run(
+      'UPDATE clientes SET vetado = ?, monto_deuda_usd = ?, motivo_veto = ? WHERE id = ?',
+      [isVetado, debt, motivo_veto || '', id]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      isVetado ? 'Cliente Vetado Manualmente' : 'Veto de Cliente Cancelado',
+      `Cliente ${client.nombre} (CI: ${client.ci || client.dni}) ${isVetado ? `vetado por $${debt} USD` : 'veto retirado'}`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Estado de veto actualizado para ${client.nombre}.` });
+  } catch (error) {
+    console.error('Error updating veto:', error);
+    res.status(500).json({ error: 'Error al actualizar estado de veto.' });
   }
 });
 
@@ -996,33 +1161,37 @@ app.put('/api/tarifas/:tipo', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/clientes - Registrar un nuevo cliente directamente (CRM) (v2 - Fase 3)
+// POST /api/clientes - Registrar un nuevo cliente directamente (CRM) (v3 - Fase 4)
 app.post('/api/clientes', requireAuth, async (req, res) => {
   if (!req.user.permisos.includes('clientes')) {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Clientes.' });
   }
 
-  const { nombre, dni, tel } = req.body;
-  if (!nombre || !dni) {
-    return res.status(400).json({ error: 'El nombre y el DNI son obligatorios.' });
+  const { nombre, ci, dni, tel, foto_ci } = req.body;
+  const numDoc = (ci || dni || '').trim();
+
+  if (!nombre || !numDoc) {
+    return res.status(400).json({ error: 'El nombre y la Cédula (CI) son obligatorios.' });
   }
 
   try {
-    const existing = await db.get('SELECT id FROM clientes WHERE dni = ?', [dni.trim()]);
+    const existing = await db.get('SELECT id FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
     if (existing) {
-      return res.status(400).json({ error: 'Ya existe un cliente registrado con este DNI.' });
+      return res.status(400).json({ error: 'Ya existe un cliente registrado con esta Cédula (CI).' });
     }
 
     const id = 'c_' + Date.now();
     await db.run(
-      'INSERT INTO clientes (id, nombre, dni, tel, visitas) VALUES (?, ?, ?, ?, 0)',
-      [id, nombre.trim(), dni.trim(), tel ? tel.trim() : '']
+      'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas, vetado, monto_deuda_usd, motivo_veto, foto_ci) VALUES (?, ?, ?, ?, ?, 0, 0, 0, "", ?)',
+      [id, nombre.trim(), numDoc, numDoc, tel ? tel.trim() : '', foto_ci || '']
     );
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Cliente Creado CRM', `Cliente ${nombre.trim()} (CI: ${numDoc}) registrado`, req.ip);
 
     res.json({ 
       success: true, 
       message: 'Cliente registrado correctamente en el CRM.', 
-      cliente: { id, nombre: nombre.trim(), dni: dni.trim(), tel: tel ? tel.trim() : '', visitas: 0 } 
+      cliente: { id, nombre: nombre.trim(), dni: numDoc, ci: numDoc, tel: tel ? tel.trim() : '', visitas: 0, vetado: 0, monto_deuda_usd: 0, foto_ci: foto_ci || '' } 
     });
   } catch (error) {
     console.error(error);

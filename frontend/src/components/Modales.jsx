@@ -108,6 +108,9 @@ export function AsignarDirectoModal({
   const montoNum = parseFloat(monto) || 0;
   const montoVes = (montoNum * tasaUsd).toFixed(2);
 
+  const matchedClient = clientes.find(c => (c.ci && c.ci === ci.trim()) || (c.dni && c.dni === ci.trim()));
+  const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
@@ -121,6 +124,25 @@ export function AsignarDirectoModal({
         </div>
         
         <div className="overflow-y-auto pr-2 flex-1">
+          {isClientVetado && (
+            <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-2 mb-4 animate-pulse">
+              <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
+                <i className="fa-solid fa-triangle-exclamation text-base"></i>
+                Cliente Vetado - Check-In Bloqueado
+              </div>
+              <p className="text-xs font-semibold text-rose-800">
+                {matchedClient.nombre} posee una deuda pendiente por causa de: <br/>
+                <strong className="font-bold text-rose-900">{matchedClient.motivo_veto || 'Daños en estadía anterior'}</strong>
+              </p>
+              <div className="bg-white px-3 py-1.5 rounded-lg border border-rose-200 inline-block font-black text-rose-800 text-xs shadow-sm">
+                Deuda: ${matchedClient.monto_deuda_usd.toFixed(2)} USD 
+                <span className="text-[10px] text-slate-500 font-bold block">
+                  (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-green-800 font-bold flex justify-between items-center px-4">
             <div>
               <span className="text-xs text-green-600 block">Habitación</span>
@@ -330,9 +352,14 @@ export function AsignarDirectoModal({
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md"
+                  disabled={isClientVetado}
+                  className={`flex-1 font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md ${
+                    isClientVetado 
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
                 >
-                  Confirmar Check-In
+                  {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Check-In'}
                 </button>
               </div>
             </div>
@@ -486,19 +513,41 @@ export function NuevaReservaModal({
   const adelantoNum = parseFloat(monto) || 0;
   const adelantoVES = (adelantoNum * tasaUsd).toFixed(2);
 
+  const matchedClient = clientes.find(c => (c.ci && c.ci === ci.trim()) || (c.dni && c.dni === ci.trim()));
+  const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh]">
         <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
-            <i className="fa-solid fa-phone text-blue-500 mr-2"></i> Reservar Habitación (Solo Pernocta)
+            <i className="fa-solid fa-calendar-plus text-blue-500 mr-2"></i> Registrar Nueva Reserva (Pernocta)
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
 
-        <div className="overflow-y-auto pr-2 flex-1 space-y-5">
+        <div className="overflow-y-auto pr-2 flex-1 space-y-4">
+          {isClientVetado && (
+            <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-2 animate-pulse">
+              <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
+                <i className="fa-solid fa-triangle-exclamation text-base"></i>
+                Cliente Vetado - Reserva Bloqueada
+              </div>
+              <p className="text-xs font-semibold text-rose-800">
+                {matchedClient.nombre} posee una deuda pendiente por causa de: <br/>
+                <strong className="font-bold text-rose-900">{matchedClient.motivo_veto || 'Daños en estadía anterior'}</strong>
+              </p>
+              <div className="bg-white px-3 py-1.5 rounded-lg border border-rose-200 inline-block font-black text-rose-800 text-xs shadow-sm">
+                Deuda: ${matchedClient.monto_deuda_usd.toFixed(2)} USD 
+                <span className="text-[10px] text-slate-500 font-bold block">
+                  (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Room Selector with category filter */}
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
@@ -740,9 +789,14 @@ export function NuevaReservaModal({
                 </button>
                 <button 
                   type="submit" 
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs"
+                  disabled={isClientVetado}
+                  className={`flex-1 font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs ${
+                    isClientVetado 
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
                 >
-                  Confirmar Reserva
+                  {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Reserva'}
                 </button>
               </div>
             </div>
@@ -888,6 +942,7 @@ export function CheckoutModal({
   isOpen, 
   room, 
   consumos = [],
+  configuracion,
   onClose, 
   onSubmit 
 }) {
@@ -897,7 +952,10 @@ export function CheckoutModal({
   const [penalidad, setPenalidad] = useState('');
   const [detallePenalidad, setDetallePenalidad] = useState('');
   const [montoHabitacion, setMontoHabitacion] = useState('0.00');
-  const [metodoPago, setMetodoPago] = useState('Efectivo');
+  const [metodoPago, setMetodoPago] = useState('Efectivo Bolívares');
+  const [vetarCliente, setVetarCliente] = useState(false);
+
+  const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
   // Filter consumptions for this room
   const roomConsumos = room ? consumos.filter(c => c.numHabitacion === room.num) : [];
@@ -911,7 +969,8 @@ export function CheckoutModal({
       setPenalidad('');
       setDetallePenalidad('');
       setMontoHabitacion('0.00');
-      setMetodoPago('Efectivo');
+      setMetodoPago('Efectivo Bolívares');
+      setVetarCliente(false);
     }
   }, [isOpen]);
 
@@ -921,7 +980,8 @@ export function CheckoutModal({
   const showPenalidadInput = !sabanas || !control || !danos;
   const finalPenalidad = showPenalidadInput ? (parseFloat(penalidad) || 0) : 0;
   const finalHab = parseFloat(montoHabitacion) || 0;
-  const totalCobrar = finalHab + totalConsumos + finalPenalidad;
+  const totalCobrar = finalHab + totalConsumos + (vetarCliente ? 0 : finalPenalidad);
+  const totalCobrarVes = (totalCobrar * tasaUsd).toFixed(2);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -941,11 +1001,14 @@ export function CheckoutModal({
 
     onSubmit({
       numHabitacion: room.num,
-      penalidad: finalPenalidad,
+      penalidad: vetarCliente ? 0 : finalPenalidad,
       detallePenalidad: finalDetalle,
       montoConsumos: totalConsumos,
       montoHabitacion: finalHab,
-      metodoPago
+      metodoPago,
+      vetarCliente,
+      montoDeuda: finalPenalidad,
+      motivoVeto: finalDetalle
     });
   };
 
@@ -977,7 +1040,7 @@ export function CheckoutModal({
               <div className="flex justify-between items-center">
                 <span>Saldo Pendiente Hospedaje:</span>
                 <div className="flex items-center gap-1">
-                  <span>S/</span>
+                  <span>$ USD</span>
                   <input 
                     type="number"
                     value={montoHabitacion}
@@ -991,19 +1054,22 @@ export function CheckoutModal({
               
               <div className="flex justify-between items-center border-t border-slate-100 pt-2">
                 <span>Consumos Extras Cargados:</span>
-                <span className="text-slate-800">S/ {totalConsumos.toFixed(2)}</span>
+                <span className="text-slate-800">$ {totalConsumos.toFixed(2)} USD</span>
               </div>
 
               {showPenalidadInput && (
                 <div className="flex justify-between items-center text-rose-600 border-t border-slate-100 pt-2">
                   <span>Penalidad Checklist:</span>
-                  <span>S/ {finalPenalidad.toFixed(2)}</span>
+                  <span>{vetarCliente ? 'VETADO (Deuda Registrada)' : `$ ${finalPenalidad.toFixed(2)} USD`}</span>
                 </div>
               )}
 
               <div className="flex justify-between items-center text-sm font-black text-slate-800 border-t-2 border-dashed border-slate-200 pt-2.5">
                 <span>TOTAL A COBRAR EN CAJA:</span>
-                <span className="text-green-600 text-base">S/ {totalCobrar.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="text-emerald-600 text-base block">$ {totalCobrar.toFixed(2)} USD</span>
+                  <span className="text-[10px] text-slate-400 font-bold block">~ Bs. {totalCobrarVes}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1017,9 +1083,11 @@ export function CheckoutModal({
               className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
               required
             >
-              <option value="Efectivo">Efectivo</option>
-              <option value="Tarjeta">Tarjeta (Crédito/Débito)</option>
-              <option value="Transferencia">Transferencia / Yape</option>
+              <option value="Efectivo Bolívares">Efectivo Bolívares</option>
+              <option value="Pago Móvil">Pago Móvil</option>
+              <option value="Punto de Venta">Punto de Venta</option>
+              <option value="Divisas Dólares">Divisas Dólares</option>
+              <option value="Binance">Binance</option>
             </select>
           </div>
 
@@ -1061,15 +1129,15 @@ export function CheckoutModal({
 
           {/* Penalty inputs */}
           {showPenalidadInput && (
-            <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl fade-in space-y-2">
+            <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl fade-in space-y-3">
               <label className="block text-xs font-bold text-rose-700 uppercase">
-                <i className="fa-solid fa-triangle-exclamation"></i> Ingrese Monto de Penalidad (S/)
+                <i className="fa-solid fa-triangle-exclamation"></i> Ingrese Monto de Penalidad ($ USD)
               </label>
               <input 
                 type="number" 
                 value={penalidad}
                 onChange={(e) => setPenalidad(e.target.value)}
-                placeholder="Ej. 50.00" 
+                placeholder="Ej. 10.00" 
                 min="1" 
                 step="0.5" 
                 required
@@ -1079,17 +1147,38 @@ export function CheckoutModal({
                 type="text" 
                 value={detallePenalidad}
                 onChange={(e) => setDetallePenalidad(e.target.value)}
-                placeholder="Detalle de penalidad (opcional)" 
+                placeholder="Detalle de penalidad o daños (opcional)" 
                 className="w-full px-4 py-2 rounded-lg border border-rose-300 text-xs outline-none focus:ring-1 focus:ring-rose-500 bg-white text-slate-700"
               />
+
+              <div className="pt-1 flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="vetarClientChk"
+                  checked={vetarCliente}
+                  onChange={(e) => setVetarCliente(e.target.checked)}
+                  className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500"
+                />
+                <label htmlFor="vetarClientChk" className="text-xs font-black text-rose-800 cursor-pointer">
+                  Huésped no paga / Vetar cliente y registrar deuda
+                </label>
+              </div>
             </div>
           )}
 
           <button 
             type="submit" 
-            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-colors text-sm"
+            className={`w-full font-bold py-3.5 rounded-xl shadow-md transition-colors text-sm ${
+              vetarCliente 
+                ? 'bg-rose-600 hover:bg-rose-700 text-white' 
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
           >
-            <i className="fa-solid fa-check mr-2"></i> {showPenalidadInput ? 'Aplicar Penalidad y Procesar Salida' : 'Liquidar Cuenta y Procesar Salida'}
+            <i className="fa-solid fa-check mr-2"></i> {
+              vetarCliente 
+                ? 'Vetar Cliente y Registrar Deuda Pendiente' 
+                : showPenalidadInput ? 'Aplicar Penalidad y Procesar Salida' : 'Liquidar Cuenta y Procesar Salida'
+            }
           </button>
         </form>
       </div>

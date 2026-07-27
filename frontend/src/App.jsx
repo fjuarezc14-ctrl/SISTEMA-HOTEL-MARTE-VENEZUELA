@@ -663,6 +663,7 @@ export default function App() {
                 <Clientes 
                   clientes={appState.clientes} 
                   token={token}
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onStateChange={fetchState}
                 />
               )}
@@ -739,6 +740,7 @@ export default function App() {
         isOpen={isCheckoutOpen}
         room={selectedRoom}
         consumos={appState.consumos}
+        configuracion={appState.configuracion}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
       />
