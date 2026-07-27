@@ -6,6 +6,7 @@ import Caja from './components/Caja';
 import Clientes from './components/Clientes';
 import Tienda from './components/Tienda';
 import Tickets from './components/Tickets';
+import EntregaTurnos from './components/EntregaTurnos';
 import Usuarios from './components/Usuarios';
 import Configuracion from './components/Configuracion';
 import { 
@@ -344,7 +345,7 @@ export default function App() {
   const canAccessTab = (tabName) => {
     if (!user) return false;
     if (user.rol === 'Administrador') return true;
-    if (tabName === 'tickets') return true;
+    if (tabName === 'tickets' || tabName === 'entregaTurnos') return true;
     const perms = user.permisos || [];
     if (tabName === 'tienda') {
       return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
@@ -359,7 +360,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       if (!canAccessTab(activeTab)) {
-        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
+        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
         const firstAvailable = availableTabs.find(t => canAccessTab(t));
         if (firstAvailable) setActiveTab(firstAvailable);
       }
@@ -373,6 +374,7 @@ export default function App() {
       habitaciones: 'Gestión de Habitaciones',
       reservas: 'Historial de Reservas',
       tickets: 'Tickets & Incidencias Internas',
+      entregaTurnos: 'Entrega y Recepción de Turno',
       caja: 'Control de Caja y Cobros habituales',
       tienda: 'Tienda & Market (Venta Directa POS)',
       clientes: 'Directorio de Clientes VIP',
@@ -526,6 +528,26 @@ export default function App() {
               {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length > 0 && (
                 <span className="bg-rose-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded-full">
                   {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {canAccessTab('entregaTurnos') && (
+            <button 
+              onClick={() => setActiveTab('entregaTurnos')} 
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'entregaTurnos'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <i className="fa-solid fa-handshake w-5"></i> Entrega de Turno
+              </div>
+              {(appState.entregaTurnos || []).filter(t => t.estado === 'Pendiente Confirmación').length > 0 && (
+                <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full">
+                  {(appState.entregaTurnos || []).filter(t => t.estado === 'Pendiente Confirmación').length}
                 </span>
               )}
             </button>
@@ -710,6 +732,18 @@ export default function App() {
                   habitaciones={appState.habitaciones}
                   token={token}
                   currentUser={user}
+                  onStateChange={fetchState}
+                />
+              )}
+              {activeTab === 'entregaTurnos' && canAccessTab('entregaTurnos') && (
+                <EntregaTurnos 
+                  entregaTurnos={appState.entregaTurnos || []}
+                  productos={appState.productos || []}
+                  habitaciones={appState.habitaciones || []}
+                  caja={appState.caja || []}
+                  token={token}
+                  currentUser={user}
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onStateChange={fetchState}
                 />
               )}

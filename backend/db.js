@@ -131,6 +131,23 @@ export async function initDb() {
       clave TEXT PRIMARY KEY,
       valor TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS entrega_turnos (
+      id TEXT PRIMARY KEY,
+      usuarioSalienteId TEXT NOT NULL,
+      usuarioSalienteNombre TEXT NOT NULL,
+      usuarioEntranteId TEXT,
+      usuarioEntranteNombre TEXT,
+      fechaHoraEntrega TEXT NOT NULL,
+      saldoEfectivoUsd REAL DEFAULT 0,
+      saldoEfectivoVes REAL DEFAULT 0,
+      stockSnackbarConteo TEXT,
+      lenceriaRecepcionConteo TEXT,
+      llavesHerramientasConteo TEXT,
+      novedades TEXT DEFAULT '',
+      observacionesConfirmacion TEXT DEFAULT '',
+      estado TEXT DEFAULT 'Pendiente Confirmación'
+    );
   `);
 
   // Seed data if empty

@@ -373,12 +373,13 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const productos = await db.all('SELECT * FROM productos');
     const tarifas = await db.all('SELECT * FROM tarifas');
     const tickets = await db.all('SELECT * FROM tickets ORDER BY fechaCreacion DESC');
+    const entregaTurnos = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
 
     const configuracionList = await db.all('SELECT * FROM configuracion');
     const configuracion = {};
     configuracionList.forEach(c => { configuracion[c.clave] = c.valor; });
 
-    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas, configuracion, tickets });
+    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas, configuracion, tickets, entregaTurnos });
   } catch (error) {
     console.error('Error fetching state:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -1116,6 +1117,105 @@ app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error registrando cierre de turno:', error);
     res.status(500).json({ error: 'Error al registrar el cierre de turno.' });
+  }
+});
+
+// GET /api/entrega-turnos - Historial de entrega de turnos (v4 - Fase 2)
+app.get('/api/entrega-turnos', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching entrega_turnos:', error);
+    res.status(500).json({ error: 'Error al consultar entregas de turno.' });
+  }
+});
+
+// POST /api/entrega-turnos - Registrar nueva entrega de turno por recepcionista saliente (v4 - Fase 2)
+app.post('/api/entrega-turnos', requireAuth, async (req, res) => {
+  const { 
+    saldoEfectivoUsd, 
+    saldoEfectivoVes, 
+    stockSnackbarConteo, 
+    lenceriaRecepcionConteo, 
+    llavesHerramientasConteo, 
+    novedades 
+  } = req.body;
+
+  try {
+    const id = 'ent_' + Date.now();
+    const fechaHora = new Date().toISOString();
+
+    await db.run(
+      `INSERT INTO entrega_turnos (
+        id, usuarioSalienteId, usuarioSalienteNombre, fechaHoraEntrega, 
+        saldoEfectivoUsd, saldoEfectivoVes, stockSnackbarConteo, 
+        lenceriaRecepcionConteo, llavesHerramientasConteo, novedades, estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        req.user.id,
+        req.user.nombre,
+        fechaHora,
+        parseFloat(saldoEfectivoUsd || 0),
+        parseFloat(saldoEfectivoVes || 0),
+        typeof stockSnackbarConteo === 'string' ? stockSnackbarConteo : JSON.stringify(stockSnackbarConteo || {}),
+        typeof lenceriaRecepcionConteo === 'string' ? lenceriaRecepcionConteo : JSON.stringify(lenceriaRecepcionConteo || {}),
+        typeof llavesHerramientasConteo === 'string' ? llavesHerramientasConteo : JSON.stringify(llavesHerramientasConteo || {}),
+        (novedades || '').trim(),
+        'Pendiente Confirmación'
+      ]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Entrega de Turno',
+      `Entrega de turno registrada. Efectivo: $${saldoEfectivoUsd} USD / Bs. ${saldoEfectivoVes}. Novedades: ${novedades || 'Ninguna'}`,
+      req.ip
+    );
+
+    res.json({ success: true, id, message: 'Planilla de entrega de turno registrada con éxito.' });
+  } catch (error) {
+    console.error('Error al registrar entrega de turno:', error);
+    res.status(500).json({ error: 'Error al registrar la entrega de turno.' });
+  }
+});
+
+// PUT /api/entrega-turnos/:id/confirmar - Recepcionista entrante confirma recepción de turno (v4 - Fase 2)
+app.put('/api/entrega-turnos/:id/confirmar', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { observacionesConfirmacion, conDiscrepancia } = req.body;
+
+  try {
+    const entrega = await db.get('SELECT * FROM entrega_turnos WHERE id = ?', [id]);
+    if (!entrega) {
+      return res.status(404).json({ error: 'Registro de entrega de turno no encontrado.' });
+    }
+
+    const nuevoEstado = conDiscrepancia ? 'Con Discrepancia' : 'Recibido Conforme';
+
+    await db.run(
+      `UPDATE entrega_turnos 
+       SET usuarioEntranteId = ?, usuarioEntranteNombre = ?, observacionesConfirmacion = ?, estado = ? 
+       WHERE id = ?`,
+      [req.user.id, req.user.nombre, (observacionesConfirmacion || '').trim(), nuevoEstado, id]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Recepción de Turno',
+      `Turno #${id} de ${entrega.usuarioSalienteNombre} ${nuevoEstado}. Obs: ${observacionesConfirmacion || 'Sin observaciones'}`,
+      req.ip
+    );
+
+    res.json({ success: true, estado: nuevoEstado, message: `Recepción de turno guardada como ${nuevoEstado}.` });
+  } catch (error) {
+    console.error('Error al confirmar recepción de turno:', error);
+    res.status(500).json({ error: 'Error al confirmar la recepción del turno.' });
   }
 });
 
