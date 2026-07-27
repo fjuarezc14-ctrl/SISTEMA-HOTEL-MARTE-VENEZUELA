@@ -23,7 +23,9 @@ export async function initDb() {
       huesped TEXT,
       acomp TEXT,
       ingreso TEXT,
-      salida TEXT
+      salida TEXT,
+      clienteId TEXT,
+      clienteCi TEXT
     );
 
     CREATE TABLE IF NOT EXISTS clientes (
@@ -277,7 +279,9 @@ export async function initDb() {
   await db.run("UPDATE habitaciones SET tipo = 'Matrimonial' WHERE tipo IN ('Simple', 'Doble')");
   await db.run("UPDATE habitaciones SET tipo = 'Mini Suite' WHERE tipo = 'Suite'");
 
-  // Migraciones autocurativas para la tabla clientes (ci, vetado, monto_deuda_usd, motivo_veto, foto_ci) (v3 - Fase 4)
+  // Migraciones autocurativas para la tabla clientes y habitaciones (ci, vetado, monto_deuda_usd, motivo_veto, foto_ci, clienteId, clienteCi) (v3 - Fase 4)
+  try { await db.run("ALTER TABLE habitaciones ADD COLUMN clienteId TEXT"); } catch (e) {}
+  try { await db.run("ALTER TABLE habitaciones ADD COLUMN clienteCi TEXT"); } catch (e) {}
   try { await db.run("ALTER TABLE clientes ADD COLUMN ci TEXT"); } catch (e) {}
   try { await db.run("ALTER TABLE clientes ADD COLUMN vetado INTEGER DEFAULT 0"); } catch (e) {}
   try { await db.run("ALTER TABLE clientes ADD COLUMN monto_deuda_usd REAL DEFAULT 0"); } catch (e) {}

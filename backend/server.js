@@ -434,6 +434,10 @@ function calcularHoraSalida(modalidad) {
   return `${hh}:${mm}`;
 }
 
+function getDigitsOnly(str) {
+  return (str || '').replace(/[^0-9]/g, '');
+}
+
 // 2. POST /api/checkin-directo - Process immediate walk-in check-in (v3 - Fase 1)
 app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor } = req.body;
@@ -444,8 +448,18 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   }
 
   try {
-    // 1. Check if client exists, otherwise create
-    let cliente = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
+    // 1. Check if client exists (robust digit-based CI matching)
+    const digitsDoc = getDigitsOnly(numDoc);
+    const allClients = await db.all('SELECT * FROM clientes');
+    let cliente = allClients.find(c => {
+      if (c.ci === numDoc || c.dni === numDoc) return true;
+      if (digitsDoc.length >= 4) {
+        const cCiDigits = getDigitsOnly(c.ci);
+        const cDniDigits = getDigitsOnly(c.dni);
+        return cCiDigits === digitsDoc || cDniDigits === digitsDoc;
+      }
+      return false;
+    });
     
     if (cliente && cliente.vetado === 1 && cliente.monto_deuda_usd > 0) {
       return res.status(400).json({ 
@@ -479,9 +493,9 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
 
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ? 
+       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ? 
        WHERE num = ?`,
-      [formattedName, acompText, getHoraActual(), salidaCalculada, numHabitacion]
+      [formattedName, acompText, getHoraActual(), salidaCalculada, clientId, numDoc, numHabitacion]
     );
 
     // 3. Register transaction in Cash register if amount > 0
@@ -520,8 +534,18 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
   }
 
   try {
-    // 1. Check/Create guest using CI/DNI
-    let cliente = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [numDoc, numDoc]);
+    // 1. Check/Create guest using CI/DNI (robust digit-based matching)
+    const digitsDoc = getDigitsOnly(numDoc);
+    const allClients = await db.all('SELECT * FROM clientes');
+    let cliente = allClients.find(c => {
+      if (c.ci === numDoc || c.dni === numDoc) return true;
+      if (digitsDoc.length >= 4) {
+        const cCiDigits = getDigitsOnly(c.ci);
+        const cDniDigits = getDigitsOnly(c.dni);
+        return cCiDigits === digitsDoc || cDniDigits === digitsDoc;
+      }
+      return false;
+    });
 
     if (cliente && cliente.vetado === 1 && cliente.monto_deuda_usd > 0) {
       return res.status(400).json({ 
@@ -601,15 +625,19 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'No se encontró reserva para esta habitación' });
     }
 
+    // Fetch guest CI
+    const cliente = await db.get('SELECT ci, dni FROM clientes WHERE id = ?', [reserva.clienteId]);
+    const clientCi = cliente ? (cliente.ci || cliente.dni) : '';
+
     // Increment guest visits
     await db.run('UPDATE clientes SET visitas = visitas + 1 WHERE id = ?', [reserva.clienteId]);
 
     // Update room status to Ocupada with Pernocta checkout time (11:00 AM)
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = '11:00 AM (Mañana)' 
+       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = '11:00 AM (Mañana)', clienteId = ?, clienteCi = ? 
        WHERE num = ?`,
-      [reserva.nombreAcomp || '', getHoraActual(), numHabitacion]
+      [reserva.nombreAcomp || '', getHoraActual(), reserva.clienteId, clientCi, numHabitacion]
     );
 
     // Delete reservation
@@ -651,10 +679,10 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     const huespedNombre = room.huesped || 'Huésped';
     const metodo = metodoPago || 'Efectivo Bolívares';
 
-    // 1. Update room status to Limpieza
+    // 1. Update room status to Limpieza and clear active guest details
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Limpieza', huesped = '', acomp = '', ingreso = '', salida = '' 
+       SET estado = 'Limpieza', huesped = '', acomp = '', ingreso = '', salida = '', clienteId = '', clienteCi = '' 
        WHERE num = ?`,
       [numHabitacion]
     );
@@ -665,14 +693,18 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
       const vetoReason = motivoVeto || detallePenalidad || 'Incidencia no saldada en Check-Out';
       
       let targetClient = null;
-      if (clienteId) {
-        targetClient = await db.get('SELECT * FROM clientes WHERE id = ?', [clienteId]);
-      } else if (clienteCi) {
-        targetClient = await db.get('SELECT * FROM clientes WHERE ci = ? OR dni = ?', [clienteCi, clienteCi]);
+      const searchId = clienteId || room.clienteId;
+      const searchCi = (clienteCi || room.clienteCi || '').replace(/[^a-zA-Z0-9]/g, '');
+
+      if (searchId) {
+        targetClient = await db.get('SELECT * FROM clientes WHERE id = ?', [searchId]);
       }
-      
+      if (!targetClient && searchCi) {
+        targetClient = await db.get('SELECT * FROM clientes WHERE REPLACE(REPLACE(ci, "V-", ""), "-", "") = ? OR REPLACE(REPLACE(dni, "V-", ""), "-", "") = ?', [searchCi, searchCi]);
+      }
       if (!targetClient && huespedNombre) {
-        targetClient = await db.get('SELECT * FROM clientes WHERE nombre LIKE ?', [`%${huespedNombre}%`]);
+        const cleanName = huespedNombre.replace(/[^a-zA-Z ]/g, '').trim();
+        targetClient = await db.get('SELECT * FROM clientes WHERE nombre LIKE ? OR nombre LIKE ?', [`%${cleanName}%`, `%${huespedNombre}%`]);
       }
 
       if (targetClient) {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
+const normalizeCi = (str) => (str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
 // ==========================================
 // 1. MODAL: WALK-IN (ASIGNAR DIRECTO)
 // ==========================================
@@ -108,7 +110,14 @@ export function AsignarDirectoModal({
   const montoNum = parseFloat(monto) || 0;
   const montoVes = (montoNum * tasaUsd).toFixed(2);
 
-  const matchedClient = clientes.find(c => (c.ci && c.ci === ci.trim()) || (c.dni && c.dni === ci.trim()));
+  const cleanInputCi = normalizeCi(ci);
+  const matchedClient = clientes.find(c => {
+    if (!cleanInputCi) return false;
+    const cleanC = normalizeCi(c.ci);
+    const cleanD = normalizeCi(c.dni);
+    return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)) || (cleanInputCi.length >= 4 && cleanC.endsWith(cleanC)))) ||
+           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD)) || (cleanInputCi.length >= 4 && cleanD.endsWith(cleanInputCi))));
+  });
   const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
 
   return (
@@ -513,7 +522,14 @@ export function NuevaReservaModal({
   const adelantoNum = parseFloat(monto) || 0;
   const adelantoVES = (adelantoNum * tasaUsd).toFixed(2);
 
-  const matchedClient = clientes.find(c => (c.ci && c.ci === ci.trim()) || (c.dni && c.dni === ci.trim()));
+  const cleanInputCi = normalizeCi(ci);
+  const matchedClient = clientes.find(c => {
+    if (!cleanInputCi) return false;
+    const cleanC = normalizeCi(c.ci);
+    const cleanD = normalizeCi(c.dni);
+    return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)) || (cleanInputCi.length >= 4 && cleanC.endsWith(cleanC)))) ||
+           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD)) || (cleanInputCi.length >= 4 && cleanD.endsWith(cleanD))));
+  });
   const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
 
   return (
@@ -1007,6 +1023,8 @@ export function CheckoutModal({
       montoHabitacion: finalHab,
       metodoPago,
       vetarCliente,
+      clienteId: room.clienteId,
+      clienteCi: room.clienteCi,
       montoDeuda: finalPenalidad,
       motivoVeto: finalDetalle
     });
