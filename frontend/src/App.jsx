@@ -4,6 +4,7 @@ import Habitaciones from './components/Habitaciones';
 import Reservas from './components/Reservas';
 import Caja from './components/Caja';
 import Clientes from './components/Clientes';
+import Tienda from './components/Tienda';
 import Usuarios from './components/Usuarios';
 import Configuracion from './components/Configuracion';
 import { 
@@ -356,6 +357,7 @@ export default function App() {
       habitaciones: 'Gestión de Habitaciones',
       reservas: 'Historial de Reservas',
       caja: 'Control de Caja y Cobros habituales',
+      tienda: 'Tienda & Market (Venta Directa POS)',
       clientes: 'Directorio de Clientes VIP',
       usuarios: 'Gestión de Personal y Accesos'
     };
@@ -502,6 +504,19 @@ export default function App() {
               }`}
             >
               <i className="fa-solid fa-cash-register w-5"></i> Caja y Cobros
+            </button>
+          )}
+
+          {user.permisos.includes('tienda') && (
+            <button 
+              onClick={() => setActiveTab('tienda')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'tienda'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-store w-5"></i> Tienda & Market
             </button>
           )}
 
@@ -656,6 +671,16 @@ export default function App() {
                   token={token}
                   currentUser={user}
                   onCajaMovimiento={handleCajaMovimiento}
+                  onStateChange={fetchState}
+                />
+              )}
+              {activeTab === 'tienda' && user.permisos.includes('tienda') && (
+                <Tienda 
+                  productos={appState.productos}
+                  clientes={appState.clientes}
+                  token={token}
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
+                  currentUser={user}
                   onStateChange={fetchState}
                 />
               )}

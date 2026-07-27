@@ -978,6 +978,101 @@ app.post('/api/limpieza-terminada', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/tienda/venta-directa - Procesar venta directa de la tienda / market con pagos mixtos (v3 - Fase 5)
+app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
+  const { items, pagos, clienteNombre, clienteCi, comprobante } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'El carrito de compras está vacío.' });
+  }
+
+  if (!pagos || (Array.isArray(pagos) && pagos.length === 0)) {
+    return res.status(400).json({ error: 'Se debe especificar al menos un método de pago.' });
+  }
+
+  try {
+    const totalUsd = items.reduce((sum, item) => sum + (parseFloat(item.precio_venta) * parseInt(item.cantidad)), 0);
+    const saleCode = 'VTA-' + Math.floor(Math.random() * 90000 + 10000);
+
+    // 1. Verify stock for all items
+    for (const item of items) {
+      const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
+      if (!prod) {
+        return res.status(404).json({ error: `El producto "${item.nombre}" ya no existe en el catálogo.` });
+      }
+      if (prod.stock < item.cantidad) {
+        return res.status(400).json({ error: `Stock insuficiente para "${item.nombre}". Stock disponible: ${prod.stock}` });
+      }
+    }
+
+    // Deduct stock
+    for (const item of items) {
+      await db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [item.cantidad, item.id]);
+    }
+
+    // 2. Prepare payment breakdown
+    const pagosList = Array.isArray(pagos) ? pagos : [pagos];
+    const isPagoMixto = pagosList.length > 1;
+    
+    let conceptoItems = items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+    let clienteInfo = clienteNombre ? ` - Cliente: ${clienteNombre.trim()}` : '';
+    if (clienteCi) clienteInfo += ` (CI: ${clienteCi.trim()})`;
+
+    // Insert cash entries in `caja` for each payment method in the breakdown
+    for (const pago of pagosList) {
+      const montoPago = parseFloat(pago.monto_usd) || 0;
+      if (montoPago > 0) {
+        const transId = 't_pos_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+        let conceptoCaja = `Venta Tienda #${saleCode} (${conceptoItems})${clienteInfo} [${comprobante || 'Ticket Interno'}]`;
+        if (isPagoMixto) {
+          conceptoCaja += ` (PAGO MIXTO: $${montoPago.toFixed(2)} USD vía ${pago.metodo})`;
+        }
+
+        await db.run(
+          'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            transId,
+            'Ingreso',
+            conceptoCaja,
+            montoPago,
+            pago.metodo || 'Efectivo Bolívares',
+            getHoraActual(),
+            req.user.id,
+            req.user.nombre
+          ]
+        );
+      }
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Venta Tienda POS',
+      `Venta #${saleCode} realizada por $${totalUsd.toFixed(2)} USD (${conceptoItems}). ${isPagoMixto ? 'Pago Mixto' : 'Pago Único'}`,
+      req.ip
+    );
+
+    res.json({
+      success: true,
+      message: `Venta #${saleCode} procesada exitosamente.`,
+      ticket: {
+        code: saleCode,
+        fecha: getHoraActual(),
+        items,
+        totalUsd,
+        pagos: pagosList,
+        clienteNombre,
+        clienteCi,
+        vendedor: req.user.nombre
+      }
+    });
+  } catch (error) {
+    console.error('Error procesando venta directa:', error);
+    res.status(500).json({ error: 'Error al procesar la venta en tienda.' });
+  }
+});
+
 // 8. GET /api/consumos/:numHabitacion - Listar consumos de una habitación (Fase 5)
 app.get('/api/consumos/:numHabitacion', requireAuth, async (req, res) => {
   const { numHabitacion } = req.params;

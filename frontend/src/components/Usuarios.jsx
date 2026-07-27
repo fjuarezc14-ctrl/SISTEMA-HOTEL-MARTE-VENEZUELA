@@ -24,6 +24,7 @@ export default function Usuarios({ token, currentUser }) {
     habitaciones: true,
     reservas: true,
     caja: true,
+    tienda: true,
     clientes: true,
     configuracion: false,
     audit_logs: false
@@ -78,10 +79,11 @@ export default function Usuarios({ token, currentUser }) {
   const applyRolePresets = (selectedRol) => {
     setRol(selectedRol);
     const preset = {
-      dashboard: true,
-      habitaciones: true,
+      dashboard: false,
+      habitaciones: false,
       reservas: false,
       caja: false,
+      tienda: false,
       clientes: false,
       configuracion: false,
       audit_logs: false
@@ -92,6 +94,7 @@ export default function Usuarios({ token, currentUser }) {
       preset.habitaciones = true;
       preset.reservas = true;
       preset.caja = true;
+      preset.tienda = true;
       preset.clientes = true;
       preset.configuracion = true;
       preset.audit_logs = true;
@@ -100,6 +103,7 @@ export default function Usuarios({ token, currentUser }) {
       preset.habitaciones = true;
       preset.reservas = true;
       preset.caja = true;
+      preset.tienda = true;
       preset.clientes = true;
       preset.configuracion = true;
       preset.audit_logs = true;
@@ -108,10 +112,15 @@ export default function Usuarios({ token, currentUser }) {
       preset.habitaciones = true;
       preset.reservas = true;
       preset.caja = true;
+      preset.tienda = true;
       preset.clientes = true;
-    } else if (selectedRol === 'Limpieza' || selectedRol === 'Camarero') {
+    } else if (selectedRol === 'Limpieza') {
       preset.dashboard = true;
       preset.habitaciones = true;
+    } else if (selectedRol === 'Camarero') {
+      preset.dashboard = true;
+      preset.habitaciones = true;
+      preset.tienda = true;
     }
 
     setPermisos(preset);
@@ -656,6 +665,15 @@ export default function Usuarios({ token, currentUser }) {
                       className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
                     />
                     Control de Caja Financiera
+                  </label>
+                  <label className="flex items-center gap-3 chk-label cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={permisos.tienda}
+                      onChange={() => handlePermissionChange('tienda')}
+                      className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
+                    />
+                    Tienda & Market (Ventas POS)
                   </label>
                   <label className="flex items-center gap-3 chk-label cursor-pointer">
                     <input 
