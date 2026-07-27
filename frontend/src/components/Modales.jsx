@@ -1054,8 +1054,12 @@ export function CheckoutModal({
     : 0;
 
   const finalHab = parseFloat(montoHabitacion) || 0;
-  const totalCobrar = finalHab + totalConsumos + montoHorasExtras + (vetarCliente ? 0 : finalPenalidad);
-  const totalCobrarVes = (totalCobrar * tasaUsd).toFixed(2);
+  const totalGeneral = finalHab + totalConsumos + montoHorasExtras + finalPenalidad;
+  
+  // When vetarCliente is checked, the damage/penalty amount is NOT paid now, but registered as pending debt on guest profile
+  const totalCobrarEnCaja = vetarCliente ? (finalHab + totalConsumos + montoHorasExtras) : totalGeneral;
+  const montoDeudaPendiente = vetarCliente ? finalPenalidad : 0;
+  const totalCobrarVes = (totalCobrarEnCaja * tasaUsd).toFixed(2);
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -1074,9 +1078,11 @@ export function CheckoutModal({
       finalDetalle = details.join(', ');
     }
 
+    const vetoReason = `Cobro Parcial realizado ($${totalCobrarEnCaja.toFixed(2)} USD pagados en caja). Deuda de $${montoDeudaPendiente.toFixed(2)} USD registrada por: ${finalDetalle || 'Incidencia de daños en Check-Out'}`;
+
     onSubmit({
       numHabitacion: room.num,
-      penalidad: (vetarCliente ? 0 : finalPenalidad) + montoHorasExtras,
+      penalidad: vetarCliente ? 0 : finalPenalidad,
       detallePenalidad: finalDetalle,
       montoConsumos: totalConsumos,
       montoHabitacion: finalHab,
@@ -1084,8 +1090,8 @@ export function CheckoutModal({
       vetarCliente,
       clienteId: room.clienteId,
       clienteCi: room.clienteCi,
-      montoDeuda: finalPenalidad + montoHorasExtras,
-      motivoVeto: finalDetalle || 'Incidencia de daños en Check-Out'
+      montoDeuda: montoDeudaPendiente,
+      motivoVeto: vetoReason
     });
   };
 
@@ -1160,14 +1166,27 @@ export function CheckoutModal({
               {showPenalidadInput && (
                 <div className="flex justify-between items-center text-rose-600 border-t border-slate-100 pt-2">
                   <span>Penalidad / Tabla de Daños:</span>
-                  <span>{vetarCliente ? 'VETADO (Deuda Registrada)' : `$ ${finalPenalidad.toFixed(2)} USD`}</span>
+                  <span>{vetarCliente ? `$ ${finalPenalidad.toFixed(2)} USD (DEUDA PENDIENTE)` : `$ ${finalPenalidad.toFixed(2)} USD`}</span>
+                </div>
+              )}
+
+              {vetarCliente && (
+                <div className="bg-rose-100/70 p-2.5 rounded-lg border border-rose-200 text-rose-900 mt-2 space-y-1">
+                  <div className="flex justify-between text-[11px] font-black">
+                    <span>Monto que el huésped SÍ cancela hoy:</span>
+                    <span className="text-emerald-700 font-bold">$ {totalCobrarEnCaja.toFixed(2)} USD</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black border-t border-rose-200/60 pt-1">
+                    <span>Deuda Registrada al Cliente (Veto):</span>
+                    <span className="text-rose-700">$ {montoDeudaPendiente.toFixed(2)} USD</span>
+                  </div>
                 </div>
               )}
 
               <div className="flex justify-between items-center text-sm font-black text-slate-800 border-t-2 border-dashed border-slate-200 pt-2.5">
-                <span>TOTAL A COBRAR EN CAJA:</span>
+                <span>INGRESO EN CAJA DE HOY:</span>
                 <div className="text-right">
-                  <span className="text-emerald-600 text-base block">$ {totalCobrar.toFixed(2)} USD</span>
+                  <span className="text-emerald-600 text-base block">$ {totalCobrarEnCaja.toFixed(2)} USD</span>
                   <span className="text-[10px] text-slate-400 font-bold block">~ Bs. {totalCobrarVes}</span>
                 </div>
               </div>
