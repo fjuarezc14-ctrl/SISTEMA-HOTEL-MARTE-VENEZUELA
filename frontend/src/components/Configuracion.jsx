@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export default function Configuracion({ token, appState, onStateChange }) {
-  const { productos = [], tarifas = [], habitaciones = [] } = appState;
+  const { productos = [], tarifas = [], habitaciones = [], tablaDanos = [] } = appState;
 
   // Products states
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -19,6 +19,14 @@ export default function Configuracion({ token, appState, onStateChange }) {
   const [roomNum, setRoomNum] = useState('');
   const [roomTipo, setRoomTipo] = useState('Matrimonial');
   const [isSubmittingRoom, setIsSubmittingRoom] = useState(false);
+
+  // Damage Table states
+  const [isDanoModalOpen, setIsDanoModalOpen] = useState(false);
+  const [editingDano, setEditingDano] = useState(null);
+  const [danoConcepto, setDanoConcepto] = useState('');
+  const [danoPrecioUsd, setDanoPrecioUsd] = useState('5.00');
+  const [danoTipoTarifa, setDanoTipoTarifa] = useState('fija');
+  const [isSubmittingDano, setIsSubmittingDano] = useState(false);
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -182,6 +190,80 @@ export default function Configuracion({ token, appState, onStateChange }) {
     }
   };
 
+  // Tabla de Daños Handlers
+  const handleOpenCreateDano = () => {
+    setEditingDano(null);
+    setDanoConcepto('');
+    setDanoPrecioUsd('5.00');
+    setDanoTipoTarifa('fija');
+    setIsDanoModalOpen(true);
+  };
+
+  const handleOpenEditDano = (dano) => {
+    setEditingDano(dano);
+    setDanoConcepto(dano.concepto);
+    setDanoPrecioUsd(dano.precio_usd.toString());
+    setDanoTipoTarifa(dano.tipo_tarifa || 'fija');
+    setIsDanoModalOpen(true);
+  };
+
+  const handleDeleteDano = async (dano) => {
+    const confirmDelete = window.confirm(`¿Está seguro de eliminar "${dano.concepto}" de la Tabla de Daños?`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`/api/tabla-danos/${dano.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar daño');
+
+      alert('✅ Concepto de daño eliminado.');
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    }
+  };
+
+  const handleDanoSubmit = async (e) => {
+    e.preventDefault();
+    if (!danoConcepto.trim() || !danoPrecioUsd || parseFloat(danoPrecioUsd) < 0) {
+      alert('Ingrese un concepto y precio válido.');
+      return;
+    }
+
+    setIsSubmittingDano(true);
+    try {
+      const url = editingDano ? `/api/tabla-danos/${editingDano.id}` : '/api/tabla-danos';
+      const method = editingDano ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          concepto: danoConcepto.trim(),
+          precio_usd: parseFloat(danoPrecioUsd),
+          tipo_tarifa: danoTipoTarifa
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar concepto de daño');
+
+      setIsDanoModalOpen(false);
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    } finally {
+      setIsSubmittingDano(false);
+    }
+  };
+
   return (
     <div className="space-y-8 fade-in">
       {/* 1. SECCIÓN GESTIÓN DE HABITACIONES (AGREGAR / ELIMINAR HABITACIONES) */}
@@ -235,7 +317,75 @@ export default function Configuracion({ token, appState, onStateChange }) {
         </div>
       </div>
 
-      {/* 2. SECCIÓN TARIFAS DE HABITACIONES */}
+      {/* 2. SECCIÓN TABLA OFICIAL DE DAÑOS Y PENALIZACIONES (v4 - Fase 4) */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
+          <div>
+            <h2 className="text-lg font-black text-slate-800">
+              <i className="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i> Tabla Oficial de Daños y Penalizaciones
+            </h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">Catálogo de tarifas por manchas, olores desinfectantes y reposición de equipamiento aplicadas en Check-Out.</p>
+          </div>
+          <button 
+            onClick={handleOpenCreateDano}
+            className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+          >
+            <i className="fa-solid fa-plus"></i> Agregar Penalización
+          </button>
+        </div>
+
+        {tablaDanos.length === 0 ? (
+          <div className="text-center py-8 text-slate-400 font-bold bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-xs">
+            No hay penalizaciones por daños registradas.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <th className="pb-3 pl-4">Concepto del Daño / Incidencia</th>
+                  <th className="pb-3 text-center">Tipo Tarifa</th>
+                  <th className="pb-3 text-right">Monto Base ($ USD)</th>
+                  <th className="pb-3 pr-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+                {tablaDanos.map(dano => (
+                  <tr key={dano.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-3.5 pl-4 font-black text-slate-800">{dano.concepto}</td>
+                    <td className="py-3.5 text-center">
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                        dano.tipo_tarifa === 'fija' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-purple-100 text-purple-800 border border-purple-200'
+                      }`}>
+                        {dano.tipo_tarifa === 'fija' ? 'Fija ($' + dano.precio_usd + ')' : 'Cotizable'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 text-right font-black text-slate-800">${dano.precio_usd.toFixed(2)} USD</td>
+                    <td className="py-3.5 pr-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={() => handleOpenEditDano(dano)}
+                          className="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteDano(dano)}
+                          className="px-2.5 py-1 rounded border border-rose-200 hover:bg-rose-50 text-rose-600 transition-colors"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 3. SECCIÓN TARIFAS DE HABITACIONES */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="border-b border-slate-100 pb-3 mb-5">
           <h2 className="text-lg font-black text-slate-800">
@@ -316,7 +466,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
         </div>
       </div>
 
-      {/* 3. SECCIÓN CATÁLOGO DE PRODUCTOS (INVENTARIO) */}
+      {/* 4. SECCIÓN CATÁLOGO DE PRODUCTOS (INVENTARIO) */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
           <div>
@@ -387,6 +537,84 @@ export default function Configuracion({ token, appState, onStateChange }) {
           </div>
         )}
       </div>
+
+      {/* CREATE / EDIT DAMAGE ITEM MODAL */}
+      {isDanoModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                {editingDano ? 'Editar Penalización' : 'Agregar Penalización'}
+              </h3>
+              <button onClick={() => setIsDanoModalOpen(false)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleDanoSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Concepto / Nombre del Daño</label>
+                <input 
+                  type="text" 
+                  value={danoConcepto}
+                  onChange={(e) => setDanoConcepto(e.target.value)}
+                  placeholder="Ej. Olores por cigarro / Control perdido"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-semibold"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-500 uppercase mb-1">Monto ($ USD)</label>
+                  <input 
+                    type="number" 
+                    step="0.50"
+                    min="0"
+                    value={danoPrecioUsd}
+                    onChange={(e) => setDanoPrecioUsd(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-500 uppercase mb-1">Tipo Tarifa</label>
+                  <select
+                    value={danoTipoTarifa}
+                    onChange={(e) => setDanoTipoTarifa(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold bg-white"
+                  >
+                    <option value="fija">Fija (Fija $ USD)</option>
+                    <option value="cotizable">Cotizable (Ajustable)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setIsDanoModalOpen(false)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSubmittingDano}
+                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+                >
+                  {isSubmittingDano ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
+                  ) : (
+                    'Guardar Penalización'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* CREATE ROOM MODAL */}
       {isRoomModalOpen && (

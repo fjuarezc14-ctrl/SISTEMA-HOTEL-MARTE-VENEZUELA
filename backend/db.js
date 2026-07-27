@@ -174,6 +174,13 @@ export async function initDb() {
       ducha TEXT DEFAULT 'Operativo',
       observaciones TEXT DEFAULT ''
     );
+
+    CREATE TABLE IF NOT EXISTS tabla_danos (
+      id TEXT PRIMARY KEY,
+      concepto TEXT UNIQUE NOT NULL,
+      precio_usd REAL DEFAULT 0,
+      tipo_tarifa TEXT DEFAULT 'fija'
+    );
   `);
 
   // Seed data if empty
@@ -391,6 +398,31 @@ export async function initDb() {
       `INSERT INTO inventario_habitaciones (numHabitacion) VALUES (?) ON CONFLICT(numHabitacion) DO NOTHING`,
       [r.num]
     );
+  }
+
+  // Seed tabla_danos (v4 - Fase 4)
+  const countDanos = await db.get('SELECT COUNT(*) as count FROM tabla_danos');
+  if (countDanos.count === 0) {
+    console.log('Seeding default tabla_danos...');
+    const defaultDanos = [
+      { id: 'd1', concepto: 'Olores (Desinfección por cigarro/sustancias ilícitas)', precio_usd: 5.00, tipo_tarifa: 'fija' },
+      { id: 'd2', concepto: 'Daño Directo a Paredes / Pintura (Velas/Licor/Manchas)', precio_usd: 4.00, tipo_tarifa: 'fija' },
+      { id: 'd3', concepto: 'Daño / Mancha Profunda en Colchón', precio_usd: 4.00, tipo_tarifa: 'fija' },
+      { id: 'd4', concepto: 'Reposición de Sábanas / Fundas Dañadas', precio_usd: 10.00, tipo_tarifa: 'cotizable' },
+      { id: 'd5', concepto: 'Reposición de Toallas / Paños Dañados', precio_usd: 8.00, tipo_tarifa: 'cotizable' },
+      { id: 'd6', concepto: 'Control Remoto de TV Perdido / Roto', precio_usd: 15.00, tipo_tarifa: 'cotizable' },
+      { id: 'd7', concepto: 'Control Remoto de Aire Perdido / Roto', precio_usd: 15.00, tipo_tarifa: 'cotizable' },
+      { id: 'd8', concepto: 'Espejo de Habitación Roto', precio_usd: 20.00, tipo_tarifa: 'cotizable' },
+      { id: 'd9', concepto: 'Llave de Habitación Perdida', precio_usd: 10.00, tipo_tarifa: 'cotizable' },
+      { id: 'd10', concepto: 'Daño General a Equipamiento / Artefactos', precio_usd: 25.00, tipo_tarifa: 'cotizable' }
+    ];
+
+    for (const d of defaultDanos) {
+      await db.run(
+        `INSERT INTO tabla_danos (id, concepto, precio_usd, tipo_tarifa) VALUES (?, ?, ?, ?)`,
+        [d.id, d.concepto, d.precio_usd, d.tipo_tarifa]
+      );
+    }
   }
 
   // Sincronizar estados de habitaciones con reservas activas (Autocuración de Consistencia)

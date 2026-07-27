@@ -882,6 +882,7 @@ export default function App() {
         room={selectedRoom}
         consumos={appState.consumos}
         configuracion={appState.configuracion}
+        tablaDanos={appState.tablaDanos || []}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
       />

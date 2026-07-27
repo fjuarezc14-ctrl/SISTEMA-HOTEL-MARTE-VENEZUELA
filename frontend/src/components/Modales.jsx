@@ -959,13 +959,15 @@ export function CheckoutModal({
   room, 
   consumos = [],
   configuracion,
+  tablaDanos = [],
   onClose, 
   onSubmit 
 }) {
   const [sabanas, setSabanas] = useState(true);
   const [control, setControl] = useState(true);
   const [danos, setDanos] = useState(true);
-  const [penalidad, setPenalidad] = useState('');
+  const [selectedDanosIds, setSelectedDanosIds] = useState([]);
+  const [penalidadManual, setPenalidadManual] = useState('');
   const [detallePenalidad, setDetallePenalidad] = useState('');
   const [montoHabitacion, setMontoHabitacion] = useState('0.00');
   const [metodoPago, setMetodoPago] = useState('Efectivo (Bs)');
@@ -982,7 +984,8 @@ export function CheckoutModal({
       setSabanas(true);
       setControl(true);
       setDanos(true);
-      setPenalidad('');
+      setSelectedDanosIds([]);
+      setPenalidadManual('');
       setDetallePenalidad('');
       setMontoHabitacion('0.00');
       setMetodoPago('Efectivo (Bs)');
@@ -992,9 +995,31 @@ export function CheckoutModal({
 
   if (!isOpen || !room) return null;
 
-  // Penalties are required if any checklist is unchecked
-  const showPenalidadInput = !sabanas || !control || !danos;
-  const finalPenalidad = showPenalidadInput ? (parseFloat(penalidad) || 0) : 0;
+  // Toggle a damage item selection
+  const handleToggleDanoItem = (danoItem) => {
+    setSelectedDanosIds(prev => {
+      const exists = prev.includes(danoItem.id);
+      const nextIds = exists ? prev.filter(id => id !== danoItem.id) : [...prev, danoItem.id];
+
+      // Auto update detail text
+      const selectedItems = tablaDanos.filter(d => nextIds.includes(d.id));
+      const detailsText = selectedItems.map(d => d.concepto).join(', ');
+      setDetallePenalidad(detailsText);
+
+      return nextIds;
+    });
+  };
+
+  // Penalties calculation
+  const selectedDanosItems = tablaDanos.filter(d => selectedDanosIds.includes(d.id));
+  const montoDanosTabla = selectedDanosItems.reduce((s, d) => s + (parseFloat(d.precio_usd) || 0), 0);
+
+  const showPenalidadInput = !sabanas || !control || !danos || selectedDanosIds.length > 0;
+  
+  const finalPenalidad = showPenalidadInput 
+    ? (montoDanosTabla > 0 ? montoDanosTabla : (parseFloat(penalidadManual) || 0))
+    : 0;
+
   const finalHab = parseFloat(montoHabitacion) || 0;
   const totalCobrar = finalHab + totalConsumos + (vetarCliente ? 0 : finalPenalidad);
   const totalCobrarVes = (totalCobrar * tasaUsd).toFixed(2);
@@ -1002,17 +1027,14 @@ export function CheckoutModal({
   const handleFormSubmit = (e) => {
     e.preventDefault();
     
-    let finalDetalle = '';
+    let finalDetalle = detallePenalidad.trim();
     
-    if (showPenalidadInput) {
+    if (showPenalidadInput && !finalDetalle) {
       const details = [];
       if (!sabanas) details.push("Sábanas/Toallas faltantes o sucias");
       if (!control) details.push("Control remoto extraviado");
       if (!danos) details.push("Daños o manchas en habitación");
-      
-      finalDetalle = detallePenalidad.trim() 
-        ? `${detallePenalidad.trim()} (${details.join(', ')})`
-        : details.join(', ');
+      finalDetalle = details.join(', ');
     }
 
     onSubmit({
@@ -1026,13 +1048,13 @@ export function CheckoutModal({
       clienteId: room.clienteId,
       clienteCi: room.clienteCi,
       montoDeuda: finalPenalidad,
-      motivoVeto: finalDetalle
+      motivoVeto: finalDetalle || 'Incidencia de daños en Check-Out'
     });
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh] overflow-y-auto">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4 shrink-0">
           <h3 className="text-lg font-bold text-slate-800">
             <i className="fa-solid fa-person-walking-arrow-right text-rose-500 mr-2"></i> Liquidación y Check-Out
@@ -1077,7 +1099,7 @@ export function CheckoutModal({
 
               {showPenalidadInput && (
                 <div className="flex justify-between items-center text-rose-600 border-t border-slate-100 pt-2">
-                  <span>Penalidad Checklist:</span>
+                  <span>Penalidad / Tabla de Daños:</span>
                   <span>{vetarCliente ? 'VETADO (Deuda Registrada)' : `$ ${finalPenalidad.toFixed(2)} USD`}</span>
                 </div>
               )}
@@ -1145,31 +1167,66 @@ export function CheckoutModal({
             </div>
           </div>
 
+          {/* Tabla Oficial de Daños Selector (v4 - Fase 4) */}
+          <div className="bg-amber-50/60 border border-amber-200 p-3.5 rounded-xl space-y-3">
+            <div className="flex justify-between items-center border-b border-amber-200/60 pb-2">
+              <label className="text-xs font-black text-amber-900 uppercase flex items-center gap-1.5">
+                <i className="fa-solid fa-triangle-exclamation text-amber-600"></i> Selector de Tabla de Daños
+              </label>
+              {selectedDanosIds.length > 0 && (
+                <span className="text-[10px] font-black bg-amber-600 text-white px-2 py-0.5 rounded-full">
+                  +{selectedDanosIds.length} ítem(s) (${montoDanosTabla.toFixed(2)} USD)
+                </span>
+              )}
+            </div>
+
+            <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+              {tablaDanos.map(d => {
+                const isSelected = selectedDanosIds.includes(d.id);
+                return (
+                  <div
+                    key={d.id}
+                    onClick={() => handleToggleDanoItem(d)}
+                    className={`p-2 rounded-lg border text-xs cursor-pointer flex justify-between items-center transition-all ${
+                      isSelected
+                        ? 'bg-amber-600 text-white border-amber-700 font-bold shadow-sm'
+                        : 'bg-white text-slate-700 border-amber-200/80 hover:bg-amber-100/50'
+                    }`}
+                  >
+                    <span className="truncate pr-2">{d.concepto}</span>
+                    <span className="font-black shrink-0">${d.precio_usd.toFixed(2)} USD</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Penalty inputs */}
           {showPenalidadInput && (
             <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl fade-in space-y-3">
               <label className="block text-xs font-bold text-rose-700 uppercase">
-                <i className="fa-solid fa-triangle-exclamation"></i> Ingrese Monto de Penalidad ($ USD)
+                <i className="fa-solid fa-circle-exclamation"></i> Total Monto por Penalidad/Daños ($ USD)
               </label>
               <input 
                 type="number" 
-                value={penalidad}
-                onChange={(e) => setPenalidad(e.target.value)}
-                placeholder="Ej. 10.00" 
+                value={montoDanosTabla > 0 ? montoDanosTabla : penalidadManual}
+                onChange={(e) => setPenalidadManual(e.target.value)}
+                placeholder="Ej. 5.00" 
                 min="1" 
                 step="0.5" 
                 required
+                readOnly={montoDanosTabla > 0}
                 className="w-full px-4 py-2 rounded-lg border border-rose-300 text-sm outline-none focus:ring-1 focus:ring-rose-500 bg-white font-bold text-rose-700"
               />
               <input 
                 type="text" 
                 value={detallePenalidad}
                 onChange={(e) => setDetallePenalidad(e.target.value)}
-                placeholder="Detalle de penalidad o daños (opcional)" 
+                placeholder="Detalle de la incidencia o daño reportado" 
                 className="w-full px-4 py-2 rounded-lg border border-rose-300 text-xs outline-none focus:ring-1 focus:ring-rose-500 bg-white text-slate-700"
               />
 
-              <div className="pt-1 flex items-center gap-2">
+              <div className="pt-1 flex items-center gap-2 bg-rose-100/50 p-2 rounded-lg border border-rose-200">
                 <input 
                   type="checkbox" 
                   id="vetarClientChk"
@@ -1177,8 +1234,8 @@ export function CheckoutModal({
                   onChange={(e) => setVetarCliente(e.target.checked)}
                   className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500"
                 />
-                <label htmlFor="vetarClientChk" className="text-xs font-black text-rose-800 cursor-pointer">
-                  Huésped no paga / Vetar cliente y registrar deuda
+                <label htmlFor="vetarClientChk" className="text-xs font-black text-rose-900 cursor-pointer">
+                  Huésped no paga / VETAR cliente y pasar a Lista Negra
                 </label>
               </div>
             </div>

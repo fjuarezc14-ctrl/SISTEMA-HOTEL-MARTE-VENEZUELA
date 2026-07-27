@@ -376,6 +376,7 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const entregaTurnos = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
     const inventarioLenceria = await db.all('SELECT * FROM inventario_lenceria');
     const inventarioHabitaciones = await db.all('SELECT * FROM inventario_habitaciones');
+    const tablaDanos = await db.all('SELECT * FROM tabla_danos');
 
     const configuracionList = await db.all('SELECT * FROM configuracion');
     const configuracion = {};
@@ -393,7 +394,8 @@ app.get('/api/state', requireAuth, async (req, res) => {
       tickets, 
       entregaTurnos,
       inventarioLenceria,
-      inventarioHabitaciones
+      inventarioHabitaciones,
+      tablaDanos
     });
   } catch (error) {
     console.error('Error fetching state:', error);
@@ -1365,6 +1367,85 @@ app.put('/api/inventario-habitaciones/:numHabitacion', requireAuth, async (req, 
   } catch (error) {
     console.error('Error updating room equipment:', error);
     res.status(500).json({ error: 'Error al actualizar equipamiento de la habitación.' });
+  }
+});
+
+// GET /api/tabla-danos - Obtener catálogo de daños y penalizaciones (v4 - Fase 4)
+app.get('/api/tabla-danos', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM tabla_danos');
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching tabla_danos:', error);
+    res.status(500).json({ error: 'Error al obtener la tabla de daños.' });
+  }
+});
+
+// POST /api/tabla-danos - Registrar nuevo ítem o penalización por daño (v4 - Fase 4)
+app.post('/api/tabla-danos', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+
+  const { concepto, precio_usd, tipo_tarifa } = req.body;
+  if (!concepto || precio_usd === undefined) {
+    return res.status(400).json({ error: 'Debe ingresar el concepto y precio base del daño.' });
+  }
+
+  try {
+    const id = 'd_' + Date.now();
+    await db.run(
+      'INSERT INTO tabla_danos (id, concepto, precio_usd, tipo_tarifa) VALUES (?, ?, ?, ?)',
+      [id, concepto.trim(), parseFloat(precio_usd), tipo_tarifa || 'fija']
+    );
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Tabla de Daños', `Registrado ítem de daño: ${concepto} ($${precio_usd} USD)`, req.ip);
+
+    res.json({ success: true, message: 'Ítem registrado en la Tabla de Daños.' });
+  } catch (error) {
+    console.error('Error adding tabla_danos item:', error);
+    res.status(500).json({ error: 'Error al agregar ítem a la Tabla de Daños.' });
+  }
+});
+
+// PUT /api/tabla-danos/:id - Editar tarifa o concepto de la Tabla de Daños (v4 - Fase 4)
+app.put('/api/tabla-danos/:id', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+
+  const { id } = req.params;
+  const { concepto, precio_usd, tipo_tarifa } = req.body;
+
+  try {
+    await db.run(
+      'UPDATE tabla_danos SET concepto = ?, precio_usd = ?, tipo_tarifa = ? WHERE id = ?',
+      [concepto.trim(), parseFloat(precio_usd), tipo_tarifa || 'fija', id]
+    );
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Tabla de Daños', `Actualizado ítem de daño #${id}: ${concepto} ($${precio_usd} USD)`, req.ip);
+
+    res.json({ success: true, message: 'Ítem de la Tabla de Daños actualizado.' });
+  } catch (error) {
+    console.error('Error updating tabla_danos item:', error);
+    res.status(500).json({ error: 'Error al actualizar ítem de la Tabla de Daños.' });
+  }
+});
+
+// DELETE /api/tabla-danos/:id - Eliminar ítem de la Tabla de Daños (v4 - Fase 4)
+app.delete('/api/tabla-danos/:id', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+
+  const { id } = req.params;
+  try {
+    await db.run('DELETE FROM tabla_danos WHERE id = ?', [id]);
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Tabla de Daños', `Eliminado ítem de daño #${id}`, req.ip);
+    res.json({ success: true, message: 'Ítem eliminado de la Tabla de Daños.' });
+  } catch (error) {
+    console.error('Error deleting tabla_danos item:', error);
+    res.status(500).json({ error: 'Error al eliminar ítem de la Tabla de Daños.' });
   }
 });
 
