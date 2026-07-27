@@ -372,15 +372,147 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const consumos = await db.all('SELECT * FROM consumos');
     const productos = await db.all('SELECT * FROM productos');
     const tarifas = await db.all('SELECT * FROM tarifas');
+    const tickets = await db.all('SELECT * FROM tickets ORDER BY fechaCreacion DESC');
 
     const configuracionList = await db.all('SELECT * FROM configuracion');
     const configuracion = {};
     configuracionList.forEach(c => { configuracion[c.clave] = c.valor; });
 
-    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas, configuracion });
+    res.json({ habitaciones, reservas, clientes, caja, consumos, productos, tarifas, configuracion, tickets });
   } catch (error) {
     console.error('Error fetching state:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/tickets - Obtener tickets de limpieza/mantenimiento (v3 - Fase 6)
+app.get('/api/tickets', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM tickets ORDER BY fechaCreacion DESC');
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching tickets:', error);
+    res.status(500).json({ error: 'Error al obtener tickets.' });
+  }
+});
+
+// POST /api/tickets - Crear nuevo ticket de incidencia/requerimiento (v3 - Fase 6)
+app.post('/api/tickets', requireAuth, async (req, res) => {
+  const { numHabitacion, titulo, descripcion, categoria, prioridad, usuarioAsignadoId, usuarioAsignadoNombre } = req.body;
+
+  if (!numHabitacion || !titulo || !categoria) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios (Habitación, Título, Categoría).' });
+  }
+
+  try {
+    const id = 'tkt_' + Date.now();
+    const estado = 'Pendiente';
+    const fechaCreacion = getHoraActual() + ' (' + new Date().toLocaleDateString('es-VE') + ')';
+
+    await db.run(
+      `INSERT INTO tickets (id, numHabitacion, titulo, descripcion, categoria, prioridad, estado, usuarioCreadorId, usuarioCreadorNombre, usuarioAsignadoId, usuarioAsignadoNombre, fechaCreacion)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        numHabitacion,
+        titulo.trim(),
+        descripcion ? descripcion.trim() : '',
+        categoria || 'Limpieza',
+        prioridad || 'Media',
+        estado,
+        req.user.id,
+        req.user.nombre,
+        usuarioAsignadoId || '',
+        usuarioAsignadoNombre || '',
+        fechaCreacion
+      ]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Ticket Creado',
+      `Ticket "${titulo.trim()}" en Hab. ${numHabitacion} (${categoria} - Prioridad: ${prioridad || 'Media'})`,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Ticket registrado exitosamente.' });
+  } catch (error) {
+    console.error('Error creating ticket:', error);
+    res.status(500).json({ error: 'Error al crear el ticket.' });
+  }
+});
+
+// PUT /api/tickets/:id - Actualizar estado o datos de ticket (v3 - Fase 6)
+app.put('/api/tickets/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { estado, prioridad, usuarioAsignadoId, usuarioAsignadoNombre, descripcion } = req.body;
+
+  try {
+    const ticket = await db.get('SELECT * FROM tickets WHERE id = ?', [id]);
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket no encontrado.' });
+    }
+
+    const nextEstado = estado || ticket.estado;
+    const nextPrioridad = prioridad || ticket.prioridad;
+    const nextDesc = descripcion !== undefined ? descripcion : ticket.descripcion;
+    const nextAsigId = usuarioAsignadoId !== undefined ? usuarioAsignadoId : ticket.usuarioAsignadoId;
+    const nextAsigNombre = usuarioAsignadoNombre !== undefined ? usuarioAsignadoNombre : ticket.usuarioAsignadoNombre;
+    
+    let fechaRes = ticket.fechaResolucion;
+    if (nextEstado === 'Resuelto' && ticket.estado !== 'Resuelto') {
+      fechaRes = getHoraActual() + ' (' + new Date().toLocaleDateString('es-VE') + ')';
+    }
+
+    await db.run(
+      `UPDATE tickets 
+       SET estado = ?, prioridad = ?, descripcion = ?, usuarioAsignadoId = ?, usuarioAsignadoNombre = ?, fechaResolucion = ? 
+       WHERE id = ?`,
+      [nextEstado, nextPrioridad, nextDesc, nextAsigId, nextAsigNombre, fechaRes, id]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Ticket Actualizado',
+      `Ticket #${id} (Hab. ${ticket.numHabitacion}) actualizado a estado "${nextEstado}"`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Ticket ${nextEstado.toLowerCase()} correctamente.` });
+  } catch (error) {
+    console.error('Error updating ticket:', error);
+    res.status(500).json({ error: 'Error al actualizar ticket.' });
+  }
+});
+
+// DELETE /api/tickets/:id - Eliminar ticket (v3 - Fase 6)
+app.delete('/api/tickets/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const ticket = await db.get('SELECT * FROM tickets WHERE id = ?', [id]);
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket no encontrado.' });
+    }
+
+    await db.run('DELETE FROM tickets WHERE id = ?', [id]);
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Ticket Eliminar',
+      `Ticket #${id} de Hab. ${ticket.numHabitacion} eliminado`,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Ticket eliminado correctamente.' });
+  } catch (error) {
+    console.error('Error deleting ticket:', error);
+    res.status(500).json({ error: 'Error al eliminar ticket.' });
   }
 });
 

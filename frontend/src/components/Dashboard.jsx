@@ -1,8 +1,10 @@
 import React from 'react';
+import { getStayExpirationStatus } from '../utils/timeHelper';
 
 export default function Dashboard({ 
-  habitaciones, 
-  reservas, 
+  habitaciones = [], 
+  reservas = [], 
+  tickets = [],
   onRoomClick, 
   onCheckinReserva 
 }) {
@@ -11,48 +13,59 @@ export default function Dashboard({
   const habLibres = habitaciones.filter(h => h.estado === 'Libre').length;
   const habOcupadas = habitaciones.filter(h => h.estado === 'Ocupada').length;
   const habLimpieza = habitaciones.filter(h => h.estado === 'Limpieza').length;
+  const ticketsPendientes = tickets.filter(t => t.estado === 'Pendiente' || t.estado === 'En Proceso').length;
 
   return (
     <div className="space-y-8 fade-in">
       {/* KPIs Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-2xl shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-xl shrink-0">
             <i className="fa-solid fa-plane-arrival"></i>
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase">Llegadas Pendientes</p>
-            <p className="text-2xl font-black text-slate-700">{llegadasPendientes}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Llegadas Pend.</p>
+            <p className="text-xl font-black text-slate-700">{llegadasPendientes}</p>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-green-50 text-green-500 flex items-center justify-center text-2xl shrink-0">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-green-50 text-green-500 flex items-center justify-center text-xl shrink-0">
             <i className="fa-solid fa-key"></i>
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase">Hab. Libres</p>
-            <p className="text-2xl font-black text-slate-700">{habLibres}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Hab. Libres</p>
+            <p className="text-xl font-black text-slate-700">{habLibres}</p>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-2xl shrink-0">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl shrink-0">
             <i className="fa-solid fa-bed"></i>
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase">Hab. Ocupadas</p>
-            <p className="text-2xl font-black text-slate-700">{habOcupadas}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase">Hab. Ocupadas</p>
+            <p className="text-xl font-black text-slate-700">{habOcupadas}</p>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-yellow-50 text-yellow-500 flex items-center justify-center text-2xl shrink-0">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-yellow-50 text-yellow-500 flex items-center justify-center text-xl shrink-0">
             <i className="fa-solid fa-broom"></i>
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase">En Limpieza</p>
-            <p className="text-2xl font-black text-slate-700">{habLimpieza}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase">En Limpieza</p>
+            <p className="text-xl font-black text-slate-700">{habLimpieza}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-rose-200 flex items-center gap-3 bg-rose-50/20">
+          <div className="w-12 h-12 rounded-full bg-rose-500 text-white flex items-center justify-center text-xl shrink-0 shadow-sm">
+            <i className="fa-solid fa-ticket"></i>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-rose-500 uppercase">Tickets Activos</p>
+            <p className="text-xl font-black text-rose-700">{ticketsPendientes}</p>
           </div>
         </div>
       </div>
@@ -95,12 +108,33 @@ export default function Dashboard({
                 textColor = "text-amber-800";
               }
 
+              // Expiration check for occupied rooms
+              const expStatus = h.estado === 'Ocupada' ? getStayExpirationStatus(h.salida) : null;
+              if (expStatus && expStatus.isExpired) {
+                bgClass = "bg-rose-100/90 border-2 border-rose-600 shadow-md animate-pulse";
+              } else if (expStatus && expStatus.isWarning) {
+                bgClass = "bg-amber-100/80 border-2 border-amber-500 shadow-sm";
+              }
+
+              // Ticket check for room
+              const roomTickets = tickets.filter(t => t.numHabitacion === h.num && (t.estado === 'Pendiente' || t.estado === 'En Proceso'));
+
               return (
                 <div 
                   key={h.num} 
                   onClick={() => onRoomClick(h)}
-                  className={`hab-selectable border-2 rounded-2xl p-4 text-center shadow-sm ${bgClass}`}
+                  className={`hab-selectable border-2 rounded-2xl p-4 text-center shadow-sm relative overflow-hidden transition-all ${bgClass}`}
                 >
+                  {/* Ticket Badge */}
+                  {roomTickets.length > 0 && (
+                    <span 
+                      className="absolute top-2 right-2 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm"
+                      title={`${roomTickets.length} ticket(s) activo(s): ${roomTickets[0].titulo}`}
+                    >
+                      <i className="fa-solid fa-ticket mr-0.5"></i> {roomTickets.length}
+                    </span>
+                  )}
+
                   <span className="block font-black text-2xl text-slate-800">{h.num}</span>
                   <span className="block text-[10px] uppercase font-bold text-slate-500 mt-0.5">{h.tipo}</span>
                   <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full uppercase mt-2 ${badgeColor}`}>
@@ -111,6 +145,18 @@ export default function Dashboard({
                     <span className={`block text-xs font-bold mt-2 truncate ${textColor}`}>
                       <i className="fa-solid fa-user text-[10px] mr-1"></i>
                       {h.huesped}
+                    </span>
+                  )}
+
+                  {/* Expiration Banner */}
+                  {expStatus && expStatus.isExpired && (
+                    <span className="block text-[9px] font-black bg-rose-600 text-white py-0.5 px-1 rounded-md mt-2 uppercase tracking-tight">
+                      🔴 TIEMPO VENCIDO (+{expStatus.minutesOverdue}m)
+                    </span>
+                  )}
+                  {expStatus && expStatus.isWarning && (
+                    <span className="block text-[9px] font-black bg-amber-500 text-white py-0.5 px-1 rounded-md mt-2 uppercase tracking-tight">
+                      ⚠️ VENCE EN {expStatus.minutesLeft} MIN
                     </span>
                   )}
                 </div>
@@ -150,10 +196,9 @@ export default function Dashboard({
                       </p>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Hora Estimada</span>
-                    <span className="text-xs font-bold text-blue-600"><i className="fa-solid fa-clock mr-1"></i>{r.hora}</span>
-                  </div>
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors shadow-xs">
+                    Ingresar
+                  </button>
                 </div>
               ))
             )}

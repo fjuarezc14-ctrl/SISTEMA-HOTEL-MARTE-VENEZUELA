@@ -73,6 +73,22 @@ export async function initDb() {
       FOREIGN KEY(numHabitacion) REFERENCES habitaciones(num)
     );
 
+    CREATE TABLE IF NOT EXISTS tickets (
+      id TEXT PRIMARY KEY,
+      numHabitacion TEXT NOT NULL,
+      titulo TEXT NOT NULL,
+      descripcion TEXT,
+      categoria TEXT NOT NULL,
+      prioridad TEXT NOT NULL,
+      estado TEXT NOT NULL,
+      usuarioCreadorId TEXT,
+      usuarioCreadorNombre TEXT,
+      usuarioAsignadoId TEXT,
+      usuarioAsignadoNombre TEXT,
+      fechaCreacion TEXT NOT NULL,
+      fechaResolucion TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS usuarios (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,

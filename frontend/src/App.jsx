@@ -5,6 +5,7 @@ import Reservas from './components/Reservas';
 import Caja from './components/Caja';
 import Clientes from './components/Clientes';
 import Tienda from './components/Tienda';
+import Tickets from './components/Tickets';
 import Usuarios from './components/Usuarios';
 import Configuracion from './components/Configuracion';
 import { 
@@ -343,6 +344,7 @@ export default function App() {
   const canAccessTab = (tabName) => {
     if (!user) return false;
     if (user.rol === 'Administrador') return true;
+    if (tabName === 'tickets') return true;
     const perms = user.permisos || [];
     if (tabName === 'tienda') {
       return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
@@ -357,7 +359,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       if (!canAccessTab(activeTab)) {
-        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
+        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
         const firstAvailable = availableTabs.find(t => canAccessTab(t));
         if (firstAvailable) setActiveTab(firstAvailable);
       }
@@ -370,6 +372,7 @@ export default function App() {
       dashboard: 'Dashboard de Recepción',
       habitaciones: 'Gestión de Habitaciones',
       reservas: 'Historial de Reservas',
+      tickets: 'Tickets & Incidencias Internas',
       caja: 'Control de Caja y Cobros habituales',
       tienda: 'Tienda & Market (Venta Directa POS)',
       clientes: 'Directorio de Clientes VIP',
@@ -505,6 +508,26 @@ export default function App() {
               }`}
             >
               <i className="fa-solid fa-calendar-check w-5"></i> Reservas
+            </button>
+          )}
+
+          {canAccessTab('tickets') && (
+            <button 
+              onClick={() => setActiveTab('tickets')} 
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'tickets'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <i className="fa-solid fa-ticket w-5"></i> Tickets & Incidencias
+              </div>
+              {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length > 0 && (
+                <span className="bg-rose-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded-full">
+                  {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length}
+                </span>
+              )}
             </button>
           )}
 
@@ -663,6 +686,7 @@ export default function App() {
                 <Dashboard 
                   habitaciones={appState.habitaciones} 
                   reservas={appState.reservas}
+                  tickets={appState.tickets || []}
                   onRoomClick={handleRoomClick}
                   onCheckinReserva={handleCheckinReserva}
                 />
@@ -670,6 +694,7 @@ export default function App() {
               {activeTab === 'habitaciones' && canAccessTab('habitaciones') && (
                 <Habitaciones 
                   habitaciones={appState.habitaciones} 
+                  tickets={appState.tickets || []}
                   onRoomClick={handleRoomClick}
                 />
               )}
@@ -677,6 +702,15 @@ export default function App() {
                 <Reservas 
                   reservas={appState.reservas} 
                   onCheckinReserva={handleCheckinReserva}
+                />
+              )}
+              {activeTab === 'tickets' && canAccessTab('tickets') && (
+                <Tickets 
+                  tickets={appState.tickets || []}
+                  habitaciones={appState.habitaciones}
+                  token={token}
+                  currentUser={user}
+                  onStateChange={fetchState}
                 />
               )}
               {activeTab === 'caja' && canAccessTab('caja') && (
