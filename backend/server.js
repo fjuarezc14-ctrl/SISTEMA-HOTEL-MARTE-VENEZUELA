@@ -84,9 +84,14 @@ const requireAuth = async (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  let decoded;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return res.status(401).json({ error: 'Token inválido o expirado.' });
+  }
+
+  try {
     // Validate if user exists and is active (Immediate session revocation)
     const user = await db.get('SELECT id, username, nombre, rol, permisos, activo, hora_inicio, hora_fin FROM usuarios WHERE id = ?', [decoded.id]);
     if (!user) {
@@ -101,7 +106,8 @@ const requireAuth = async (req, res, next) => {
     req.user.permisos = JSON.parse(user.permisos || '[]');
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Token inválido o expirado.' });
+    console.error('Database error in requireAuth:', error);
+    return res.status(500).json({ error: 'Error interno de servidor al validar sesión.' });
   }
 };
 
