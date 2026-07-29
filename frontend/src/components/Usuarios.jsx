@@ -394,7 +394,7 @@ export default function Usuarios({ token, currentUser }) {
                     <div className="mb-4">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Módulos Permitidos</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {user.permisos.length === 0 ? (
+                        {(!user.permisos || !Array.isArray(user.permisos) || user.permisos.length === 0) ? (
                           <span className="text-[10px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-lg font-bold border border-rose-100">Sin Accesos</span>
                         ) : (
                           user.permisos.map(p => {
@@ -406,7 +406,11 @@ export default function Usuarios({ token, currentUser }) {
                               clientes: 'Clientes',
                               reportes: 'Reportes',
                               configuracion: 'Catálogo',
-                              audit_logs: 'Auditoría'
+                              audit_logs: 'Auditoría',
+                              tickets: 'Tickets',
+                              entregaTurnos: 'Entrega Turnos',
+                              inventarioLenceria: 'Lencería',
+                              tienda: 'Tienda/Market'
                             };
                             return (
                               <span key={p} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg font-bold border border-blue-100">

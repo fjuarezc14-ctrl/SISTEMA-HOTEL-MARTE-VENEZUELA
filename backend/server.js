@@ -255,11 +255,11 @@ app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
     if (id === 'u_admin') {
       rol = 'Administrador';
       userActivo = 1; // Nunca puede ser desactivado
-      permisos = {
-        dashboard: true, habitaciones: true, reservas: true, tickets: true,
-        entregaTurnos: true, inventarioLenceria: true, caja: true, tienda: true,
-        clientes: true, reportes: true, configuracion: true, audit_logs: true
-      };
+      permisos = [
+        'dashboard', 'habitaciones', 'reservas', 'tickets',
+        'entregaTurnos', 'inventarioLenceria', 'caja', 'tienda',
+        'clientes', 'reportes', 'configuracion', 'audit_logs'
+      ];
     }
 
     if (password) {
