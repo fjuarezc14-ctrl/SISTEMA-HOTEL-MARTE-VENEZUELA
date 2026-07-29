@@ -486,8 +486,9 @@ export default function App() {
         </div>
         
         <nav className="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto">
-          {user.permisos && user.permisos.some(p => ['dashboard', 'habitaciones', 'reservas', 'caja'].includes(p)) && (
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-2 px-2">Operaciones</p>
+          {/* CATEGORÍA 1: OPERACIONES PRINCIPALES */}
+          {user.permisos && user.permisos.some(p => ['dashboard', 'habitaciones', 'reservas', 'entregaTurnos'].includes(p)) && (
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-2 px-2">Operaciones Principales</p>
           )}
           
           {canAccessTab('dashboard') && (
@@ -529,26 +530,6 @@ export default function App() {
             </button>
           )}
 
-          {canAccessTab('tickets') && (
-            <button 
-              onClick={() => setActiveTab('tickets')} 
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
-                activeTab === 'tickets'
-                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <i className="fa-solid fa-ticket w-5"></i> Tickets & Incidencias
-              </div>
-              {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length > 0 && (
-                <span className="bg-rose-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded-full">
-                  {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length}
-                </span>
-              )}
-            </button>
-          )}
-
           {canAccessTab('entregaTurnos') && (
             <button 
               onClick={() => setActiveTab('entregaTurnos')} 
@@ -569,17 +550,9 @@ export default function App() {
             </button>
           )}
 
-          {canAccessTab('inventarioLenceria') && (
-            <button 
-              onClick={() => setActiveTab('inventarioLenceria')} 
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                activeTab === 'inventarioLenceria'
-                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <i className="fa-solid fa-boxes-stacked w-5"></i> Lencería & Equipamiento
-            </button>
+          {/* CATEGORÍA 2: FINANZAS Y VENTAS */}
+          {user.permisos && user.permisos.some(p => ['caja', 'tienda', 'reportes'].includes(p)) && (
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-2">Finanzas & Ventas</p>
           )}
 
           {canAccessTab('caja') && (
@@ -621,51 +594,86 @@ export default function App() {
             </button>
           )}
 
-          {canAccessTab('clientes') && (
-            <>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Fidelización & CRM</p>
-              <button 
-                onClick={() => setActiveTab('clientes')} 
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  activeTab === 'clientes'
-                    ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <i className="fa-solid fa-users w-5"></i> Mis Clientes
-              </button>
-            </>
+          {/* CATEGORÍA 3: MANTENIMIENTO Y CONTROL */}
+          {user.permisos && user.permisos.some(p => ['tickets', 'inventarioLenceria'].includes(p)) && (
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-2">Mantenimiento & Insumos</p>
           )}
 
-          {(canAccessTab('usuarios') || canAccessTab('configuracion')) && (
-            <>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Administración & Auditoría</p>
-              {canAccessTab('usuarios') && (
-                <button 
-                  onClick={() => setActiveTab('usuarios')} 
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    activeTab === 'usuarios'
-                      ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <i className="fa-solid fa-user-gear w-5"></i> Personal & Auditoría
-                </button>
+          {canAccessTab('tickets') && (
+            <button 
+              onClick={() => setActiveTab('tickets')} 
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'tickets'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <i className="fa-solid fa-ticket w-5"></i> Tickets & Incidencias
+              </div>
+              {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length > 0 && (
+                <span className="bg-rose-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded-full">
+                  {(appState.tickets || []).filter(t => t.estado === 'Pendiente').length}
+                </span>
               )}
-              
-              {canAccessTab('configuracion') && (
-                <button 
-                  onClick={() => setActiveTab('configuracion')} 
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    activeTab === 'configuracion'
-                      ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <i className="fa-solid fa-sliders w-5"></i> Catálogo y Tarifas
-                </button>
-              )}
-            </>
+            </button>
+          )}
+
+          {canAccessTab('inventarioLenceria') && (
+            <button 
+              onClick={() => setActiveTab('inventarioLenceria')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'inventarioLenceria'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-boxes-stacked w-5"></i> Lencería & Equipamiento
+            </button>
+          )}
+
+          {/* CATEGORÍA 4: GESTIÓN Y ADMINISTRACIÓN */}
+          {user.permisos && user.permisos.some(p => ['clientes', 'usuarios', 'configuracion'].includes(p)) && (
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-2">Gestión & Administración</p>
+          )}
+
+          {canAccessTab('clientes') && (
+            <button 
+              onClick={() => setActiveTab('clientes')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'clientes'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-users w-5"></i> Mis Clientes
+            </button>
+          )}
+
+          {canAccessTab('usuarios') && (
+            <button 
+              onClick={() => setActiveTab('usuarios')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'usuarios'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-user-gear w-5"></i> Personal & Auditoría
+            </button>
+          )}
+
+          {canAccessTab('configuracion') && (
+            <button 
+              onClick={() => setActiveTab('configuracion')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'configuracion'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-sliders w-5"></i> Catálogo y Tarifas
+            </button>
           )}
         </nav>
         
