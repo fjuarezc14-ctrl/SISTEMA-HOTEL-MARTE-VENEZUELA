@@ -147,10 +147,6 @@ export default function Usuarios({ token, currentUser }) {
   };
 
   const handleOpenEditModal = (user) => {
-    if (user.id === 'u_admin') {
-      alert('⚠️ El administrador principal es inmutable y no puede modificarse.');
-      return;
-    }
     setEditingUser(user);
     setNombre(user.nombre);
     setUsername(user.username);
