@@ -1,5 +1,79 @@
 import React, { useState } from 'react';
 
+// Helper para normalización de caracteres, sin tildes ni diacríticos
+const normalizeStr = (str) => {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ñ/g, "n");
+};
+
+// Normalización fonética y corrección de variaciones comunes en español (b/v, y/ll, c/s/z, h)
+const phoneticNormalize = (str) => {
+  return normalizeStr(str)
+    .replace(/h/g, '')
+    .replace(/v/g, 'b')
+    .replace(/z/g, 's')
+    .replace(/c(?=[eipïíé])/g, 's')
+    .replace(/k/g, 'c')
+    .replace(/ll/g, 'y');
+};
+
+// Algoritmo de distancia Levenshtein para tolerancia a errores ortográficos
+const levenshtein = (a, b) => {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+};
+
+// Coincidencia semántica inteligente
+const fuzzySemanticMatch = (query, itemText) => {
+  if (!query || !query.trim()) return true;
+
+  const rawQuery = query.trim();
+  const normQuery = normalizeStr(rawQuery);
+  const normItem = normalizeStr(itemText);
+
+  // 1. Coincidencia directa o insensible a tildes/mayúsculas
+  if (normItem.includes(normQuery)) return true;
+
+  // 2. Coincidencia fonética (b/v, s/c/z, y/ll, omitiendo h)
+  const phonQuery = phoneticNormalize(rawQuery);
+  const phonItem = phoneticNormalize(itemText);
+  if (phonItem.includes(phonQuery)) return true;
+
+  // 3. Coincidencia palabra por palabra con tolerancia a tipografías (Fuzzy)
+  const queryWords = normQuery.split(/\s+/);
+  const itemWords = normItem.split(/\s+/);
+
+  return queryWords.every(qWord => {
+    if (qWord.length <= 2) {
+      return normItem.includes(qWord);
+    }
+    return itemWords.some(iWord => {
+      if (iWord.includes(qWord) || qWord.includes(iWord)) return true;
+      const maxDistance = qWord.length <= 4 ? 1 : 2;
+      return levenshtein(qWord, iWord) <= maxDistance;
+    });
+  });
+};
+
 export default function InventarioLenceria({ 
   inventarioLenceria = [], 
   inventarioHabitaciones = [], 
@@ -217,9 +291,9 @@ export default function InventarioLenceria({
     }
   };
 
-  // Filtered Lencería
+  // Filtered Lencería con búsqueda semántica y fuzzy (sin tildes / variaciones fonéticas)
   const filteredLenceria = inventarioLenceria.filter(i => 
-    i.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+    fuzzySemanticMatch(searchQuery, i.nombre)
   );
 
   return (
