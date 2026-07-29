@@ -29,6 +29,7 @@ export default function Usuarios({ token, currentUser }) {
     caja: true,
     tienda: true,
     clientes: true,
+    reportes: false,
     configuracion: false,
     audit_logs: false
   });
@@ -91,6 +92,7 @@ export default function Usuarios({ token, currentUser }) {
       caja: false,
       tienda: false,
       clientes: false,
+      reportes: false,
       configuracion: false,
       audit_logs: false
     };
@@ -105,6 +107,7 @@ export default function Usuarios({ token, currentUser }) {
       preset.caja = true;
       preset.tienda = true;
       preset.clientes = true;
+      preset.reportes = true;
       preset.configuracion = true;
       preset.audit_logs = true;
     } else if (selectedRol === 'Recepcionista') {
@@ -402,6 +405,7 @@ export default function Usuarios({ token, currentUser }) {
                               reservas: 'Reservas',
                               caja: 'Caja',
                               clientes: 'Clientes',
+                              reportes: 'Reportes',
                               configuracion: 'Catálogo',
                               audit_logs: 'Auditoría'
                             };
@@ -723,11 +727,20 @@ export default function Usuarios({ token, currentUser }) {
                   <label className="flex items-center gap-3 chk-label cursor-pointer">
                     <input 
                       type="checkbox" 
+                      checked={permisos.reportes}
+                      onChange={() => handlePermissionChange('reportes')}
+                      className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
+                    />
+                    Reportes Generales y Analíticas
+                  </label>
+                  <label className="flex items-center gap-3 chk-label cursor-pointer">
+                    <input 
+                      type="checkbox" 
                       checked={permisos.configuracion}
                       onChange={() => handlePermissionChange('configuracion')}
                       className="w-4 h-4 text-[#ff331f] rounded border-slate-300 focus:ring-[#ff331f] bg-white"
                     />
-                    Catálogo y Tarifas
+                    Catálogo y Tarifación
                   </label>
                   <label className="flex items-center gap-3 chk-label cursor-pointer">
                     <input 

@@ -10,6 +10,7 @@ import EntregaTurnos from './components/EntregaTurnos';
 import InventarioLenceria from './components/InventarioLenceria';
 import Usuarios from './components/Usuarios';
 import Configuracion from './components/Configuracion';
+import Reportes from './components/Reportes';
 import { 
   AsignarDirectoModal, 
   NuevaReservaModal, 
@@ -362,6 +363,9 @@ export default function App() {
     if (tabName === 'usuarios') {
       return user.rol === 'Administrador' || user.rol === 'Supervisor' || perms.includes('audit_logs');
     }
+    if (tabName === 'reportes') {
+      return user.rol === 'Administrador' || user.rol === 'Supervisor' || perms.includes('reportes');
+    }
     return perms.includes(tabName);
   };
 
@@ -369,7 +373,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       if (!canAccessTab(activeTab)) {
-        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'inventarioLenceria', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion'];
+        const availableTabs = ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'inventarioLenceria', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion', 'reportes'];
         const firstAvailable = availableTabs.find(t => canAccessTab(t));
         if (firstAvailable) setActiveTab(firstAvailable);
       }
@@ -388,7 +392,9 @@ export default function App() {
       caja: 'Control de Caja y Cobros habituales',
       tienda: 'Tienda & Market (Venta Directa POS)',
       clientes: 'Directorio de Clientes VIP',
-      usuarios: 'Gestión de Personal y Accesos'
+      usuarios: 'Gestión de Personal y Accesos',
+      reportes: 'Reportes y Analíticas',
+      configuracion: 'Configuración General'
     };
     return titles[activeTab] || 'Hotel Marte';
   };
@@ -602,6 +608,19 @@ export default function App() {
             </button>
           )}
 
+          {canAccessTab('reportes') && (
+            <button 
+              onClick={() => setActiveTab('reportes')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'reportes'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-chart-pie w-5"></i> Reportes Generales
+            </button>
+          )}
+
           {canAccessTab('clientes') && (
             <>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-6 px-2">Fidelización & CRM</p>
@@ -808,6 +827,12 @@ export default function App() {
                   token={token}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onStateChange={fetchState}
+                />
+              )}
+              {activeTab === 'reportes' && canAccessTab('reportes') && (
+                <Reportes 
+                  caja={appState.caja} 
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                 />
               )}
               {activeTab === 'usuarios' && canAccessTab('usuarios') && (

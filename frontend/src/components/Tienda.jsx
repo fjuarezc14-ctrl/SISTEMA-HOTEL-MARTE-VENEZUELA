@@ -387,11 +387,10 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
                 <select 
                   value={comprobante}
                   onChange={(e) => setComprobante(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-slate-100 cursor-not-allowed"
+                  disabled
                 >
                   <option value="Ticket Interno">Ticket Interno</option>
-                  <option value="Nota de Venta">Nota de Venta</option>
-                  <option value="Factura">Factura</option>
                 </select>
               </div>
 

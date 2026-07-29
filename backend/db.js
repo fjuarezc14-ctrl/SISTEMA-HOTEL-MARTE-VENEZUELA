@@ -60,7 +60,8 @@ export async function initDb() {
       metodo TEXT NOT NULL,
       hora TEXT NOT NULL,
       usuarioId TEXT,
-      usuarioNombre TEXT
+      usuarioNombre TEXT,
+      origen TEXT DEFAULT 'Hospedaje'
     );
 
     CREATE TABLE IF NOT EXISTS consumos (
@@ -183,6 +184,14 @@ export async function initDb() {
     );
   `);
 
+  // ALTER EXISTING TABLES TO ADD NEW COLUMNS (v5)
+  try {
+    await db.run(`ALTER TABLE caja ADD COLUMN origen TEXT DEFAULT 'Hospedaje'`);
+    console.log("Columna 'origen' añadida a 'caja'");
+  } catch (err) {
+    // Column might already exist
+  }
+
   // Seed data if empty
   const countHab = await db.get('SELECT COUNT(*) as count FROM habitaciones');
   if (countHab.count === 0) {
@@ -240,16 +249,17 @@ export async function initDb() {
     }
 
     // Seed caja
+    const todayStr = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const txn = [
-      { id: 't1', tipo: 'Ingreso', concepto: 'Apertura de Turno Recepción', monto: 300.00, metodo: 'Efectivo', hora: '07:30' },
-      { id: 't2', tipo: 'Ingreso', concepto: 'Cobro Reserva M. Vargas - Hab 101', monto: 150.00, metodo: 'Tarjeta', hora: '08:15' },
-      { id: 't3', tipo: 'Egreso', concepto: 'Compra de Artículos de Limpieza', monto: 45.00, metodo: 'Efectivo', hora: '09:00' }
+      { id: 't1', tipo: 'Ingreso', concepto: 'Apertura de Turno Recepción', monto: 300.00, metodo: 'Efectivo', hora: `${todayStr}, 07:30`, origen: 'Hospedaje', usuarioNombre: 'Administrador Root' },
+      { id: 't2', tipo: 'Ingreso', concepto: 'Cobro Reserva M. Vargas - Hab 101', monto: 150.00, metodo: 'Punto de Venta', hora: `${todayStr}, 08:15`, origen: 'Hospedaje', usuarioNombre: 'Laura Medina' },
+      { id: 't3', tipo: 'Egreso', concepto: 'Compra de Artículos de Limpieza', monto: 45.00, metodo: 'Efectivo', hora: `${todayStr}, 09:00`, origen: 'Egresos', usuarioNombre: 'Laura Medina' }
     ];
 
     for (const t of txn) {
       await db.run(
-        `INSERT INTO caja (id, tipo, concepto, monto, metodo, hora) VALUES (?, ?, ?, ?, ?, ?)`,
-        [t.id, t.tipo, t.concepto, t.monto, t.metodo, t.hora]
+        `INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, origen, usuarioNombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [t.id, t.tipo, t.concepto, t.monto, t.metodo, t.hora, t.origen, t.usuarioNombre]
       );
     }
 

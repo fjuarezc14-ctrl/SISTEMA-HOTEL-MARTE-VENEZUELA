@@ -8,6 +8,8 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
 
   // Filter state ('all' vs 'mine')
   const [filterMode, setFilterMode] = useState('all');
+  // Origen filter ('Todos', 'Hospedaje', 'Market', 'Egresos')
+  const [tabMode, setTabMode] = useState('Todos');
   // Validation filter ('all', 'pending', 'validated')
   const [valFilter, setValFilter] = useState('all');
 
@@ -23,6 +25,14 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   let displayedCaja = filterMode === 'mine' && currentUser
     ? caja.filter(t => t.usuarioId === currentUser.id)
     : caja;
+
+  if (tabMode !== 'Todos') {
+    if (tabMode === 'Egresos') {
+      displayedCaja = displayedCaja.filter(t => t.tipo === 'Egreso');
+    } else {
+      displayedCaja = displayedCaja.filter(t => t.origen === tabMode && t.tipo === 'Ingreso');
+    }
+  }
 
   if (valFilter === 'pending') {
     displayedCaja = displayedCaja.filter(t => ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo) && (!t.validado || t.validado === 0));
@@ -175,6 +185,27 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
             Planilla de Arqueo y Cierre
           </button>
         </div>
+      </div>
+
+      {/* Tabs Filter: Origen */}
+      <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 w-fit">
+        {['Todos', 'Hospedaje', 'Market', 'Egresos'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setTabMode(tab)}
+            className={`px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+              tabMode === tab 
+                ? tab === 'Egresos' ? 'bg-rose-600 text-white shadow-sm' : 'bg-slate-800 text-white shadow-sm' 
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {tab === 'Todos' && <i className="fa-solid fa-layer-group"></i>}
+            {tab === 'Hospedaje' && <i className="fa-solid fa-bed"></i>}
+            {tab === 'Market' && <i className="fa-solid fa-store"></i>}
+            {tab === 'Egresos' && <i className="fa-solid fa-arrow-trend-down"></i>}
+            {tab}
+          </button>
+        ))}
       </div>
 
       {/* Validation status quick filters bar */}

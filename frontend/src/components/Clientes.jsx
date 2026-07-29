@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { WebcamModal } from './Modales';
 
 export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onStateChange }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -10,6 +11,10 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const [ci, setCi] = useState('');
   const [tel, setTel] = useState('');
   const [fotoCi, setFotoCi] = useState('');
+  
+  // Webcam state
+  const [isWebcamOpen, setIsWebcamOpen] = useState(false);
+  const [webcamTarget, setWebcamTarget] = useState(null); // 'registro' or 'edicion'
 
   // Veto / Debt payment modal state
   const [selectedClient, setSelectedClient] = useState(null);
@@ -412,12 +417,31 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
               {/* Photo Upload Input */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Foto Cédula de Identidad (CI)</label>
-                <input 
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, setFotoCi)}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
-                />
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <input 
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileUpload(e, setFotoCi)}
+                      className="flex-1 text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWebcamTarget('registro');
+                        setIsWebcamOpen(true);
+                      }}
+                      className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                      <i className="fa-solid fa-camera"></i> Cámara
+                    </button>
+                  </div>
+                  {fotoCi && (
+                    <div className="w-20 h-16 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 mt-1">
+                      <img src={fotoCi} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex gap-3">
@@ -596,12 +620,24 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
 
             <div className="space-y-3 pt-2">
               <label className="block text-xs font-bold text-slate-500 uppercase">Cargar Nueva Imagen o Tomar Foto</label>
-              <input 
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileUpload(e, setPhotoInput)}
-                className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-              />
+              <div className="flex gap-2">
+                <input 
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, setPhotoInput)}
+                  className="flex-1 text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWebcamTarget('edicion');
+                    setIsWebcamOpen(true);
+                  }}
+                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 shrink-0"
+                >
+                  <i className="fa-solid fa-camera"></i> Cámara
+                </button>
+              </div>
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex gap-3">
@@ -623,6 +659,19 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
           </div>
         </div>
       )}
+
+      {/* WEBCAM MODAL INTEGRATION */}
+      <WebcamModal
+        isOpen={isWebcamOpen}
+        onClose={() => setIsWebcamOpen(false)}
+        onCapture={(imgData) => {
+          if (webcamTarget === 'registro') {
+            setFotoCi(imgData);
+          } else if (webcamTarget === 'edicion') {
+            setPhotoInput(imgData);
+          }
+        }}
+      />
     </div>
   );
 }
