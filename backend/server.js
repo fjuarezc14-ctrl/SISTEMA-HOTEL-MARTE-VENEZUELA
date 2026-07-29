@@ -235,11 +235,7 @@ app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado.' });
   }
   const { id } = req.params;
-  const { nombre, rol, permisos, password, activo, hora_inicio, hora_fin } = req.body;
-
-  if (id === 'u_admin') {
-    return res.status(400).json({ error: 'El administrador por defecto es inmutable y no puede modificarse.' });
-  }
+  let { nombre, rol, permisos, password, activo, hora_inicio, hora_fin } = req.body;
 
   try {
     const user = await db.get('SELECT id, username FROM usuarios WHERE id = ?', [id]);
@@ -247,7 +243,18 @@ app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
 
-    const userActivo = activo !== undefined ? (activo ? 1 : 0) : 1;
+    let userActivo = activo !== undefined ? (activo ? 1 : 0) : 1;
+
+    // Protecciones inmutables para el administrador root
+    if (id === 'u_admin') {
+      rol = 'Administrador';
+      userActivo = 1; // Nunca puede ser desactivado
+      permisos = {
+        dashboard: true, habitaciones: true, reservas: true, tickets: true,
+        entregaTurnos: true, inventarioLenceria: true, caja: true, tienda: true,
+        clientes: true, reportes: true, configuracion: true, audit_logs: true
+      };
+    }
 
     if (password) {
       const hash = bcrypt.hashSync(password, 10);

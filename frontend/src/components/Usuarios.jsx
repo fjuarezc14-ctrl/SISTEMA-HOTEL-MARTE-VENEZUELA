@@ -353,12 +353,15 @@ export default function Usuarios({ token, currentUser }) {
                   ) : (
                     <button
                       onClick={() => handleToggleActivo(user)}
+                      disabled={user.id === 'u_admin'}
                       className={`absolute top-3 right-3 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all ${
-                        isUserActive 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
-                          : 'bg-rose-100 text-rose-700 border-rose-300 hover:bg-rose-200'
+                        user.id === 'u_admin' 
+                          ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+                          : isUserActive 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                            : 'bg-rose-100 text-rose-700 border-rose-300 hover:bg-rose-200'
                       }`}
-                      title={isUserActive ? "Haga clic para desactivar acceso" : "Haga clic para activar acceso"}
+                      title={user.id === 'u_admin' ? "Estado Inmutable" : (isUserActive ? "Haga clic para desactivar acceso" : "Haga clic para activar acceso")}
                     >
                       <i className={`fa-solid ${isUserActive ? 'fa-user-check' : 'fa-user-slash'} mr-1`}></i>
                       {isUserActive ? 'Activo' : 'Inactivo'}
@@ -423,12 +426,7 @@ export default function Usuarios({ token, currentUser }) {
                   <div className="pt-4 border-t border-slate-100 flex gap-2 justify-end">
                     <button 
                       onClick={() => handleOpenEditModal(user)}
-                      disabled={user.id === 'u_admin'}
-                      className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 ${
-                        user.id === 'u_admin' 
-                          ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
+                      className="px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50"
                     >
                       <i className="fa-solid fa-pen-to-square"></i> Editar
                     </button>
@@ -567,7 +565,8 @@ export default function Usuarios({ token, currentUser }) {
                   <select 
                     value={rol}
                     onChange={(e) => applyRolePresets(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+                    disabled={editingUser?.id === 'u_admin'}
+                    className={`w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold ${editingUser?.id === 'u_admin' ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
                   >
                     <option value="Recepcionista">Recepcionista</option>
                     <option value="Supervisor">Supervisor</option>
@@ -589,7 +588,8 @@ export default function Usuarios({ token, currentUser }) {
                     type="checkbox"
                     checked={activo}
                     onChange={(e) => setActivo(e.target.checked)}
-                    className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                    disabled={editingUser?.id === 'u_admin'}
+                    className={`rounded focus:ring-emerald-500 h-4 w-4 ${editingUser?.id === 'u_admin' ? 'text-slate-400 cursor-not-allowed' : 'text-emerald-600'}`}
                   />
                   <span className={`text-xs font-bold ${activo ? 'text-emerald-700' : 'text-rose-600'}`}>
                     {activo ? 'Activo' : 'Inactivo'}
