@@ -740,7 +740,7 @@ export function AsignarDirectoModal({
 }
 
 // ==========================================
-// 2. MODAL: NUEVA RESERVA (v3 - Fase 2)
+// 2. MODAL: NUEVA RESERVA (v5 - Fase 2)
 // ==========================================
 export function NuevaReservaModal({ 
   isOpen, 
@@ -751,19 +751,26 @@ export function NuevaReservaModal({
   onClose, 
   onSubmit 
 }) {
+  const [modalidad, setModalidad] = useState('pernocta'); // '4h' or 'pernocta'
   const [selectedHabNum, setSelectedHabNum] = useState('');
-  const [selectedHabTipo, setSelectedHabTipo] = useState('');
+  const [selectedHabTipo, setSelectedHabTipo] = useState('Matrimonial');
   const [ci, setCi] = useState('');
   const [nombre, setNombre] = useState('');
   const [tel, setTel] = useState('');
   const [hora, setHora] = useState('');
-  const [nomAcomp, setNomAcomp] = useState('');
-  const [ciAcomp, setCiAcomp] = useState('');
-  const [monto, setMonto] = useState('');
+  const [fotoCi, setFotoCi] = useState('');
+  const [isWebcamOpen, setIsWebcamOpen] = useState(false);
+
+  // Dynamic Companions Array
+  const [acompanantes, setAcompanantes] = useState([]);
+
+  const [monto, setMonto] = useState('0'); // Can be 0 USD for reservation without deposit
   const [metodo, setMetodo] = useState('Efectivo (Bs)');
-  const [comprobante, setComprobante] = useState('Nota de Venta');
+  const [codigoVerificacion, setCodigoVerificacion] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('Todas');
-  
+
+  const comprobante = 'Ticket Interno'; // Locked per client directive
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredClientes, setFilteredClientes] = useState([]);
@@ -771,30 +778,23 @@ export function NuevaReservaModal({
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
-  // Filter free rooms by category
-  const freeRooms = habitaciones.filter(h => {
-    if (h.estado !== 'Libre') return false;
-    if (categoriaFiltro === 'Todas') return true;
-    return h.tipo === categoriaFiltro;
-  });
-
   useEffect(() => {
     if (isOpen) {
+      setModalidad('pernocta');
       setSelectedHabNum('');
-      setSelectedHabTipo('');
+      setSelectedHabTipo('Matrimonial');
       setCi('');
       setNombre('');
       setTel('');
-      setNomAcomp('');
-      setCiAcomp('');
-      setMonto('');
+      setFotoCi('');
+      setAcompanantes([]);
+      setMonto('0');
       setMetodo('Efectivo (Bs)');
-      setComprobante('Nota de Venta');
+      setCodigoVerificacion('');
       setSearchQuery('');
       setCategoriaFiltro('Todas');
       setShowSuggestions(false);
       
-      // Set current time as default
       const now = new Date();
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
@@ -804,14 +804,77 @@ export function NuevaReservaModal({
 
   if (!isOpen) return null;
 
-  const hasAcompanante = ['Doble', 'Matrimonial', 'Mini Suite', 'Suite'].includes(selectedHabTipo);
+  // Filter free rooms with 1-hour margin validation
+  const checkRoom1HourMargin = (room) => {
+    if (!room.salida || !hora) return { isAvailable: true, marginMinutes: 999 };
+    
+    // Parse expected arrival time vs room checkout time
+    const [arrH, arrM] = hora.split(':').map(Number);
+    const [outH, outM] = room.salida.split(':').map(Number);
+    
+    const arrMinutes = arrH * 60 + arrM;
+    const outMinutes = outH * 60 + outM;
+    
+    const marginMinutes = arrMinutes - outMinutes;
+    return {
+      isAvailable: marginMinutes >= 60,
+      marginMinutes
+    };
+  };
 
-  const getPernoctaPrice = (roomType) => {
-    const tarifa = tarifas?.find(t => t.tipo === roomType);
-    if (tarifa) {
-      return parseFloat(tarifa.precio_pernocta_usd || tarifa.precio_diario || 20);
+  const freeRooms = habitaciones.filter(h => {
+    if (h.estado !== 'Libre') return false;
+    if (categoriaFiltro === 'Todas') return true;
+    return h.tipo === categoriaFiltro;
+  });
+
+  // Calculate Base stay price according to modality & room category
+  const getStayBasePrice = (type, mod) => {
+    if (type === 'Mini Suite') {
+      return mod === 'pernocta' ? 24 : 14;
     }
-    return roomType === 'Mini Suite' ? 24 : 20;
+    return mod === 'pernocta' ? 20 : 10;
+  };
+
+  const currentCategory = modalidad === '4h' ? selectedHabTipo : (selectedHabTipo || 'Matrimonial');
+  const baseStayPrice = getStayBasePrice(currentCategory, modalidad);
+
+  // Compute companion surcharges (+5 USD for 3rd+ adult guest)
+  const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
+    const guestNumber = idx + 2;
+    const age = calcularEdad(a.fechaNacimiento);
+    const isAdult = age >= 18;
+    if (guestNumber >= 3 && isAdult) {
+      return sum + 5.00;
+    }
+    return sum;
+  }, 0);
+
+  const totalStayPriceUSD = baseStayPrice + companionSurcharges;
+  const totalStayPriceVES = (totalStayPriceUSD * tasaUsd).toFixed(2);
+
+  const adelantoNum = parseFloat(monto) || 0;
+  const adelantoVES = (adelantoNum * tasaUsd).toFixed(2);
+
+  // Handlers for companion list
+  const handleAddAcompanante = () => {
+    setAcompanantes(prev => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        nombre: '',
+        ci: '',
+        fechaNacimiento: ''
+      }
+    ]);
+  };
+
+  const handleRemoveAcompanante = (id) => {
+    setAcompanantes(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleUpdateAcompanante = (id, field, value) => {
+    setAcompanantes(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
   };
 
   const selectRoom = (num, tipo) => {
@@ -840,47 +903,71 @@ export function NuevaReservaModal({
     setCi(doc);
     setNombre(c.nombre);
     setTel(c.tel);
+    if (c.foto_ci) setFotoCi(c.foto_ci);
     setShowSuggestions(false);
     setSearchQuery('');
   };
 
-  const handleCiChange = (val) => {
-    setCi(val);
-    const found = clientes.find(c => 
-      (c.ci && c.ci.trim() === val.trim()) || 
-      (c.dni && c.dni.trim() === val.trim())
-    );
-    if (found) {
-      setNombre(found.nombre);
-      setTel(found.tel || '');
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setFotoCi(reader.result);
+      reader.readAsDataURL(file);
     }
   };
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
-    if (!selectedHabNum) {
-      alert("¡Debe seleccionar una habitación libre!");
+
+    if (modalidad === 'pernocta' && !selectedHabNum) {
+      alert("⚠️ ¡Para reservación Pernocta debe seleccionar una habitación específica!");
       return;
     }
+
+    // Determine target room number (if 4h, pick first available room of that category)
+    let finalRoomNum = selectedHabNum;
+    if (modalidad === '4h') {
+      const matchingRoom = freeRooms.find(r => r.tipo === selectedHabTipo);
+      if (!matchingRoom) {
+        alert(`⚠️ No hay habitaciones disponibles en la categoría "${selectedHabTipo}" para asignar.`);
+        return;
+      }
+      finalRoomNum = matchingRoom.num;
+    }
+
+    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
+    if (isDigital && adelantoNum > 0 && !codigoVerificacion.trim()) {
+      alert('⚠️ Debe ingresar el Código de Verificación / Referencia para adelantos digitales.');
+      return;
+    }
+
+    const acompNombres = acompanantes.map((a, i) => {
+      const age = calcularEdad(a.fechaNacimiento);
+      const isAdult = age >= 18;
+      const surchargeNote = (i + 2 >= 3 && isAdult) ? ' [18+ Adulto +$5]' : (age > 0 && age < 18 ? ' [Menor de Edad]' : '');
+      return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
+    }).join(', ');
+
     onSubmit({
-      numHabitacion: selectedHabNum,
+      numHabitacion: finalRoomNum,
       ci: ci.trim(),
       dni: ci.trim(),
       nombre: nombre.trim(),
       tel: tel.trim(),
-      nomAcomp: hasAcompanante ? nomAcomp.trim() : '',
-      ciAcomp: hasAcompanante ? ciAcomp.trim() : '',
+      nomAcomp: acompNombres,
+      ciAcomp: acompanantes.map(a => a.ci).join(', '),
+      acompanantes,
       hora,
-      monto: parseFloat(monto) || 0,
-      metodo,
-      comprobante
+      monto: adelantoNum,
+      metodo: isDigital && adelantoNum > 0 ? `${metodo} - Ref: ${codigoVerificacion}` : metodo,
+      codigoVerificacion,
+      comprobante,
+      fotoCi,
+      modalidad,
+      tipoHabitacion: selectedHabTipo
     });
   };
-
-  const selectedRoomPriceUSD = selectedHabNum ? getPernoctaPrice(selectedHabTipo) : 0;
-  const selectedRoomPriceVES = (selectedRoomPriceUSD * tasaUsd).toFixed(2);
-  const adelantoNum = parseFloat(monto) || 0;
-  const adelantoVES = (adelantoNum * tasaUsd).toFixed(2);
 
   const cleanInputCi = normalizeCi(ci);
   const matchedClient = clientes.find(c => {
@@ -888,298 +975,467 @@ export function NuevaReservaModal({
     const cleanC = normalizeCi(c.ci);
     const cleanD = normalizeCi(c.dni);
     return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)) || (cleanInputCi.length >= 4 && cleanC.endsWith(cleanC)))) ||
-           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD)) || (cleanInputCi.length >= 4 && cleanD.endsWith(cleanD))));
+           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD)) || (cleanInputCi.length >= 4 && cleanD.endsWith(cleanInputCi))));
   });
   const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh]">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
-          <h3 className="text-lg font-bold text-slate-800">
-            <i className="fa-solid fa-calendar-plus text-blue-500 mr-2"></i> Registrar Nueva Reserva (Pernocta)
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
-            <i className="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
-
-        <div className="overflow-y-auto pr-2 flex-1 space-y-4">
-          {isClientVetado && (
-            <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-2 animate-pulse">
-              <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
-                <i className="fa-solid fa-triangle-exclamation text-base"></i>
-                Cliente Vetado - Reserva Bloqueada
-              </div>
-              <p className="text-xs font-semibold text-rose-800">
-                {matchedClient.nombre} posee una deuda pendiente por causa de: <br/>
-                <strong className="font-bold text-rose-900">{matchedClient.motivo_veto || 'Daños en estadía anterior'}</strong>
-              </p>
-              <div className="bg-white px-3 py-1.5 rounded-lg border border-rose-200 inline-block font-black text-rose-800 text-xs shadow-sm">
-                Deuda: ${matchedClient.monto_deuda_usd.toFixed(2)} USD 
-                <span className="text-[10px] text-slate-500 font-bold block">
-                  (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Room Selector with category filter */}
-          <div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase">
-                1. Seleccione Habitación (Solo Libres)
-              </label>
-              <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
-                {['Todas', 'Matrimonial', 'Mini Suite'].map(cat => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setCategoriaFiltro(cat)}
-                    className={`px-2 py-1 rounded ${
-                      categoriaFiltro === cat ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {freeRooms.length === 0 ? (
-              <p className="text-xs text-red-500 font-bold py-2 bg-red-50 rounded-lg text-center border border-red-100">
-                No hay habitaciones libres en esta categoría en este momento.
-              </p>
-            ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-36 overflow-y-auto p-1 border border-slate-100 rounded-xl bg-slate-50/50">
-                {freeRooms.map(h => (
-                  <div 
-                    key={h.num} 
-                    onClick={() => selectRoom(h.num, h.tipo)} 
-                    className={`hab-selectable border rounded-xl p-2 text-center shadow-sm transition-all ${
-                      selectedHabNum === h.num 
-                        ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-500' 
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <span className="block font-black text-slate-700 text-base">{h.num}</span>
-                    <span className="block text-[8px] uppercase font-black text-slate-400 truncate">{h.tipo}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+    <>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[95vh]">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-3 shrink-0">
+            <h3 className="text-lg font-bold text-slate-800">
+              <i className="fa-solid fa-calendar-plus text-blue-500 mr-2"></i> Registrar Nueva Reserva
+            </h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
+              <i className="fa-solid fa-xmark text-xl"></i>
+            </button>
           </div>
 
-          {selectedHabNum && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex justify-between items-center text-blue-900 font-bold">
-              <div>
-                <span className="text-[10px] text-blue-600 block">Habitación Seleccionada</span>
-                <span className="text-lg font-black">{selectedHabNum} ({selectedHabTipo})</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-blue-600 block">Tarifa Pernocta</span>
-                <span className="text-base font-black text-blue-800">${selectedRoomPriceUSD} USD</span>
-                <span className="block text-[10px] text-blue-600 font-medium">~ Bs. {selectedRoomPriceVES}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Client Search */}
-          <div className="relative bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div className="flex justify-between items-end mb-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase">2. Buscar Cliente Frecuente</label>
-              {(ci || nombre || tel) && (
-                <button 
-                  type="button" 
-                  onClick={() => { setCi(''); setNombre(''); setTel(''); }} 
-                  className="text-[10px] text-blue-500 hover:underline font-bold"
-                >
-                  Limpiar datos
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Buscar por Nombre o CI..." 
-                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-              />
-              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
-            </div>
-            
-            {showSuggestions && filteredClientes.length > 0 && (
-              <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100">
-                {filteredClientes.map(c => (
-                  <div 
-                    key={c.id} 
-                    onClick={() => selectCliente(c)}
-                    className="p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
-                  >
-                    <span>{c.nombre} <span className="text-slate-400 font-normal">(CI: {c.ci || c.dni})</span></span>
-                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">{c.visitas} visitas</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">CI (Cédula)</label>
-                <input 
-                  type="text" 
-                  value={ci}
-                  onChange={(e) => handleCiChange(e.target.value)}
-                  required 
-                  placeholder="Ej: V-12345678" 
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora Llegada</label>
-                <input 
-                  type="time" 
-                  value={hora}
-                  onChange={(e) => setHora(e.target.value)}
-                  required 
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
-                <input 
-                  type="text" 
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  required 
-                  placeholder="Nombre completo del huésped" 
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Celular / Teléfono</label>
-                <input 
-                  type="text" 
-                  value={tel}
-                  onChange={(e) => setTel(e.target.value)}
-                  required 
-                  placeholder="Ej: 0412-1234567" 
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-400 bg-white font-bold"
-                />
-              </div>
-            </div>
-
-            {/* Companion section (Conditional) */}
-            {hasAcompanante && (
-              <div className="border-t border-slate-200 pt-3 mt-4">
-                <p className="text-xs font-bold text-indigo-600 uppercase mb-2 flex items-center gap-1">
-                  <i className="fa-solid fa-user-plus"></i> Datos del Acompañante
-                </p>
-                <div className="grid grid-cols-2 gap-3 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI Acompañante</label>
-                    <input 
-                      type="text" 
-                      value={ciAcomp}
-                      onChange={(e) => setCiAcomp(e.target.value)}
-                      placeholder="CI (Opcional)" 
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Acompañante</label>
-                    <input 
-                      type="text" 
-                      value={nomAcomp}
-                      onChange={(e) => setNomAcomp(e.target.value)}
-                      placeholder="Nombre completo" 
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
-                    />
-                  </div>
+          <div className="overflow-y-auto pr-2 flex-1 space-y-4">
+            {isClientVetado && (
+              <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-2 animate-pulse">
+                <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
+                  <i className="fa-solid fa-triangle-exclamation text-base"></i>
+                  Cliente Vetado - Reserva Bloqueada
                 </div>
-              </div>
-            )}
-
-            {/* Deposit Payment Details */}
-            <div className="border-t border-slate-200 pt-3 mt-4 space-y-3">
-              <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
-                <i className="fa-solid fa-wallet"></i> Pago de Reserva / Adelanto
-              </p>
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto Adelanto ($ USD)</label>
-                  <input 
-                    type="number" 
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                    placeholder="0.00" 
-                    step="0.50" 
-                    min="0" 
-                    required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
-                  />
-                  <span className="block text-[10px] font-black text-emerald-700 mt-1">
-                    = Bs. {adelantoVES}
+                <p className="text-xs font-semibold text-rose-800">
+                  {matchedClient.nombre} posee una deuda pendiente por causa de: <br/>
+                  <strong className="font-bold text-rose-900">{matchedClient.motivo_veto || 'Daños en estadía anterior'}</strong>
+                </p>
+                <div className="bg-white px-3 py-1.5 rounded-lg border border-rose-200 inline-block font-black text-rose-800 text-xs shadow-sm">
+                  Deuda: ${matchedClient.monto_deuda_usd.toFixed(2)} USD 
+                  <span className="text-[10px] text-slate-500 font-bold block">
+                    (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
                   </span>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
-                  <select 
-                    value={metodo}
-                    onChange={(e) => setMetodo(e.target.value)}
-                    required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
-                  >
-                    <option value="Efectivo (Bs)">Efectivo (Bs)</option>
-                    <option value="Pago Móvil">Pago Móvil</option>
-                    <option value="Punto de Venta">Punto de Venta</option>
-                    <option value="Efectivo ($)">Efectivo ($)</option>
-                    <option value="Zelle">Zelle</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Comprobante</label>
-                  <select 
-                    value={comprobante}
-                    onChange={(e) => setComprobante(e.target.value)}
-                    required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
-                  >
-                    <option value="Nota de Venta">Nota de Venta</option>
-                    <option value="Factura">Factura</option>
-                    <option value="Ticket Interno">Ticket Interno</option>
-                  </select>
-                </div>
               </div>
+            )}
 
-              <div className="pt-2 flex gap-3">
+            {/* Modalidad Selection (4h vs Pernocta) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Modalidad de Reserva</label>
+              <div className="grid grid-cols-2 gap-2">
                 <button 
-                  type="button" 
-                  onClick={onClose}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isClientVetado}
-                  className={`flex-1 font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs ${
-                    isClientVetado 
-                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  type="button"
+                  onClick={() => { setModalidad('4h'); setSelectedHabNum(''); }}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                    modalidad === '4h' 
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Reserva'}
+                  <i className="fa-solid fa-clock mr-1.5"></i> 4 Horas (Por Categoría)
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setModalidad('pernocta')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                    modalidad === 'pernocta' 
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <i className="fa-solid fa-moon mr-1.5"></i> Pernocta (Hab. Específica)
                 </button>
               </div>
             </div>
-          </form>
+
+            {/* 1. ROOM / CATEGORY SELECTOR */}
+            {modalidad === '4h' ? (
+              <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200 space-y-2">
+                <label className="block text-xs font-black text-emerald-900 uppercase">
+                  Seleccione Categoría de Habitación (4 Horas)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Matrimonial', 'Mini Suite'].map(tipo => {
+                    const countFree = habitaciones.filter(h => h.estado === 'Libre' && h.tipo === tipo).length;
+                    return (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setSelectedHabTipo(tipo)}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          selectedHabTipo === tipo
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            : 'bg-white text-slate-800 border-slate-200 hover:border-emerald-300'
+                        }`}
+                      >
+                        <span className="block font-black text-sm">{tipo}</span>
+                        <span className="text-[10px] opacity-80 block font-bold mt-0.5">
+                          {countFree > 0 ? `${countFree} habitaciones libres` : 'Sin libres disponibles'}
+                        </span>
+                        <span className="text-xs font-black block mt-1">
+                          ${tipo === 'Mini Suite' ? 14 : 10} USD
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase">
+                    Seleccione Habitación Específica (Margen Limpieza 1h)
+                  </label>
+                  <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
+                    {['Todas', 'Matrimonial', 'Mini Suite'].map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategoriaFiltro(cat)}
+                        className={`px-2 py-1 rounded ${
+                          categoriaFiltro === cat ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {freeRooms.length === 0 ? (
+                  <p className="text-xs text-red-500 font-bold py-2 bg-red-50 rounded-lg text-center border border-red-100">
+                    No hay habitaciones libres en esta categoría en este momento.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1.5 border border-slate-200 rounded-xl bg-slate-50">
+                    {freeRooms.map(h => {
+                      const marginCheck = checkRoom1HourMargin(h);
+                      const isDisabled = !marginCheck.isAvailable;
+
+                      return (
+                        <button 
+                          key={h.num} 
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => selectRoom(h.num, h.tipo)} 
+                          className={`border rounded-xl p-2 text-center transition-all relative ${
+                            isDisabled 
+                              ? 'bg-rose-50 border-rose-200 opacity-60 cursor-not-allowed'
+                              : selectedHabNum === h.num 
+                                ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-600 shadow-sm' 
+                                : 'bg-white border-slate-200 hover:border-indigo-300'
+                          }`}
+                        >
+                          <span className="block font-black text-slate-800 text-base">{h.num}</span>
+                          <span className="block text-[8px] uppercase font-black text-slate-400 truncate">{h.tipo}</span>
+                          {isDisabled && (
+                            <span className="text-[8px] font-black text-rose-600 block mt-0.5">
+                              ⌛ Margen &lt; 1h
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Total Stay Price Summary Banner */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex justify-between items-center text-indigo-900 font-bold">
+              <div>
+                <span className="text-[10px] text-indigo-600 block">Estadía {modalidad === '4h' ? '4 Horas' : 'Pernocta'}</span>
+                <span className="text-base font-black">
+                  {modalidad === '4h' ? `Cat. ${selectedHabTipo}` : `Hab. ${selectedHabNum || 'Por seleccionar'} (${selectedHabTipo})`}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-indigo-600 block">Monto Total Hospedaje</span>
+                <span className="text-lg font-black text-indigo-900">${totalStayPriceUSD.toFixed(2)} USD</span>
+                <span className="block text-[10px] text-indigo-600 font-medium">~ Bs. {totalStayPriceVES}</span>
+              </div>
+            </div>
+
+            {/* Client Search */}
+            <div className="relative bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">¿Cliente Frecuente?</label>
+                {(ci || nombre || tel) && (
+                  <button 
+                    type="button" 
+                    onClick={() => { setCi(''); setNombre(''); setTel(''); setFotoCi(''); }} 
+                    className="text-[10px] text-blue-500 hover:underline font-bold"
+                  >
+                    Limpiar datos
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Buscar por Nombre o CI..." 
+                  className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-medium"
+                />
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+              </div>
+              
+              {showSuggestions && filteredClientes.length > 0 && (
+                <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100">
+                  {filteredClientes.map(c => (
+                    <div 
+                      key={c.id} 
+                      onClick={() => selectCliente(c)}
+                      className="p-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
+                    >
+                      <span>{c.nombre} <span className="text-slate-400 font-normal">(CI: {c.ci || c.dni})</span></span>
+                      <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">{c.visitas} visitas</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleFormSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI (Cédula de Identidad)</label>
+                  <input 
+                    type="text" 
+                    value={ci}
+                    onChange={(e) => setCi(e.target.value)}
+                    required 
+                    placeholder="Ej. V-12345678" 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hora de Llegada Estimada *</label>
+                  <input 
+                    type="time" 
+                    value={hora}
+                    onChange={(e) => setHora(e.target.value)}
+                    required 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
+                  <input 
+                    type="text" 
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    required 
+                    placeholder="Nombre completo del huésped" 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Celular / Teléfono</label>
+                  <input 
+                    type="text" 
+                    value={tel}
+                    onChange={(e) => setTel(e.target.value)}
+                    required 
+                    placeholder="Ej: 0412-1234567" 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Foto / Webcam Capture for CI */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Foto de Cédula de Identidad</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsWebcamOpen(true)}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <i className="fa-solid fa-camera"></i> Cámara Web
+                  </button>
+                  <label className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+                    <i className="fa-solid fa-upload"></i> Subir Foto
+                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+                {fotoCi && (
+                  <div className="relative mt-2 aspect-video w-32 rounded-lg overflow-hidden border border-slate-300 shadow-sm">
+                    <img src={fotoCi} alt="CI Capturada" className="w-full h-full object-cover" />
+                    <button 
+                      type="button" 
+                      onClick={() => setFotoCi('')}
+                      className="absolute top-1 right-1 bg-rose-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Dynamic Companions Section */}
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs font-black text-indigo-700 uppercase flex items-center gap-1.5">
+                    <i className="fa-solid fa-user-plus"></i> Acompañantes ({acompanantes.length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAddAcompanante}
+                    className="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors"
+                  >
+                    <i className="fa-solid fa-plus"></i> Agregar Acompañante
+                  </button>
+                </div>
+
+                {acompanantes.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 font-medium italic bg-slate-50 p-2.5 rounded-xl border border-dashed text-center">
+                    Sin acompañantes adicionales.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5 max-h-44 overflow-y-auto pr-1">
+                    {acompanantes.map((acomp, idx) => {
+                      const guestNumber = idx + 2;
+                      const age = calcularEdad(acomp.fechaNacimiento);
+                      const isAdult = age >= 18;
+                      const hasSurcharge = guestNumber >= 3 && isAdult;
+
+                      return (
+                        <div key={acomp.id} className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 space-y-2 relative">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black uppercase text-indigo-900">Huésped #{guestNumber} (Acompañante)</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAcompanante(acomp.id)}
+                              className="text-rose-500 hover:text-rose-700 text-xs"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Nombre Completo"
+                              value={acomp.nombre}
+                              onChange={(e) => handleUpdateAcompanante(acomp.id, 'nombre', e.target.value)}
+                              className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                              required
+                            />
+                            <input
+                              type="text"
+                              placeholder="C.I. (Opcional)"
+                              value={acomp.ci}
+                              onChange={(e) => handleUpdateAcompanante(acomp.id, 'ci', e.target.value)}
+                              className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-indigo-100">
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">F. Nacimiento:</label>
+                              <input
+                                type="date"
+                                value={acomp.fechaNacimiento}
+                                onChange={(e) => handleUpdateAcompanante(acomp.id, 'fechaNacimiento', e.target.value)}
+                                className="px-2 py-1 rounded border border-slate-300 text-xs font-bold bg-white"
+                              />
+                            </div>
+                            
+                            {acomp.fechaNacimiento && (
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                hasSurcharge ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {age} años {hasSurcharge ? '(Adulto +$5.00)' : '(Sin recargo)'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Deposit Payment Details ($0.00 USD permitted) */}
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
+                  <i className="fa-solid fa-wallet"></i> Pago de Reserva / Adelanto (Comprobante: {comprobante})
+                </p>
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto Adelanto ($ USD)</label>
+                    <input 
+                      type="number" 
+                      value={monto}
+                      onChange={(e) => setMonto(e.target.value)}
+                      placeholder="0.00 (Opcional)" 
+                      step="0.50" 
+                      min="0" 
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
+                    />
+                    <span className="block text-[10px] font-black text-emerald-700 mt-1">
+                      {adelantoNum > 0 ? `= Bs. ${adelantoVES}` : 'Reserva Sin Adelanto ($0 USD)'}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
+                    <select 
+                      value={metodo}
+                      onChange={(e) => setMetodo(e.target.value)}
+                      disabled={adelantoNum === 0}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold disabled:opacity-50"
+                    >
+                      <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                      <option value="Efectivo ($)">Efectivo ($)</option>
+                      <option value="Pago Móvil">Pago Móvil</option>
+                      <option value="Punto de Venta">Punto de Venta</option>
+                      <option value="Zelle">Zelle</option>
+                    </select>
+                  </div>
+
+                  {/* Verification code if digital deposit > 0 */}
+                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo) && adelantoNum > 0 && (
+                    <div className="col-span-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                      <label className="block text-[10px] font-black text-amber-900 uppercase mb-1">Código de Verificación / Ref. Adelanto *</label>
+                      <input 
+                        type="text" 
+                        value={codigoVerificacion}
+                        onChange={(e) => setCodigoVerificacion(e.target.value)}
+                        placeholder="Ej. Ref 123456" 
+                        required
+                        className="w-full px-3 py-1.5 rounded border border-amber-300 text-xs font-bold bg-white text-slate-800"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button 
+                    type="button" 
+                    onClick={onClose}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isClientVetado}
+                    className={`flex-1 font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs ${
+                      isClientVetado 
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
+                  >
+                    {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Reserva'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
+
+      <WebcamModal 
+        isOpen={isWebcamOpen}
+        onClose={() => setIsWebcamOpen(false)}
+        onCapture={(imgData) => setFotoCi(imgData)}
+      />
+    </>
   );
 }
 
