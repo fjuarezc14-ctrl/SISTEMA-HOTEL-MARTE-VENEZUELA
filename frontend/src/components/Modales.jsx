@@ -1,6 +1,142 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const normalizeCi = (str) => (str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+export function calcularEdad(fechaNacimientoStr) {
+  if (!fechaNacimientoStr) return 0;
+  const birth = new Date(fechaNacimientoStr);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : 0;
+}
+
+// ==========================================
+// WEBCAM CAMERA CAPTURE MODAL (v5 - Fase 1)
+// ==========================================
+export function WebcamModal({ isOpen, onClose, onCapture }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [cameraError, setCameraError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setCapturedImage(null);
+      setCameraError('');
+      navigator.mediaDevices?.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'environment' } })
+        .then(s => {
+          setStream(s);
+          if (videoRef.current) {
+            videoRef.current.srcObject = s;
+          }
+        })
+        .catch(err => {
+          console.error('Webcam error:', err);
+          setCameraError('No se pudo acceder a la cámara web o permiso denegado.');
+        });
+    } else {
+      stopCamera();
+    }
+
+    return () => stopCamera();
+  }, [isOpen]);
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+  };
+
+  const takeSnapshot = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setCapturedImage(dataUrl);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (capturedImage) {
+      onCapture(capturedImage);
+      stopCamera();
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl border border-slate-200 fade-in flex flex-col space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+            <i className="fa-solid fa-camera text-indigo-600"></i> Captura de Cédula por Cámara
+          </h3>
+          <button onClick={() => { stopCamera(); onClose(); }} className="text-slate-400 hover:text-rose-500">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        {cameraError ? (
+          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl text-center">
+            <i className="fa-solid fa-triangle-exclamation text-lg block mb-1"></i>
+            {cameraError}
+          </div>
+        ) : (
+          <div className="relative bg-slate-950 rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-800">
+            {capturedImage ? (
+              <img src={capturedImage} alt="Foto Capturada" className="w-full h-full object-cover" />
+            ) : (
+              <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+            )}
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {capturedImage ? (
+            <>
+              <button 
+                type="button" 
+                onClick={() => setCapturedImage(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+              >
+                <i className="fa-solid fa-rotate-left mr-1"></i> Repetir Foto
+              </button>
+              <button 
+                type="button" 
+                onClick={handleConfirm}
+                className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-xs shadow-md"
+              >
+                <i className="fa-solid fa-check mr-1"></i> Usar esta Foto
+              </button>
+            </>
+          ) : (
+            <button 
+              type="button" 
+              onClick={takeSnapshot}
+              disabled={!!cameraError}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-circle-dot text-rose-400 text-base"></i> Tomar Captura de Cédula
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ==========================================
 // 1. MODAL: WALK-IN (ASIGNAR DIRECTO)
@@ -16,14 +152,24 @@ export function AsignarDirectoModal({
   const [ci, setCi] = useState('');
   const [nombre, setNombre] = useState('');
   const [tel, setTel] = useState('');
-  const [nomAcomp, setNomAcomp] = useState('');
-  const [ciAcomp, setCiAcomp] = useState('');
+  const [fotoCi, setFotoCi] = useState('');
+  const [isWebcamOpen, setIsWebcamOpen] = useState(false);
+
+  // Dynamic Companions Array (v5 - Fase 1)
+  // [{ id, nombre, ci, fechaNacimiento, age, esMayor, recargo }]
+  const [acompanantes, setAcompanantes] = useState([]);
+
   const [modalidad, setModalidad] = useState('4h');
-  const [esMenor, setEsMenor] = useState(false);
-  const [monto, setMonto] = useState('10');
   const [metodo, setMetodo] = useState('Efectivo (Bs)');
-  const [comprobante, setComprobante] = useState('Nota de Venta');
+  const [codigoVerificacion, setCodigoVerificacion] = useState('');
   
+  // Mixed Payment states
+  const [montoEfectivo, setMontoEfectivo] = useState('0');
+  const [montoDigital, setMontoDigital] = useState('0');
+  const [metodoDigital, setMetodoDigital] = useState('Pago Móvil');
+
+  const comprobante = 'Ticket Interno'; // Locked to Ticket Interno per client request
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredClientes, setFilteredClientes] = useState([]);
@@ -31,39 +177,70 @@ export function AsignarDirectoModal({
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
+  // Compute Base Price according to room type and stay modality
+  const getBasePrice = (type, mod) => {
+    if (type === 'Mini Suite') {
+      return mod === 'pernocta' ? 24 : 14;
+    }
+    return mod === 'pernocta' ? 20 : 10;
+  };
+
   useEffect(() => {
     if (isOpen && room) {
       setCi('');
       setNombre('');
       setTel('');
-      setNomAcomp('');
-      setCiAcomp('');
+      setFotoCi('');
+      setAcompanantes([]);
       setModalidad('4h');
-      setEsMenor(false);
       setMetodo('Efectivo (Bs)');
-      setComprobante('Nota de Venta');
+      setCodigoVerificacion('');
+      setMontoEfectivo('0');
+      setMontoDigital('0');
+      setMetodoDigital('Pago Móvil');
       setSearchQuery('');
       setShowSuggestions(false);
-
-      const basePrice = room.tipo === 'Mini Suite' ? '14' : '10';
-      setMonto(basePrice);
     }
   }, [isOpen, room]);
 
-  const handleModalidadChange = (mod) => {
-    setModalidad(mod);
-    if (room) {
-      if (mod === 'pernocta') {
-        setMonto(room.tipo === 'Mini Suite' ? '24' : '20');
-      } else {
-        setMonto(room.tipo === 'Mini Suite' ? '14' : '10');
-      }
-    }
-  };
-
   if (!isOpen || !room) return null;
 
-  const hasAcompanante = ['Doble', 'Matrimonial', 'Mini Suite', 'Suite'].includes(room.tipo);
+  const basePrice = getBasePrice(room.tipo, modalidad);
+
+  // Compute total companion surcharges (+5 USD for adult 3rd+ guests)
+  const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
+    const guestNumber = idx + 2; // Guest 1 = primary, Guest 2 = 1st companion, Guest 3+ = additional
+    const age = calcularEdad(a.fechaNacimiento);
+    const isAdult = age >= 18;
+    if (guestNumber >= 3 && isAdult) {
+      return sum + 5.00;
+    }
+    return sum;
+  }, 0);
+
+  const totalMontoUsd = basePrice + companionSurcharges;
+  const montoVes = (totalMontoUsd * tasaUsd).toFixed(2);
+
+  // Handlers for companion dynamic list
+  const handleAddAcompanante = () => {
+    setAcompanantes(prev => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        nombre: '',
+        ci: '',
+        fechaNacimiento: ''
+      }
+    ]);
+  };
+
+  const handleRemoveAcompanante = (id) => {
+    setAcompanantes(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleUpdateAcompanante = (id, field, value) => {
+    setAcompanantes(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
+  };
 
   const handleSearchChange = (val) => {
     setSearchQuery(val);
@@ -85,30 +262,67 @@ export function AsignarDirectoModal({
     setCi(c.ci || c.dni || '');
     setNombre(c.nombre);
     setTel(c.tel);
+    if (c.foto_ci) setFotoCi(c.foto_ci);
     setShowSuggestions(false);
     setSearchQuery('');
   };
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setFotoCi(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleFormSubmit = (e) => {
     e.preventDefault();
+
+    // Digital verification code check
+    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
+    if (isDigital && !codigoVerificacion.trim()) {
+      alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
+      return;
+    }
+
+    if (metodo === 'Pago Mixto') {
+      const ef = parseFloat(montoEfectivo) || 0;
+      const dig = parseFloat(montoDigital) || 0;
+      if (Math.abs((ef + dig) - totalMontoUsd) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma ($${ef.toFixed(2)} + $${dig.toFixed(2)} = $${(ef+dig).toFixed(2)}) debe coincidir con el total ($${totalMontoUsd.toFixed(2)} USD).`);
+        return;
+      }
+      if (dig > 0 && !codigoVerificacion.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para el componente digital del Pago Mixto.');
+        return;
+      }
+    }
+
+    const acompNombres = acompanantes.map((a, i) => {
+      const age = calcularEdad(a.fechaNacimiento);
+      const isAdult = age >= 18;
+      const surchargeNote = (i + 2 >= 3 && isAdult) ? ' [18+ Adulto +$5]' : (age > 0 && age < 18 ? ' [Menor de Edad]' : '');
+      return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
+    }).join(', ');
+
     onSubmit({
       numHabitacion: room.num,
       ci: ci.trim(),
       dni: ci.trim(),
       nombre: nombre.trim(),
       tel: tel.trim(),
-      nomAcomp: hasAcompanante ? nomAcomp.trim() : '',
-      ciAcomp: hasAcompanante ? ciAcomp.trim() : '',
-      monto: parseFloat(monto) || 0,
-      metodo,
+      nomAcomp: acompNombres,
+      ciAcomp: acompanantes.map(a => a.ci).join(', '),
+      acompanantes,
+      monto: totalMontoUsd,
+      metodo: metodo === 'Pago Mixto' ? `Pago Mixto (Ef: $${montoEfectivo} + ${metodoDigital}: $${montoDigital}) - Ref: ${codigoVerificacion}` : metodo,
+      codigoVerificacion,
+      fotoCi,
       comprobante,
-      modalidad,
-      esMenor
+      modalidad
     });
   };
-
-  const montoNum = parseFloat(monto) || 0;
-  const montoVes = (montoNum * tasaUsd).toFixed(2);
 
   const cleanInputCi = normalizeCi(ci);
   const matchedClient = clientes.find(c => {
@@ -121,261 +335,407 @@ export function AsignarDirectoModal({
   const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
-          <h3 className="text-lg font-bold text-slate-800">
-            <i className="fa-solid fa-person-walking-luggage text-green-500 mr-2"></i> Asignar al Instante (Walk-In)
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
-            <i className="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
-        
-        <div className="overflow-y-auto pr-2 flex-1">
-          {isClientVetado && (
-            <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-2 mb-4 animate-pulse">
-              <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
-                <i className="fa-solid fa-triangle-exclamation text-base"></i>
-                Cliente Vetado - Check-In Bloqueado
-              </div>
-              <p className="text-xs font-semibold text-rose-800">
-                {matchedClient.nombre} posee una deuda pendiente por causa de: <br/>
-                <strong className="font-bold text-rose-900">{matchedClient.motivo_veto || 'Daños en estadía anterior'}</strong>
-              </p>
-              <div className="bg-white px-3 py-1.5 rounded-lg border border-rose-200 inline-block font-black text-rose-800 text-xs shadow-sm">
-                Deuda: ${matchedClient.monto_deuda_usd.toFixed(2)} USD 
-                <span className="text-[10px] text-slate-500 font-bold block">
-                  (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-green-800 font-bold flex justify-between items-center px-4">
-            <div>
-              <span className="text-xs text-green-600 block">Habitación</span>
-              <span className="text-2xl font-black">{room.num}</span>
-            </div>
-            <div className="text-right">
-              <span className="text-xs uppercase bg-green-200 text-green-900 px-2 py-0.5 rounded font-black block">{room.tipo}</span>
-              <span className="text-[10px] text-green-700 font-semibold block mt-0.5">Tasa: 1$ = Bs. {tasaUsd.toFixed(2)}</span>
-            </div>
+    <>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-3 shrink-0">
+            <h3 className="text-lg font-bold text-slate-800">
+              <i className="fa-solid fa-person-walking-luggage text-green-500 mr-2"></i> Asignar al Instante (Walk-In)
+            </h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
+              <i className="fa-solid fa-xmark text-xl"></i>
+            </button>
           </div>
-
-          {/* Modalidad Selection */}
-          <div className="mb-4">
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Modalidad de Hospedaje</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button 
-                type="button"
-                onClick={() => handleModalidadChange('4h')}
-                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
-                  modalidad === '4h' 
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                <i className="fa-solid fa-clock mr-1.5"></i> 4 Horas (+4h)
-              </button>
-              <button 
-                type="button"
-                onClick={() => handleModalidadChange('pernocta')}
-                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
-                  modalidad === 'pernocta' 
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                <i className="fa-solid fa-moon mr-1.5"></i> Pernocta (11:00 AM)
-              </button>
-            </div>
-          </div>
-
-          {/* Intelligent Search */}
-          <div className="relative mb-5 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div className="flex justify-between items-end mb-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase">¿Cliente Frecuente?</label>
-              {(ci || nombre || tel) && (
-                <button 
-                  type="button" 
-                  onClick={() => { setCi(''); setNombre(''); setTel(''); }} 
-                  className="text-[10px] text-blue-500 hover:underline font-bold"
-                >
-                  Limpiar datos
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Buscar por Nombre o Cédula (CI)..." 
-                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
-              />
-              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
-            </div>
-            
-            {showSuggestions && filteredClientes.length > 0 && (
-              <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100">
-                {filteredClientes.map(c => (
-                  <div 
-                    key={c.id} 
-                    onClick={() => selectCliente(c)}
-                    className="p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
-                  >
-                    <span>{c.nombre} <span className="text-slate-400 font-normal">(CI: {c.ci || c.dni})</span></span>
-                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">{c.visitas} visitas</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">CI (Cédula de Identidad)</label>
-                <input 
-                  type="text" 
-                  value={ci}
-                  onChange={(e) => setCi(e.target.value)}
-                  required 
-                  placeholder="Ej. V-12345678" 
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
-                <input 
-                  type="text" 
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  required 
-                  placeholder="Nombre del Huésped" 
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Teléfono / Celular</label>
-                <input 
-                  type="text" 
-                  value={tel}
-                  onChange={(e) => setTel(e.target.value)}
-                  required 
-                  placeholder="Ej. 0412-1234567" 
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
-                />
-              </div>
-            </div>
-
-            {/* Companion section (Conditional) */}
-            {hasAcompanante && (
-              <div className="border-t border-slate-200 pt-3 mt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-xs font-bold text-indigo-600 uppercase flex items-center gap-1">
-                    <i className="fa-solid fa-user-plus"></i> Datos del Acompañante
-                  </p>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input 
-                      type="checkbox"
-                      checked={esMenor}
-                      onChange={(e) => setEsMenor(e.target.checked)}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                    />
-                    <span className="text-[10px] font-bold text-indigo-700">Es Menor de Edad (Sin recargo)</span>
-                  </label>
+          
+          <div className="overflow-y-auto pr-2 flex-1 space-y-4">
+            {isClientVetado && (
+              <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-2 animate-pulse">
+                <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
+                  <i className="fa-solid fa-triangle-exclamation text-base"></i>
+                  Cliente Vetado - Check-In Bloqueado
                 </div>
-                <div className="grid grid-cols-2 gap-3 bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI Acompañante</label>
-                    <input 
-                      type="text" 
-                      value={ciAcomp}
-                      onChange={(e) => setCiAcomp(e.target.value)}
-                      placeholder="CI (Opcional)" 
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Acompañante</label>
-                    <input 
-                      type="text" 
-                      value={nomAcomp}
-                      onChange={(e) => setNomAcomp(e.target.value)}
-                      placeholder="Nombre completo" 
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Payment Section */}
-            <div className="border-t border-slate-200 pt-3 mt-4 space-y-3">
-              <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
-                <i className="fa-solid fa-wallet"></i> Detalle de Cobro Inmediato
-              </p>
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto ($ USD)</label>
-                  <input 
-                    type="number" 
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                    placeholder="0.00" 
-                    step="0.50" 
-                    min="0" 
-                    required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
-                  />
-                  <span className="block text-[10px] font-black text-emerald-700 mt-1">
-                    = Bs. {montoVes}
+                <p className="text-xs font-semibold text-rose-800">
+                  {matchedClient.nombre} posee una deuda pendiente por causa de: <br/>
+                  <strong className="font-bold text-rose-900">{matchedClient.motivo_veto || 'Daños en estadía anterior'}</strong>
+                </p>
+                <div className="bg-white px-3 py-1.5 rounded-lg border border-rose-200 inline-block font-black text-rose-800 text-xs shadow-sm">
+                  Deuda: ${matchedClient.monto_deuda_usd.toFixed(2)} USD 
+                  <span className="text-[10px] text-slate-500 font-bold block">
+                    (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
                   </span>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
-                  <select 
-                    value={metodo}
-                    onChange={(e) => setMetodo(e.target.value)}
-                    required 
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
-                  >
-                    <option value="Efectivo (Bs)">Efectivo (Bs)</option>
-                    <option value="Pago Móvil">Pago Móvil</option>
-                    <option value="Punto de Venta">Punto de Venta</option>
-                    <option value="Efectivo ($)">Efectivo ($)</option>
-                    <option value="Zelle">Zelle</option>
-                  </select>
-                </div>
               </div>
+            )}
 
-              <div className="pt-2 flex gap-3">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-800 font-bold flex justify-between items-center px-4">
+              <div>
+                <span className="text-xs text-green-600 block">Habitación</span>
+                <span className="text-2xl font-black">{room.num}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs uppercase bg-green-200 text-green-900 px-2 py-0.5 rounded font-black block">{room.tipo}</span>
+                <span className="text-[10px] text-green-700 font-semibold block mt-0.5">Tasa: 1$ = Bs. {tasaUsd.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Modalidad Selection */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Modalidad de Hospedaje</label>
+              <div className="grid grid-cols-2 gap-2">
                 <button 
-                  type="button" 
-                  onClick={onClose}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isClientVetado}
-                  className={`flex-1 font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md ${
-                    isClientVetado 
-                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  type="button"
+                  onClick={() => setModalidad('4h')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                    modalidad === '4h' 
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Check-In'}
+                  <i className="fa-solid fa-clock mr-1.5"></i> 4 Horas (+4h)
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setModalidad('pernocta')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                    modalidad === 'pernocta' 
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <i className="fa-solid fa-moon mr-1.5"></i> Pernocta (11:00 AM)
                 </button>
               </div>
             </div>
-          </form>
+
+            {/* Intelligent Search */}
+            <div className="relative bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">¿Cliente Frecuente?</label>
+                {(ci || nombre || tel) && (
+                  <button 
+                    type="button" 
+                    onClick={() => { setCi(''); setNombre(''); setTel(''); setFotoCi(''); }} 
+                    className="text-[10px] text-blue-500 hover:underline font-bold"
+                  >
+                    Limpiar datos
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Buscar por Nombre o Cédula (CI)..." 
+                  className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-medium"
+                />
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+              </div>
+              
+              {showSuggestions && filteredClientes.length > 0 && (
+                <div className="absolute z-10 w-full left-0 bg-white border border-slate-200 shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100">
+                  {filteredClientes.map(c => (
+                    <div 
+                      key={c.id} 
+                      onClick={() => selectCliente(c)}
+                      className="p-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-xs font-bold text-slate-700 flex justify-between items-center"
+                    >
+                      <span>{c.nombre} <span className="text-slate-400 font-normal">(CI: {c.ci || c.dni})</span></span>
+                      <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">{c.visitas} visitas</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleFormSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI (Cédula de Identidad)</label>
+                  <input 
+                    type="text" 
+                    value={ci}
+                    onChange={(e) => setCi(e.target.value)}
+                    required 
+                    placeholder="Ej. V-12345678" 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Teléfono / Celular</label>
+                  <input 
+                    type="text" 
+                    value={tel}
+                    onChange={(e) => setTel(e.target.value)}
+                    required 
+                    placeholder="Ej. 0412-1234567" 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
+                  <input 
+                    type="text" 
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    required 
+                    placeholder="Nombre del Huésped" 
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Foto / Webcam Capture for CI (v5 - Fase 1) */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Foto de Cédula de Identidad</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsWebcamOpen(true)}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <i className="fa-solid fa-camera"></i> Cámara Web
+                  </button>
+                  <label className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+                    <i className="fa-solid fa-upload"></i> Subir Foto
+                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+                {fotoCi && (
+                  <div className="relative mt-2 aspect-video w-32 rounded-lg overflow-hidden border border-slate-300 shadow-sm">
+                    <img src={fotoCi} alt="CI Capturada" className="w-full h-full object-cover" />
+                    <button 
+                      type="button" 
+                      onClick={() => setFotoCi('')}
+                      className="absolute top-1 right-1 bg-rose-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Dynamic Companions Section (v5 - Fase 1) */}
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs font-black text-indigo-700 uppercase flex items-center gap-1.5">
+                    <i className="fa-solid fa-user-plus"></i> Acompañantes ({acompanantes.length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAddAcompanante}
+                    className="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors"
+                  >
+                    <i className="fa-solid fa-plus"></i> Agregar Acompañante
+                  </button>
+                </div>
+
+                {acompanantes.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 font-medium italic bg-slate-50 p-2.5 rounded-xl border border-dashed text-center">
+                    Sin acompañantes adicionales.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                    {acompanantes.map((acomp, idx) => {
+                      const guestNumber = idx + 2;
+                      const age = calcularEdad(acomp.fechaNacimiento);
+                      const isAdult = age >= 18;
+                      const hasSurcharge = guestNumber >= 3 && isAdult;
+
+                      return (
+                        <div key={acomp.id} className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 space-y-2 relative">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black uppercase text-indigo-900">Huésped #{guestNumber} (Acompañante)</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAcompanante(acomp.id)}
+                              className="text-rose-500 hover:text-rose-700 text-xs"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Nombre Completo"
+                              value={acomp.nombre}
+                              onChange={(e) => handleUpdateAcompanante(acomp.id, 'nombre', e.target.value)}
+                              className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                              required
+                            />
+                            <input
+                              type="text"
+                              placeholder="C.I. (Opcional)"
+                              value={acomp.ci}
+                              onChange={(e) => handleUpdateAcompanante(acomp.id, 'ci', e.target.value)}
+                              className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white"
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-indigo-100">
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">F. Nacimiento:</label>
+                              <input
+                                type="date"
+                                value={acomp.fechaNacimiento}
+                                onChange={(e) => handleUpdateAcompanante(acomp.id, 'fechaNacimiento', e.target.value)}
+                                className="px-2 py-1 rounded border border-slate-300 text-xs font-bold bg-white"
+                              />
+                            </div>
+                            
+                            {acomp.fechaNacimiento && (
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                hasSurcharge ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {age} años {hasSurcharge ? '(Adulto +$5.00)' : '(Sin recargo)'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Section */}
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
+                  <i className="fa-solid fa-wallet"></i> Detalle de Cobro Inmediato (Comprobante: {comprobante})
+                </p>
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto Total ($ USD)</label>
+                    <input 
+                      type="number" 
+                      value={totalMontoUsd}
+                      readOnly
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-black text-slate-800 bg-slate-100 cursor-not-allowed outline-none"
+                    />
+                    <span className="block text-[10px] font-black text-emerald-700 mt-1">
+                      = Bs. {montoVes}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
+                    <select 
+                      value={metodo}
+                      onChange={(e) => setMetodo(e.target.value)}
+                      required 
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+                    >
+                      <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                      <option value="Efectivo ($)">Efectivo ($)</option>
+                      <option value="Pago Móvil">Pago Móvil</option>
+                      <option value="Punto de Venta">Punto de Venta</option>
+                      <option value="Zelle">Zelle</option>
+                      <option value="Pago Mixto">Pago Mixto (Efectivo + Digital)</option>
+                    </select>
+                  </div>
+
+                  {/* Verification Code field for digital payments */}
+                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo) && (
+                    <div className="col-span-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                      <label className="block text-[10px] font-black text-amber-900 uppercase mb-1">Código de Verificación / Referencia Bancaria *</label>
+                      <input 
+                        type="text" 
+                        value={codigoVerificacion}
+                        onChange={(e) => setCodigoVerificacion(e.target.value)}
+                        placeholder="Ej. Ref 987654 / Baucher #1234" 
+                        required
+                        className="w-full px-3 py-1.5 rounded border border-amber-300 text-xs font-bold bg-white text-slate-800"
+                      />
+                    </div>
+                  )}
+
+                  {/* Mixed Payment Breakdown */}
+                  {metodo === 'Pago Mixto' && (
+                    <div className="col-span-2 bg-indigo-50 p-3 rounded-xl border border-indigo-200 space-y-2">
+                      <p className="text-[10px] font-black text-indigo-900 uppercase">Desglose de Pago Mixto</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500">Efectivo ($ USD)</label>
+                          <input 
+                            type="number"
+                            step="0.50"
+                            value={montoEfectivo}
+                            onChange={(e) => setMontoEfectivo(e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500">Monto Digital ($ USD)</label>
+                          <input 
+                            type="number"
+                            step="0.50"
+                            value={montoDigital}
+                            onChange={(e) => setMontoDigital(e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500">Método Digital</label>
+                          <select 
+                            value={metodoDigital}
+                            onChange={(e) => setMetodoDigital(e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          >
+                            <option value="Pago Móvil">Pago Móvil</option>
+                            <option value="Punto de Venta">Punto de Venta</option>
+                            <option value="Zelle">Zelle</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500">Ref. Digital *</label>
+                          <input 
+                            type="text"
+                            value={codigoVerificacion}
+                            onChange={(e) => setCodigoVerificacion(e.target.value)}
+                            placeholder="Ref #123"
+                            required
+                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button 
+                    type="button" 
+                    onClick={onClose}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-xs border border-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isClientVetado}
+                    className={`flex-1 font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md ${
+                      isClientVetado 
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                  >
+                    {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Check-In'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
+
+      <WebcamModal 
+        isOpen={isWebcamOpen}
+        onClose={() => setIsWebcamOpen(false)}
+        onCapture={(imgData) => setFotoCi(imgData)}
+      />
+    </>
   );
 }
 
@@ -1512,14 +1872,51 @@ export function DetalleHabitacionOcupadaModal({
             )}
           </div>
 
-          {/* Add Consumption Form */}
+          {/* Quick POS Market Grid (v5 - Fase 1) */}
+          <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-3">
+            <p className="text-xs font-black text-amber-900 uppercase flex items-center justify-between">
+              <span><i className="fa-solid fa-store text-amber-600 mr-1.5"></i> Venta Rápida Market (POS)</span>
+              <span className="text-[10px] text-amber-700 font-bold">1-Clic para cargar consumo</span>
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
+              {productos.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    if (p.stock <= 0) {
+                      alert(`⚠️ Producto "${p.nombre}" agotado.`);
+                      return;
+                    }
+                    onAddConsumo({
+                      numHabitacion: room.num,
+                      concepto: p.nombre,
+                      monto: p.precio_venta,
+                      cantidad: 1,
+                      productoId: p.id
+                    });
+                  }}
+                  className="bg-white hover:bg-amber-100/60 p-2 rounded-lg border border-amber-200 text-left transition-all flex flex-col justify-between shadow-sm hover:shadow"
+                >
+                  <span className="text-xs font-bold text-slate-800 truncate block">{p.nombre}</span>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[10px] font-bold text-slate-400">Stock: {p.stock}</span>
+                    <span className="text-xs font-black text-amber-700">${p.precio_venta.toFixed(2)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Manual Add Consumption Form */}
           <form onSubmit={handleSubmit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 relative z-30">
             {showDropdown && (
               <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
             )}
             <div className="flex justify-between items-center relative z-20">
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                Registrar Nuevo Cargo
+                Registrar Otro Cargo / Consumo Personalizado
               </p>
               {selectedProduct && (
                 <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">

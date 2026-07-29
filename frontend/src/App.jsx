@@ -740,6 +740,8 @@ export default function App() {
                 <Habitaciones 
                   habitaciones={appState.habitaciones} 
                   tickets={appState.tickets || []}
+                  token={token}
+                  onStateChange={fetchState}
                   onRoomClick={handleRoomClick}
                 />
               )}

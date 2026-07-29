@@ -648,6 +648,45 @@ app.delete('/api/habitaciones/:num', requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/habitaciones/:num - Modificar número o tipo de habitación (v5 - Fase 1)
+app.put('/api/habitaciones/:num', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
+    return res.status(403).json({ error: 'Acceso denegado.' });
+  }
+
+  const { num } = req.params;
+  const { nuevoNum, tipo } = req.body;
+
+  try {
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [num]);
+    if (!room) {
+      return res.status(404).json({ error: 'Habitación no encontrada.' });
+    }
+
+    const targetNum = nuevoNum ? String(nuevoNum).trim() : num;
+    if (targetNum !== num) {
+      const existing = await db.get('SELECT num FROM habitaciones WHERE num = ?', [targetNum]);
+      if (existing) {
+        return res.status(400).json({ error: `La habitación número ${targetNum} ya existe.` });
+      }
+    }
+
+    await db.run('UPDATE habitaciones SET num = ?, tipo = ? WHERE num = ?', [targetNum, tipo || room.tipo, num]);
+    
+    // Auto sync inventario_habitaciones if number changed
+    if (targetNum !== num) {
+      await db.run('UPDATE inventario_habitaciones SET numHabitacion = ? WHERE numHabitacion = ?', [targetNum, num]);
+    }
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Editar Habitación', `Habitación #${num} modificada a #${targetNum} (${tipo || room.tipo})`, req.ip);
+
+    res.json({ success: true, message: `Habitación #${targetNum} actualizada correctamente.` });
+  } catch (error) {
+    console.error('Error updating room:', error);
+    res.status(500).json({ error: 'Error al modificar la habitación.' });
+  }
+});
+
 // Helper: Calcular hora de salida según modalidad (4 Horas o Pernocta 11:00 AM)
 function calcularHoraSalida(modalidad) {
   if (modalidad === 'pernocta') {
