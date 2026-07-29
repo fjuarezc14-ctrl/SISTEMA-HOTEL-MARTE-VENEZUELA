@@ -1,5 +1,90 @@
 import React, { useState } from 'react';
 
+function SearchableRoomSelect({ habitaciones, value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filterText, setFilterText] = useState('');
+
+  const selectedRoom = habitaciones.find(h => h.num.toString() === value.toString());
+
+  const filtered = habitaciones.filter(h => {
+    const term = filterText.toLowerCase().trim();
+    if (!term) return true;
+    return (
+      h.num.toString().toLowerCase().includes(term) ||
+      (h.tipo && h.tipo.toLowerCase().includes(term)) ||
+      (h.estado && h.estado.toLowerCase().includes(term))
+    );
+  });
+
+  const displayValue = isOpen ? filterText : (selectedRoom ? `Hab. ${selectedRoom.num} (${selectedRoom.tipo})` : value ? `Hab. ${value}` : '');
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={displayValue}
+          onFocus={() => {
+            setFilterText('');
+            setIsOpen(true);
+          }}
+          onChange={(e) => {
+            const rawVal = e.target.value;
+            setFilterText(rawVal);
+            const numOnly = rawVal.replace(/[^0-9]/g, '');
+            onChange(numOnly || rawVal);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onBlur={() => {
+            setTimeout(() => setIsOpen(false), 200);
+          }}
+          placeholder="Buscar hab..."
+          required
+          className="w-full px-3 py-2 pr-8 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-rose-500 bg-white"
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs">
+          <i className={`fa-solid ${isOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 max-h-48 overflow-y-auto z-50 py-1 divide-y divide-slate-100">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-slate-400 font-semibold text-center">
+              No hay coincidencias
+            </div>
+          ) : (
+            filtered.map(h => (
+              <div
+                key={h.num}
+                onMouseDown={() => {
+                  onChange(h.num.toString());
+                  setFilterText('');
+                  setIsOpen(false);
+                }}
+                className={`px-3 py-2 text-xs cursor-pointer flex justify-between items-center hover:bg-rose-50 transition-colors ${value.toString() === h.num.toString() ? 'bg-rose-50 font-bold text-rose-700' : 'text-slate-700 font-medium'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900">Hab. {h.num}</span>
+                  <span className="text-[10px] text-slate-400">({h.tipo})</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
+                  h.estado === 'Libre' ? 'bg-emerald-100 text-emerald-700' :
+                  h.estado === 'Ocupada' ? 'bg-rose-100 text-rose-700' :
+                  h.estado === 'Limpieza' ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-100 text-slate-600'
+                }`}>
+                  {h.estado}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Tickets({ tickets = [], habitaciones = [], token, currentUser, onStateChange }) {
   const [filterState, setFilterState] = useState('Pendientes'); // 'Todos' | 'Pendientes' | 'En Proceso' | 'Resueltos'
   const [filterCategory, setFilterCategory] = useState('Todas');
@@ -327,17 +412,11 @@ export default function Tickets({ tickets = [], habitaciones = [], token, curren
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Habitación</label>
-                  <select 
-                    value={numHabitacion}
-                    onChange={(e) => setNumHabitacion(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-rose-500 bg-white"
-                  >
-                    <option value="">Seleccione...</option>
-                    {habitaciones.map(h => (
-                      <option key={h.num} value={h.num}>Hab. {h.num} ({h.tipo} - {h.estado})</option>
-                    ))}
-                  </select>
+                  <SearchableRoomSelect 
+                    habitaciones={habitaciones} 
+                    value={numHabitacion} 
+                    onChange={(val) => setNumHabitacion(val)} 
+                  />
                 </div>
 
                 <div>
