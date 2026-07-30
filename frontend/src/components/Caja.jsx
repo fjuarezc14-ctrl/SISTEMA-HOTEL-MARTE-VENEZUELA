@@ -10,8 +10,12 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const [filterMode, setFilterMode] = useState('all');
   // Origen filter ('Todos', 'Hospedaje', 'Market', 'Egresos')
   const [tabMode, setTabMode] = useState('Todos');
-  // Validation filter ('all', 'pending', 'validated')
-  const [valFilter, setValFilter] = useState('all');
+  // Helper function to detect digital payments with reference code strings
+  const isDigitalPayment = (m) => {
+    if (!m) return false;
+    const str = m.toLowerCase();
+    return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('ref:');
+  };
 
   // Shift closure modal state
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
@@ -35,9 +39,9 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   }
 
   if (valFilter === 'pending') {
-    displayedCaja = displayedCaja.filter(t => ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo) && (!t.validado || t.validado === 0));
+    displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0));
   } else if (valFilter === 'validated') {
-    displayedCaja = displayedCaja.filter(t => ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo) && t.validado === 1);
+    displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1);
   }
 
   // Calculate totals for displayed movements ($ USD and Bs. VES)
@@ -226,7 +230,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
           }`}
         >
           <i className="fa-solid fa-clock text-[10px] mr-1"></i>
-          Pendientes de Validación Superadmin ({caja.filter(t => ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo) && (!t.validado || t.validado === 0)).length})
+          Pendientes de Validación Superadmin ({caja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0)).length})
         </button>
         <button
           onClick={() => setValFilter('validated')}
@@ -235,7 +239,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
           }`}
         >
           <i className="fa-solid fa-circle-check text-[10px] mr-1"></i>
-          Validados por Superadmin ({caja.filter(t => ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo) && t.validado === 1).length})
+          Validados por Superadmin ({caja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1).length})
         </button>
       </div>
 
@@ -305,7 +309,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                   {displayedCaja.map(t => {
                     const montoUsdVal = parseFloat(t.monto) || 0;
                     const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
-                    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo);
+                    const isDigital = isDigitalPayment(t.metodo);
                     const isValidated = t.validado === 1;
 
                     return (
