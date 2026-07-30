@@ -751,9 +751,12 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       return false;
     });
     
-    if (cliente && cliente.vetado === 1 && cliente.monto_deuda_usd > 0) {
+    if (cliente && cliente.vetado === 1) {
+      const debtMsg = (cliente.monto_deuda_usd && cliente.monto_deuda_usd > 0) 
+        ? ` por una deuda pendiente de $${cliente.monto_deuda_usd.toFixed(2)} USD.` 
+        : '.';
       return res.status(400).json({ 
-        error: `El cliente ${cliente.nombre} (CI: ${cliente.ci || cliente.dni}) se encuentra VETADO por una deuda pendiente de $${cliente.monto_deuda_usd.toFixed(2)} USD. Motivo: ${cliente.motivo_veto || 'Daños en estadía anterior'}`,
+        error: `El cliente ${cliente.nombre} (CI: ${cliente.ci || cliente.dni}) se encuentra VETADO${debtMsg} Motivo: ${cliente.motivo_veto || 'Incidencia o conducta en estadía anterior'}`,
         vetado: true,
         clienteVetado: cliente
       });
@@ -913,9 +916,12 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
       return false;
     });
 
-    if (cliente && cliente.vetado === 1 && cliente.monto_deuda_usd > 0) {
+    if (cliente && cliente.vetado === 1) {
+      const debtMsg = (cliente.monto_deuda_usd && cliente.monto_deuda_usd > 0) 
+        ? ` por una deuda pendiente de $${cliente.monto_deuda_usd.toFixed(2)} USD.` 
+        : '.';
       return res.status(400).json({ 
-        error: `El cliente ${cliente.nombre} (CI: ${cliente.ci || cliente.dni}) se encuentra VETADO por una deuda pendiente de $${cliente.monto_deuda_usd.toFixed(2)} USD. Motivo: ${cliente.motivo_veto || 'Daños en estadía anterior'}`,
+        error: `El cliente ${cliente.nombre} (CI: ${cliente.ci || cliente.dni}) se encuentra VETADO${debtMsg} Motivo: ${cliente.motivo_veto || 'Incidencia o conducta en estadía anterior'}`,
         vetado: true,
         clienteVetado: cliente
       });

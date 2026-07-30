@@ -360,13 +360,15 @@ export function AsignarDirectoModal({
 
   const cleanInputCi = normalizeCi(ci);
   const matchedClient = clientes.find(c => {
+    if (ci && (c.ci === ci || c.dni === ci)) return true;
+    if (nombre && c.nombre && c.nombre.toLowerCase().trim() === nombre.toLowerCase().trim()) return true;
     if (!cleanInputCi) return false;
     const cleanC = normalizeCi(c.ci);
     const cleanD = normalizeCi(c.dni);
-    return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)) || (cleanInputCi.length >= 4 && cleanC.endsWith(cleanC)))) ||
-           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD)) || (cleanInputCi.length >= 4 && cleanD.endsWith(cleanInputCi))));
+    return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)))) ||
+           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD))));
   });
-  const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
+  const isClientVetado = matchedClient && matchedClient.vetado === 1;
 
   return (
     <>
