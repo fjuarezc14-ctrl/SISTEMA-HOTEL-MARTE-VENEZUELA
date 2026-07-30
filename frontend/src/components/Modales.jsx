@@ -241,13 +241,14 @@ export function AsignarDirectoModal({
 
   const basePrice = getBasePrice(room.tipo, modalidad);
 
-  // Compute total companion surcharges (+5 USD for adult 3rd+ guests)
+  // Compute total companion surcharges (50% of base stay price for 3rd+ adult guest)
+  const recargoIndividual = basePrice * 0.50;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2; // Guest 1 = primary, Guest 2 = 1st companion, Guest 3+ = additional
     const age = calcularEdad(a.fechaNacimiento);
     const isAdult = age >= 18;
     if (guestNumber >= 3 && isAdult) {
-      return sum + 5.00;
+      return sum + recargoIndividual;
     }
     return sum;
   }, 0);
@@ -621,7 +622,7 @@ export function AsignarDirectoModal({
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                                 hasSurcharge ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800'
                               }`}>
-                                {age} años {hasSurcharge ? '(Adulto +$5.00)' : '(Sin recargo)'}
+                                {age} años {hasSurcharge ? `(3er Adulto +50% = +$${recargoIndividual.toFixed(2)})` : '(Sin recargo)'}
                               </span>
                             )}
                           </div>
@@ -880,13 +881,14 @@ export function NuevaReservaModal({
   const currentCategory = modalidad === '4h' ? selectedHabTipo : (selectedHabTipo || 'Matrimonial');
   const baseStayPrice = getStayBasePrice(currentCategory, modalidad);
 
-  // Compute companion surcharges (+5 USD for 3rd+ adult guest)
+  // Compute companion surcharges (50% of base stay price for 3rd+ adult guest)
+  const recargoIndividualReserva = baseStayPrice * 0.50;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2;
     const age = calcularEdad(a.fechaNacimiento);
     const isAdult = age >= 18;
     if (guestNumber >= 3 && isAdult) {
-      return sum + 5.00;
+      return sum + recargoIndividualReserva;
     }
     return sum;
   }, 0);
@@ -1380,7 +1382,7 @@ export function NuevaReservaModal({
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                                 hasSurcharge ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800'
                               }`}>
-                                {age} años {hasSurcharge ? '(Adulto +$5.00)' : '(Sin recargo)'}
+                                {age} años {hasSurcharge ? `(3er Adulto +50% = +$${recargoIndividualReserva.toFixed(2)})` : '(Sin recargo)'}
                               </span>
                             )}
                           </div>
@@ -2041,7 +2043,8 @@ export function DetalleHabitacionOcupadaModal({
   onClose,
   onAddConsumo,
   onDeleteConsumo,
-  onCheckout
+  onCheckout,
+  onOpenAgregarAcompanante
 }) {
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
@@ -2124,8 +2127,21 @@ export function DetalleHabitacionOcupadaModal({
             <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-600 font-semibold">
               <div><span className="text-slate-400">Tipo Hab:</span> {room.tipo}</div>
               <div><span className="text-slate-400">Ingreso:</span> {room.ingreso || 'N/A'}</div>
-              {room.acomp && <div className="col-span-2"><span className="text-slate-400">Acompañante:</span> {room.acomp}</div>}
+              {room.acomp && <div className="col-span-2"><span className="text-slate-400">Acompañante(s):</span> {room.acomp}</div>}
             </div>
+
+            {onOpenAgregarAcompanante && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAgregarAcompanante(room);
+                }}
+                className="w-full mt-3 py-2 px-3 bg-[#c5920c] hover:bg-[#b08107] text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+              >
+                <i className="fa-solid fa-user-plus"></i> Registrar Acompañante Posterior (+50% recargo si es 3er huésped)
+              </button>
+            )}
           </div>
 
           {/* Consumptions List */}
@@ -2315,3 +2331,351 @@ export function DetalleHabitacionOcupadaModal({
   );
 }
 
+// ==========================================
+// MODAL: REGISTRAR ACOMPAÑANTE POSTERIOR
+// ==========================================
+export function AgregarAcompanantePosteriorModal({
+  isOpen,
+  habitaciones = [],
+  room = null,
+  tarifas = [],
+  tasaUsd = 50.0,
+  token,
+  onClose,
+  onSubmitSuccess
+}) {
+  const [selectedNum, setSelectedNum] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [ci, setCi] = useState('');
+  const [fechaNacimiento, setFechaNacimiento] = useState('');
+  const [fotoCi, setFotoCi] = useState('');
+  const [isWebcamOpen, setIsWebcamOpen] = useState(false);
+
+  const [metodo, setMetodo] = useState('Efectivo (Bs)');
+  const [codigoVerificacion, setCodigoVerificacion] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const occupiedRooms = habitaciones.filter(h => h.estado === 'Ocupada');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (room) {
+        setSelectedNum(room.num.toString());
+      } else if (occupiedRooms.length > 0) {
+        setSelectedNum(occupiedRooms[0].num.toString());
+      } else {
+        setSelectedNum('');
+      }
+      setNombre('');
+      setCi('');
+      setFechaNacimiento('');
+      setFotoCi('');
+      setMetodo('Efectivo (Bs)');
+      setCodigoVerificacion('');
+    }
+  }, [isOpen, room]);
+
+  if (!isOpen) return null;
+
+  const currentRoom = room || habitaciones.find(h => h.num.toString() === selectedNum.toString());
+
+  // Count existing occupants
+  let currentOccupantsCount = 1; // Primary guest
+  if (currentRoom && currentRoom.acomp && currentRoom.acomp.trim()) {
+    const existingList = currentRoom.acomp.split(',').filter(x => x.trim().length > 0);
+    currentOccupantsCount += existingList.length;
+  }
+
+  // Next occupant position
+  const nextOccupantPosition = currentOccupantsCount + 1;
+  const isAdult = fechaNacimiento ? calcularEdad(fechaNacimiento) >= 18 : true;
+  const is3rdGuestOrMore = nextOccupantPosition >= 3;
+
+  // Determine 50% surcharge of room's base stay rate
+  const roomTarifa = currentRoom ? (tarifas || []).find(t => t.tipo === currentRoom.tipo) : null;
+  const baseStayPrice = roomTarifa 
+    ? (parseFloat(roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) || 20)
+    : (currentRoom?.tipo === 'Mini Suite' ? 24 : 20);
+
+  const recargo50PercentUsd = baseStayPrice * 0.50;
+  const finalRecargoUsd = (is3rdGuestOrMore && isAdult) ? recargo50PercentUsd : 0.00;
+  const finalRecargoVes = (finalRecargoUsd * tasaUsd).toFixed(2);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const compressed = await compressImageFile(file);
+      setFotoCi(compressed);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!currentRoom) {
+      alert('⚠️ Debe seleccionar una habitación ocupada.');
+      return;
+    }
+    if (!nombre.trim()) {
+      alert('⚠️ El nombre completo del acompañante es obligatorio.');
+      return;
+    }
+
+    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
+    if (finalRecargoUsd > 0 && isDigital && !codigoVerificacion.trim()) {
+      alert('⚠️ Debe ingresar el Código de Verificación para el pago por método digital.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/habitaciones/${currentRoom.num}/acompanante`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          ci: ci.trim(),
+          fechaNacimiento,
+          foto_ci: fotoCi,
+          monto: finalRecargoUsd,
+          metodo,
+          codigoVerificacion
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al registrar acompañante');
+
+      alert(`✅ ${data.message}`);
+      if (onSubmitSuccess) await onSubmitSuccess();
+      onClose();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in flex flex-col max-h-[90vh]">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4 shrink-0">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <i className="fa-solid fa-user-plus text-[#ff331f]"></i> Ingreso de Acompañante Posterior
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
+            <i className="fa-solid fa-xmark text-xl"></i>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="overflow-y-auto pr-1 flex-1 space-y-4">
+          {/* Room Selection */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Habitación de Destino</label>
+            {room ? (
+              <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 text-sm font-black text-slate-800 flex justify-between items-center">
+                <span>Habitación #{room.num} ({room.tipo})</span>
+                <span className="text-xs text-slate-500 font-normal">Huésped: {room.huesped}</span>
+              </div>
+            ) : (
+              <select
+                value={selectedNum}
+                onChange={(e) => setSelectedNum(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:ring-1 focus:ring-[#ff331f]"
+                required
+              >
+                {occupiedRooms.length === 0 ? (
+                  <option value="">No hay habitaciones ocupadas actualmente</option>
+                ) : (
+                  occupiedRooms.map(h => (
+                    <option key={h.num} value={h.num}>
+                      Habitación #{h.num} ({h.tipo}) - Huésped: {h.huesped}
+                    </option>
+                  ))
+                )}
+              </select>
+            )}
+          </div>
+
+          {/* Occupants Status Banner */}
+          {currentRoom && (
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+              <div className="flex justify-between font-bold text-slate-700">
+                <span>Ocupantes Actuales:</span>
+                <span>{currentOccupantsCount} persona(s)</span>
+              </div>
+              {currentRoom.acomp && (
+                <p className="text-[11px] text-slate-500 truncate">
+                  <strong>Acompañantes:</strong> {currentRoom.acomp}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Companion Details */}
+          <div className="space-y-3 pt-1 border-t border-slate-100">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Datos del Nuevo Acompañante</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Nombre Completo *</label>
+                <input
+                  type="text"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Nombre y Apellido"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white focus:ring-1 focus:ring-[#ff331f]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Cédula / Pasaporte</label>
+                <input
+                  type="text"
+                  value={ci}
+                  onChange={(e) => setCi(e.target.value)}
+                  placeholder="V-12345678"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white focus:ring-1 focus:ring-[#ff331f]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Fecha de Nacimiento</label>
+              <input
+                type="date"
+                value={fechaNacimiento}
+                onChange={(e) => setFechaNacimiento(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white focus:ring-1 focus:ring-[#ff331f]"
+              />
+            </div>
+
+            {/* Photo CI / Identity */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Foto Cédula de Identidad</label>
+              <div className="flex gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={() => setIsWebcamOpen(true)}
+                  className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs border border-indigo-200 flex items-center justify-center gap-1.5"
+                >
+                  <i className="fa-solid fa-camera"></i> Cámara Web
+                </button>
+                <label className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs border border-slate-300 flex items-center justify-center gap-1.5 cursor-pointer">
+                  <i className="fa-solid fa-upload"></i> Subir Foto
+                  <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                </label>
+              </div>
+
+              {fotoCi && (
+                <div className="mt-2 relative w-28 h-16 rounded-xl overflow-hidden border border-slate-300 shadow-sm">
+                  <img src={fotoCi} alt="Cédula" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setFotoCi('')}
+                    className="absolute top-1 right-1 bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Surcharge Banner & Breakdown */}
+          <div className="p-3.5 rounded-xl border space-y-1.5 transition-all bg-amber-50/80 border-amber-200">
+            <div className="flex justify-between items-center text-xs font-bold text-slate-800">
+              <span className="flex items-center gap-1.5">
+                <i className="fa-solid fa-calculator text-amber-600"></i>
+                <span>Cálculo de Recargo (Huésped #{nextOccupantPosition}):</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${
+                finalRecargoUsd > 0 ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+              }`}>
+                {finalRecargoUsd > 0 ? `+$${finalRecargoUsd.toFixed(2)} USD` : 'INCLUIDO ($0 USD)'}
+              </span>
+            </div>
+
+            {finalRecargoUsd > 0 ? (
+              <p className="text-[11px] text-amber-900 font-medium">
+                ⚠️ Este es el <strong>3er huésped</strong>. Se aplica un recargo del <strong>50%</strong> sobre la tarifa base de la habitación (${baseStayPrice.toFixed(2)} USD) = <strong>${finalRecargoUsd.toFixed(2)} USD</strong> (Bs. {finalRecargoVes}).
+              </p>
+            ) : (
+              <p className="text-[11px] text-emerald-800 font-medium">
+                ✅ Este es el 2do huésped o menor de edad. Está <strong>incluido sin recargo adicional</strong> en la tarifa base de la habitación.
+              </p>
+            )}
+          </div>
+
+          {/* Payment Details if surcharge > 0 */}
+          {finalRecargoUsd > 0 && (
+            <div className="space-y-3 pt-1 border-t border-slate-100">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cobro del Recargo por 3er Huésped</p>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Método de Pago</label>
+                <select
+                  value={metodo}
+                  onChange={(e) => setMetodo(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white focus:ring-1 focus:ring-[#ff331f]"
+                >
+                  <option value="Efectivo (Bs)">Efectivo (Bs. {finalRecargoVes})</option>
+                  <option value="Pago Móvil">Pago Móvil (Bs. {finalRecargoVes})</option>
+                  <option value="Punto de Venta">Punto de Venta (Bs. {finalRecargoVes})</option>
+                  <option value="Zelle">Zelle ($ {finalRecargoUsd.toFixed(2)} USD)</option>
+                  <option value="Efectivo ($ USD)">Efectivo ($ {finalRecargoUsd.toFixed(2)} USD)</option>
+                </select>
+              </div>
+
+              {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo) && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Código de Verificación / Referencia *</label>
+                  <input
+                    type="text"
+                    value={codigoVerificacion}
+                    onChange={(e) => setCodigoVerificacion(e.target.value)}
+                    placeholder="Ej: Ref #123456"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white focus:ring-1 focus:ring-[#ff331f]"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="pt-3 border-t border-slate-100 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !currentRoom}
+              className="flex-1 bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-2.5 rounded-xl text-xs shadow-md flex items-center justify-center gap-1.5"
+            >
+              {isSubmitting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <i className="fa-solid fa-user-plus"></i> Guardar Acompañante
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <WebcamModal
+        isOpen={isWebcamOpen}
+        onClose={() => setIsWebcamOpen(false)}
+        onCapture={(imgData) => setFotoCi(imgData)}
+      />
+    </div>
+  );
+}

@@ -17,7 +17,8 @@ import {
   CheckinExitosoModal, 
   CheckoutModal,
   DetalleHabitacionOcupadaModal,
-  AccionesReservaModal
+  AccionesReservaModal,
+  AgregarAcompanantePosteriorModal
 } from './components/Modales';
 
 export default function App() {
@@ -83,6 +84,7 @@ export default function App() {
   const [tasaInput, setTasaInput] = useState('');
   const [isAccionesReservaOpen, setIsAccionesReservaOpen] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState(null);
+  const [isAgregarAcompOpen, setIsAgregarAcompOpen] = useState(false);
   
   // Mobile responsive sidebar state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -966,6 +968,22 @@ export default function App() {
           setIsDetalleOcupadaOpen(false);
           setIsCheckoutOpen(true);
         }}
+        onOpenAgregarAcompanante={(room) => {
+          setIsDetalleOcupadaOpen(false);
+          setSelectedRoom(room);
+          setIsAgregarAcompOpen(true);
+        }}
+      />
+
+      <AgregarAcompanantePosteriorModal 
+        isOpen={isAgregarAcompOpen}
+        habitaciones={appState.habitaciones || []}
+        room={selectedRoom}
+        tarifas={appState.tarifas || []}
+        tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
+        token={token}
+        onClose={() => setIsAgregarAcompOpen(false)}
+        onSubmitSuccess={fetchState}
       />
 
       <CheckoutModal 

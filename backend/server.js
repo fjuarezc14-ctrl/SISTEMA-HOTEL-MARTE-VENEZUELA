@@ -815,6 +815,81 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/habitaciones/:num/acompanante - Registrar acompañante posterior en habitación ocupada
+app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => {
+  const { num } = req.params;
+  const { nombre, ci, fechaNacimiento, foto_ci, monto, metodo, codigoVerificacion } = req.body;
+
+  if (!nombre || !nombre.trim()) {
+    return res.status(400).json({ error: 'El nombre del acompañante es obligatorio.' });
+  }
+
+  try {
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [num]);
+    if (!room) {
+      return res.status(404).json({ error: 'Habitación no encontrada.' });
+    }
+    if (room.estado !== 'Ocupada') {
+      return res.status(400).json({ error: 'Solo se pueden agregar acompañantes a habitaciones ocupadas.' });
+    }
+
+    const acompName = nombre.trim();
+    const acompCi = ci ? ci.trim() : '';
+    const newAcompString = acompCi ? `${acompName} (CI: ${acompCi})` : acompName;
+
+    const updatedAcomp = room.acomp && room.acomp.trim() 
+      ? `${room.acomp}, ${newAcompString}` 
+      : newAcompString;
+
+    await db.run('UPDATE habitaciones SET acomp = ? WHERE num = ?', [updatedAcomp, num]);
+
+    const finalMonto = parseFloat(monto) || 0;
+    if (finalMonto > 0) {
+      const transactionId = 't_' + Date.now();
+      const metodoTexto = codigoVerificacion 
+        ? `${metodo} (Ref: ${codigoVerificacion})` 
+        : metodo;
+
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          transactionId,
+          'Ingreso',
+          `Recargo 3er Huésped (50%) Hab ${num} (${acompName})`,
+          finalMonto,
+          metodoTexto || 'Efectivo Bolívares',
+          getFechaHoraActual(),
+          req.user.id,
+          req.user.nombre,
+          'Hospedaje'
+        ]
+      );
+
+      await db.run(
+        'INSERT INTO consumos (numHabitacion, concepto, monto, fecha) VALUES (?, ?, ?, ?)',
+        [num, `Recargo Acompañante 3er Huésped (50%) - ${acompName}`, finalMonto, getFechaHoraActual()]
+      );
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Ingreso Acompañante',
+      `Registrado acompañante posterior en Hab #${num}: ${newAcompString}${finalMonto > 0 ? ` con recargo del 50% ($${finalMonto.toFixed(2)} USD)` : ''}`,
+      req.ip
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Acompañante ${acompName} registrado con éxito en la Habitación #${num}.` 
+    });
+  } catch (error) {
+    console.error('Error al agregar acompañante:', error);
+    res.status(500).json({ error: 'Error al registrar acompañante.' });
+  }
+});
+
 // 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
 app.post('/api/reservar', requireAuth, async (req, res) => {
   const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante } = req.body;
