@@ -20,6 +20,22 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
     return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('ref:');
   };
 
+  // Helper function to separate method name from reference code
+  const parseMetodoAndRef = (metodoStr) => {
+    if (!metodoStr) return { cleanMetodo: 'Efectivo (Bs)', refCode: '-' };
+    const match = metodoStr.match(/(.+?)\s*\((?:Ref:?|Ref\s*#?)\s*(.+?)\)/i);
+    if (match) {
+      return {
+        cleanMetodo: match[1].trim(),
+        refCode: match[2].trim()
+      };
+    }
+    return {
+      cleanMetodo: metodoStr,
+      refCode: '-'
+    };
+  };
+
   // Shift closure modal state
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
   const [isSubmittingCierre, setIsSubmittingCierre] = useState(false);
@@ -304,6 +320,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                     <th className="p-4">Concepto / Detalle</th>
                     <th className="p-4">Responsable</th>
                     <th className="p-4 text-center">Método de Pago</th>
+                    <th className="p-4 text-center">Código de Referencia</th>
                     <th className="p-4 text-center">Estado Validación</th>
                     <th className="p-4 text-right pr-6">Monto ($ USD / Bs)</th>
                   </tr>
@@ -314,6 +331,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                     const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
                     const isDigital = isDigitalPayment(t.metodo);
                     const isValidated = t.validado === 1;
+                    const { cleanMetodo, refCode } = parseMetodoAndRef(t.metodo);
 
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/50">
@@ -325,7 +343,21 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                             {t.usuarioNombre || 'Sistema'}
                           </span>
                         </td>
-                        <td className="p-4 text-center text-slate-700 font-bold text-xs">{t.metodo || 'Efectivo (Bs)'}</td>
+                        <td className="p-4 text-center">
+                          <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold inline-block">
+                            {cleanMetodo}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center font-mono">
+                          {refCode !== '-' ? (
+                            <span className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-xs px-2.5 py-1 rounded-lg inline-block shadow-2xs">
+                              <i className="fa-solid fa-[#c5920c] fa-hashtag text-[10px] text-amber-600 mr-1"></i>
+                              {refCode}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs font-medium">-</span>
+                          )}
+                        </td>
                         
                         {/* Validation Status Badge & Action */}
                         <td className="p-4 text-center">
