@@ -238,12 +238,12 @@ export default function Tickets({ tickets = [], habitaciones = [], token, curren
       {/* Filter Toolbar */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
         {/* Status Filter Subtabs */}
-        <div className="bg-slate-100 p-1 rounded-xl flex text-xs font-bold text-slate-600 border border-slate-200">
+        <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap sm:flex-nowrap text-xs font-bold text-slate-600 border border-slate-200 overflow-x-auto gap-1">
           {['Pendientes', 'En Proceso', 'Resueltos', 'Todos'].map(st => (
             <button
               key={st}
               onClick={() => setFilterState(st)}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                 filterState === st 
                   ? 'bg-white text-slate-900 shadow-sm font-black' 
                   : 'hover:text-slate-900'
@@ -259,7 +259,7 @@ export default function Tickets({ tickets = [], habitaciones = [], token, curren
         </div>
 
         {/* Category & Search */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <select 
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}

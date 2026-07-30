@@ -84,6 +84,9 @@ export default function App() {
   const [isAccionesReservaOpen, setIsAccionesReservaOpen] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState(null);
   
+  // Mobile responsive sidebar state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
   // Selected entities for modals
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [checkinSuccessDetails, setCheckinSuccessDetails] = useState({
@@ -476,16 +479,34 @@ export default function App() {
   }
 
   return (
-    <div className="flex w-full h-full overflow-hidden">
+    <div className="flex w-full h-full overflow-hidden bg-slate-100">
+      {/* MOBILE OVERLAY BACKDROP */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all z-40">
-        <div className="p-6 flex flex-col items-center justify-center border-b border-slate-800 bg-slate-950/40">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+      }`}>
+        <div className="p-6 flex flex-col items-center justify-center border-b border-slate-800 bg-slate-950/40 relative">
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="lg:hidden absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+          >
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
           <div className="bg-white p-3 rounded-2xl shadow-inner max-w-[150px] flex items-center justify-center border border-slate-800">
-            <img src="/logo.png" alt="Hotel Marte" className="h-16 w-auto object-contain" />
+            <img src="/logo.png" alt="Hotel Marte" className="h-14 w-auto object-contain" />
           </div>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto" onClick={(e) => {
+          if (e.target.closest('button')) setIsMobileMenuOpen(false);
+        }}>
           {/* CATEGORÍA 1: OPERACIONES PRINCIPALES */}
           {user.permisos && user.permisos.some(p => ['dashboard', 'habitaciones', 'reservas', 'entregaTurnos'].includes(p)) && (
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-2 px-2">Operaciones Principales</p>
@@ -700,11 +721,20 @@ export default function App() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-55">
+      <main className="flex-1 flex flex-col overflow-y-auto relative bg-slate-50 min-w-0">
         {/* TOPBAR */}
-        <header className="bg-white px-8 py-5 flex justify-between items-center shadow-sm shrink-0 border-b border-slate-200 sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-black text-slate-800">{getTabTitle()}</h1>
+        <header className="bg-white px-4 sm:px-8 py-3.5 sm:py-5 flex flex-wrap sm:flex-nowrap justify-between items-center shadow-sm shrink-0 border-b border-slate-200 sticky top-0 z-30 gap-3">
+          <div className="flex items-center gap-3">
+            {/* Hamburger Button for Mobile/Tablet */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors shrink-0"
+              title="Abrir Menú"
+            >
+              <i className="fa-solid fa-bars text-lg"></i>
+            </button>
+
+            <h1 className="text-xl sm:text-2xl font-black text-slate-800 truncate">{getTabTitle()}</h1>
             
             {/* Tasa del Día USD/VES Badge */}
             <div 
@@ -719,7 +749,7 @@ export default function App() {
                   }
                 }
               }}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all ${
+              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all ${
                 canAccessTab('configuracion') 
                   ? 'cursor-pointer hover:bg-amber-100 bg-amber-50 border-amber-300 text-amber-900 shadow-sm' 
                   : 'bg-slate-50 border-slate-200 text-slate-700'
@@ -727,27 +757,48 @@ export default function App() {
               title={canAccessTab('configuracion') ? "Haga clic para cambiar la Tasa del Día" : "Tasa de Cambio del Día"}
             >
               <i className="fa-solid fa-money-bill-transfer text-emerald-600 font-bold"></i>
-              <span>Tasa del Día: <strong className="text-emerald-700 font-black">1 USD = Bs. {appState.configuracion?.tasa_usd || '50.00'}</strong></span>
+              <span className="whitespace-nowrap">Tasa del Día: <strong className="text-emerald-700 font-black">1 USD = Bs. {appState.configuracion?.tasa_usd || '50.00'}</strong></span>
               {canAccessTab('configuracion') && (
                 <i className="fa-solid fa-pen text-[10px] text-amber-700 ml-1"></i>
               )}
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Tasa Mobile Badge */}
+            <div 
+              onClick={() => {
+                if (canAccessTab('configuracion')) {
+                  const val = prompt('💡 Ingrese la nueva Tasa de Cambio del Día (1 USD = Bs.):', appState.configuracion?.tasa_usd || '50.00');
+                  if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) {
+                    authFetch('/api/configuracion', {
+                      method: 'PUT',
+                      body: JSON.stringify({ tasa_usd: parseFloat(val) })
+                    }).then(() => fetchState());
+                  }
+                }
+              }}
+              className="md:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[11px] font-bold"
+            >
+              <i className="fa-solid fa-money-bill-transfer text-emerald-600"></i>
+              <span>Bs. {appState.configuracion?.tasa_usd || '50.00'}</span>
+            </div>
+
             {canAccessTab('reservas') && (
               <button 
                 onClick={() => setIsNuevaReservaOpen(true)}
-                className="bg-[#c5920c] hover:bg-[#b08107] text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-md transition-colors flex items-center gap-2"
+                className="bg-[#c5920c] hover:bg-[#b08107] text-white px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-colors flex items-center gap-1.5 shrink-0"
               >
-                <i className="fa-solid fa-phone"></i> Nueva Reserva
+                <i className="fa-solid fa-phone"></i>
+                <span className="hidden sm:inline">Nueva Reserva</span>
+                <span className="sm:hidden">Reserva</span>
               </button>
             )}
           </div>
         </header>
 
         {/* TAB WORKSPACE */}
-        <div className="p-8 flex-1">
+        <div className="p-4 sm:p-8 flex-1 overflow-x-hidden">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff331f]"></div>
