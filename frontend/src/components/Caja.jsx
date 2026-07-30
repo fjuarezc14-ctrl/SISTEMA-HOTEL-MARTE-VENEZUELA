@@ -20,18 +20,39 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
     return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('ref:');
   };
 
-  // Helper function to separate method name from reference code
+  // Helper function to separate method name from reference code (handles all formats: dash, parens, colons)
   const parseMetodoAndRef = (metodoStr) => {
     if (!metodoStr) return { cleanMetodo: 'Efectivo (Bs)', refCode: '-' };
-    const match = metodoStr.match(/(.+?)\s*\((?:Ref:?|Ref\s*#?)\s*(.+?)\)/i);
-    if (match) {
+
+    // Clean encoding or missing accent variations (e.g. Pago Mvil / Pago M?vil)
+    let str = metodoStr.replace(/Mvil/gi, 'Móvil').replace(/M\?vil/gi, 'Móvil');
+
+    // 1. Match pattern: "Pago Móvil - Ref: 998877" or "Pago Móvil (Ref: 998877)" or "Zelle - Ref #123"
+    const regex = /^(.*?)(?:\s*[-–—]\s*|\s*\(\s*|\s+)(?:Ref:?|Ref\s*#?|Referencia:?)\s*#?\s*([^()\-]+?)\s*\)?$/i;
+    const match = str.match(regex);
+
+    if (match && match[2] && match[2].trim().length > 0) {
       return {
-        cleanMetodo: match[1].trim(),
+        cleanMetodo: match[1].trim() || 'Pago Móvil',
         refCode: match[2].trim()
       };
     }
+
+    // 2. Fallback check for any string containing "ref"
+    if (str.toLowerCase().includes('ref')) {
+      const parts = str.split(/ref:?|ref\s*#/i);
+      if (parts.length >= 2) {
+        let cleanM = parts[0].replace(/[-–—()]/g, '').trim();
+        let refC = parts[1].replace(/[()]/g, '').trim();
+        return {
+          cleanMetodo: cleanM || 'Pago Digital',
+          refCode: refC || '-'
+        };
+      }
+    }
+
     return {
-      cleanMetodo: metodoStr,
+      cleanMetodo: str.trim(),
       refCode: '-'
     };
   };
