@@ -2,6 +2,31 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const normalizeCi = (str) => (str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
+export const compressImageFile = (file, maxWidth = 800, quality = 0.7) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export function calcularEdad(fechaNacimientoStr) {
   if (!fechaNacimientoStr) return 0;
   const birth = new Date(fechaNacimientoStr);
@@ -276,12 +301,11 @@ export function AsignarDirectoModal({
     setSearchQuery('');
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setFotoCi(reader.result);
-      reader.readAsDataURL(file);
+      const compressed = await compressImageFile(file);
+      setFotoCi(compressed);
     }
   };
 
@@ -925,12 +949,11 @@ export function NuevaReservaModal({
     setSearchQuery('');
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setFotoCi(reader.result);
-      reader.readAsDataURL(file);
+      const compressed = await compressImageFile(file);
+      setFotoCi(compressed);
     }
   };
 

@@ -284,8 +284,18 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                   onChange={(e) => setRoomTipo(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                 >
-                  <option value="Matrimonial">Matrimonial ($10 / $20 USD)</option>
-                  <option value="Mini Suite">Mini Suite ($14 / $24 USD)</option>
+                  {tarifas && tarifas.length > 0 ? (
+                    tarifas.map(t => (
+                      <option key={t.tipo} value={t.tipo}>
+                        {t.tipo} (${t.precio_4h_usd || 10} / ${t.precio_pernocta_usd || t.precio_diario} USD)
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Matrimonial">Matrimonial ($10 / $20 USD)</option>
+                      <option value="Mini Suite">Mini Suite ($14 / $24 USD)</option>
+                    </>
+                  )}
                 </select>
               </div>
 

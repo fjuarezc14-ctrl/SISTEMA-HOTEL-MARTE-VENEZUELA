@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { WebcamModal } from './Modales';
+import { WebcamModal, compressImageFile } from './Modales';
 
 export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onStateChange }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,14 +53,11 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
     setIsModalOpen(true);
   };
 
-  const handleFileUpload = (e, callback) => {
+  const handleFileUpload = async (e, callback) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      callback(reader.result);
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImageFile(file);
+    callback(compressed);
   };
 
   const handleSubmit = async (e) => {
