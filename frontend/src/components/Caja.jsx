@@ -10,6 +10,9 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const [filterMode, setFilterMode] = useState('all');
   // Origen filter ('Todos', 'Hospedaje', 'Market', 'Egresos')
   const [tabMode, setTabMode] = useState('Todos');
+  // Validation filter ('all', 'pending', 'validated')
+  const [valFilter, setValFilter] = useState('all');
+
   // Helper function to detect digital payments with reference code strings
   const isDigitalPayment = (m) => {
     if (!m) return false;
