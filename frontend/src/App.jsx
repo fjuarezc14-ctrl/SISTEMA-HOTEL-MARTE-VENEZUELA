@@ -759,6 +759,8 @@ export default function App() {
                   habitaciones={appState.habitaciones} 
                   reservas={appState.reservas}
                   tickets={appState.tickets || []}
+                  tarifas={appState.tarifas || []}
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onRoomClick={handleRoomClick}
                   onCheckinReserva={handleCheckinReserva}
                 />
@@ -767,6 +769,8 @@ export default function App() {
                 <Habitaciones 
                   habitaciones={appState.habitaciones} 
                   tickets={appState.tickets || []}
+                  tarifas={appState.tarifas || []}
+                  tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   token={token}
                   onStateChange={fetchState}
                   onRoomClick={handleRoomClick}
@@ -867,6 +871,7 @@ export default function App() {
         room={selectedRoom}
         clientes={appState.clientes}
         configuracion={appState.configuracion}
+        tarifas={appState.tarifas || []}
         onClose={() => setIsAsignarDirectoOpen(false)}
         onSubmit={handleCheckinDirectoSubmit}
       />

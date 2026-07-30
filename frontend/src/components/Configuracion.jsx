@@ -13,6 +13,8 @@ export default function Configuracion({ token, appState, onStateChange }) {
   // Rates edit state
   const [editingRateType, setEditingRateType] = useState(null);
   const [ratePrice, setRatePrice] = useState('');
+  const [ratePrice4h, setRatePrice4h] = useState('');
+  const [ratePriceHoraExtra, setRatePriceHoraExtra] = useState('');
 
   // Room Management states
   const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
@@ -102,13 +104,18 @@ export default function Configuracion({ token, appState, onStateChange }) {
 
   const handleStartEditRate = (rate) => {
     setEditingRateType(rate.tipo);
-    setRatePrice(rate.precio_diario.toString());
+    setRatePrice((rate.precio_pernocta_usd || rate.precio_diario || 20).toString());
+    setRatePrice4h((rate.precio_4h_usd || 10).toString());
+    setRatePriceHoraExtra((rate.precio_hora_extra_usd || 3).toString());
   };
 
   const handleSaveRate = async (tipo) => {
-    const precio = parseFloat(ratePrice);
-    if (isNaN(precio) || precio <= 0) {
-      alert('Por favor ingrese un precio diario válido.');
+    const pPernocta = parseFloat(ratePrice);
+    const p4h = parseFloat(ratePrice4h);
+    const pHoraExtra = parseFloat(ratePriceHoraExtra);
+
+    if (isNaN(pPernocta) || pPernocta <= 0 || isNaN(p4h) || p4h <= 0) {
+      alert('Por favor ingrese precios válidos.');
       return;
     }
 
@@ -119,13 +126,18 @@ export default function Configuracion({ token, appState, onStateChange }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ precio_diario: precio })
+        body: JSON.stringify({ 
+          precio_diario: pPernocta,
+          precio_pernocta_usd: pPernocta,
+          precio_4h_usd: p4h,
+          precio_hora_extra_usd: pHoraExtra
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al actualizar tarifa');
 
       setEditingRateType(null);
-      onStateChange();
+      if (onStateChange) await onStateChange();
     } catch (err) {
       alert(`⚠️ Error: ${err.message}`);
     }
@@ -414,23 +426,66 @@ export default function Configuracion({ token, appState, onStateChange }) {
                   </div>
                 </div>
 
-                <div className="my-3">
+                <div className="my-3 space-y-2">
                   {isEditing ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-black text-slate-600">$ USD</span>
-                      <input 
-                        type="number"
-                        value={ratePrice}
-                        onChange={(e) => setRatePrice(e.target.value)}
-                        min="1"
-                        step="1"
-                        className="w-full px-2 py-1 text-sm font-black text-slate-800 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-[#ff331f]"
-                      />
+                    <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Pernocta ($ USD)</label>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-600">$</span>
+                          <input 
+                            type="number"
+                            value={ratePrice}
+                            onChange={(e) => setRatePrice(e.target.value)}
+                            min="1"
+                            step="1"
+                            className="w-full px-2 py-1 text-xs font-black text-slate-800 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-[#ff331f]"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">4 Horas ($ USD)</label>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-600">$</span>
+                          <input 
+                            type="number"
+                            value={ratePrice4h}
+                            onChange={(e) => setRatePrice4h(e.target.value)}
+                            min="1"
+                            step="1"
+                            className="w-full px-2 py-1 text-xs font-black text-slate-800 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-[#ff331f]"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Hora Extra ($ USD)</label>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-600">$</span>
+                          <input 
+                            type="number"
+                            value={ratePriceHoraExtra}
+                            onChange={(e) => setRatePriceHoraExtra(e.target.value)}
+                            min="1"
+                            step="1"
+                            className="w-full px-2 py-1 text-xs font-black text-slate-800 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-[#ff331f]"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="text-2xl font-black text-slate-800">
-                      ${rate.precio_diario.toFixed(2)} USD
-                      <span className="text-[10px] text-slate-400 font-bold block mt-1">POR PERNOCTA / TARIFA</span>
+                    <div>
+                      <div className="text-xl font-black text-slate-800">
+                        ${(rate.precio_pernocta_usd || rate.precio_diario || 0).toFixed(2)} USD
+                        <span className="text-[10px] text-slate-400 font-bold block">PERNOCTA</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 text-xs font-bold text-slate-600">
+                        <span>4 Horas:</span>
+                        <span className="text-slate-800">${(rate.precio_4h_usd || 10).toFixed(2)} USD</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1 text-xs font-bold text-slate-600">
+                        <span>Hora Extra:</span>
+                        <span className="text-slate-800">${(rate.precio_hora_extra_usd || 3).toFixed(2)} USD</span>
+                      </div>
                     </div>
                   )}
                 </div>

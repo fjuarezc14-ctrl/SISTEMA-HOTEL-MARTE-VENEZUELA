@@ -1928,11 +1928,11 @@ app.get('/api/tarifas', requireAuth, async (req, res) => {
 
 // PUT /api/tarifas/:tipo - Editar tarifa de un tipo de habitación (Solo Admin o con permiso)
 app.put('/api/tarifas/:tipo', requireAuth, async (req, res) => {
-  if (!req.user.permisos.includes('configuracion')) {
+  if (!req.user.permisos.includes('configuracion') && req.user.rol !== 'Administrador') {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
   const { tipo } = req.params;
-  const { precio_diario } = req.body;
+  const { precio_diario, precio_4h_usd, precio_pernocta_usd, precio_hora_extra_usd } = req.body;
 
   try {
     const rate = await db.get('SELECT tipo FROM tarifas WHERE tipo = ?', [tipo]);
@@ -1940,13 +1940,29 @@ app.put('/api/tarifas/:tipo', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Tipo de tarifa no encontrada.' });
     }
 
-    const precio = parseFloat(precio_diario);
-    if (isNaN(precio) || precio <= 0) {
-      return res.status(400).json({ error: 'Precio diario inválido.' });
+    const pPernocta = parseFloat(precio_pernocta_usd !== undefined ? precio_pernocta_usd : precio_diario);
+    const p4h = parseFloat(precio_4h_usd !== undefined ? precio_4h_usd : 10);
+    const pHoraExtra = parseFloat(precio_hora_extra_usd !== undefined ? precio_hora_extra_usd : 3);
+
+    if (isNaN(pPernocta) || pPernocta <= 0) {
+      return res.status(400).json({ error: 'Precio de pernocta inválido.' });
     }
 
-    await db.run('UPDATE tarifas SET precio_diario = ? WHERE tipo = ?', [precio, tipo]);
-    res.json({ success: true, message: `Tarifa de habitación ${tipo} actualizada a S/ ${precio.toFixed(2)}.` });
+    await db.run(
+      'UPDATE tarifas SET precio_diario = ?, precio_pernocta_usd = ?, precio_4h_usd = ?, precio_hora_extra_usd = ? WHERE tipo = ?',
+      [pPernocta, pPernocta, p4h, pHoraExtra, tipo]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Catálogo Tarifas',
+      `Actualizada tarifa de ${tipo}: Pernocta $${pPernocta}, 4H $${p4h}, Hora Extra $${pHoraExtra}`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Tarifa de habitación ${tipo} actualizada correctamente.` });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al actualizar tarifa.' });

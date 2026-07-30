@@ -5,6 +5,8 @@ export default function Dashboard({
   habitaciones = [], 
   reservas = [], 
   tickets = [],
+  tarifas = [],
+  tasaUsd = 50.00,
   onRoomClick, 
   onCheckinReserva 
 }) {
@@ -137,7 +139,17 @@ export default function Dashboard({
 
                   <span className="block font-black text-2xl text-slate-800">{h.num}</span>
                   <span className="block text-[10px] uppercase font-bold text-slate-500 mt-0.5">{h.tipo}</span>
-                  <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full uppercase mt-2 ${badgeColor}`}>
+                  {(() => {
+                    const roomTarifa = (tarifas || []).find(t => t.tipo === h.tipo);
+                    const priceUsd = roomTarifa ? (roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) : null;
+                    const priceVes = priceUsd ? (priceUsd * tasaUsd).toFixed(0) : null;
+                    return priceUsd ? (
+                      <span className="block text-[10px] font-black text-emerald-700 mt-0.5">
+                        ${priceUsd} USD <span className="text-[9px] text-slate-400 font-medium">(Bs. {priceVes})</span>
+                      </span>
+                    ) : null;
+                  })()}
+                  <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full uppercase mt-1.5 ${badgeColor}`}>
                     {h.estado}
                   </span>
                   

@@ -146,6 +146,7 @@ export function AsignarDirectoModal({
   room, 
   clientes, 
   configuracion,
+  tarifas = [],
   onClose, 
   onSubmit 
 }) {
@@ -177,8 +178,16 @@ export function AsignarDirectoModal({
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
-  // Compute Base Price according to room type and stay modality
+  // Compute Base Price according to room type and stay modality from dynamic tariffs
   const getBasePrice = (type, mod) => {
+    const rate = (tarifas || []).find(t => t.tipo === type);
+    if (rate) {
+      if (mod === 'pernocta') {
+        return parseFloat(rate.precio_pernocta_usd || rate.precio_diario) || 20;
+      } else {
+        return parseFloat(rate.precio_4h_usd) || 10;
+      }
+    }
     if (type === 'Mini Suite') {
       return mod === 'pernocta' ? 24 : 14;
     }
@@ -828,8 +837,16 @@ export function NuevaReservaModal({
     return h.tipo === categoriaFiltro;
   });
 
-  // Calculate Base stay price according to modality & room category
+  // Calculate Base stay price according to modality & room category from dynamic tariffs
   const getStayBasePrice = (type, mod) => {
+    const rate = (tarifas || []).find(t => t.tipo === type);
+    if (rate) {
+      if (mod === 'pernocta') {
+        return parseFloat(rate.precio_pernocta_usd || rate.precio_diario) || 20;
+      } else {
+        return parseFloat(rate.precio_4h_usd) || 10;
+      }
+    }
     if (type === 'Mini Suite') {
       return mod === 'pernocta' ? 24 : 14;
     }
