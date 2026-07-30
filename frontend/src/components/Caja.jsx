@@ -24,8 +24,11 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const parseMetodoAndRef = (metodoStr) => {
     if (!metodoStr) return { cleanMetodo: 'Efectivo (Bs)', refCode: '-' };
 
-    // Clean encoding or missing accent variations (e.g. Pago Mvil / Pago M?vil)
-    let str = metodoStr.replace(/Mvil/gi, 'Móvil').replace(/M\?vil/gi, 'Móvil');
+    // Clean encoding or missing accent variations (e.g. Pago Mvil / Pago M?vil / Pago Mvil)
+    let str = metodoStr
+      .replace(/M[^\w\s]?vil/gi, 'Móvil')
+      .replace(/Bol[^\w\s]?vares/gi, 'Bolívares')
+      .replace(/\uFFFD/g, '');
 
     // 1. Match pattern: "Pago Móvil - Ref: 998877" or "Pago Móvil (Ref: 998877)" or "Zelle - Ref #123"
     const regex = /^(.*?)(?:\s*[-–—]\s*|\s*\(\s*|\s+)(?:Ref:?|Ref\s*#?|Referencia:?)\s*#?\s*([^()\-]+?)\s*\)?$/i;

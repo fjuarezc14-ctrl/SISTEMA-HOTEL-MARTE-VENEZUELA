@@ -75,12 +75,28 @@ export default function Reportes({ caja = [], consumos = [], reservas = [], habi
   const totalEgresos = filteredCaja.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + parseFloat(t.monto), 0);
   const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
 
+  // Helper to clean encoding errors and group by base payment method category
+  const cleanPaymentMethodName = (m) => {
+    if (!m) return 'EFECTIVO BOLÍVARES';
+    let str = m
+      .replace(/M[^\w\s]?vil/gi, 'Móvil')
+      .replace(/Bol[^\w\s]?vares/gi, 'Bolívares')
+      .replace(/\uFFFD/g, '');
+    
+    const match = str.match(/^(.*?)(?:\s*[-–—]\s*|\s*\(\s*|\s+)(?:Ref:?|Ref\s*#?|Referencia:?)/i);
+    if (match && match[1] && match[1].trim().length > 0) {
+      str = match[1].trim();
+    }
+    return str.trim().toUpperCase();
+  };
+
   // Breakdown by method
   const metodosSummary = {};
   filteredCaja.forEach(t => {
     if (t.tipo === 'Ingreso') {
-      if (!metodosSummary[t.metodo]) metodosSummary[t.metodo] = 0;
-      metodosSummary[t.metodo] += parseFloat(t.monto);
+      const key = cleanPaymentMethodName(t.metodo);
+      if (!metodosSummary[key]) metodosSummary[key] = 0;
+      metodosSummary[key] += parseFloat(t.monto);
     }
   });
 
@@ -233,8 +249,8 @@ export default function Reportes({ caja = [], consumos = [], reservas = [], habi
                   <tr key={t.id} className="border-b">
                     <td className="p-2">{t.hora}</td>
                     <td className="p-2 font-semibold">{t.concepto}</td>
-                    <td className="p-2">{t.metodo}</td>
-                    <td className="p-2 text-right font-bold text-emerald-600">${t.monto.toFixed(2)}</td>
+                    <td className="p-2">{cleanPaymentMethodName(t.metodo)}</td>
+                    <td className="p-2 text-right font-bold text-emerald-700">${parseFloat(t.monto).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

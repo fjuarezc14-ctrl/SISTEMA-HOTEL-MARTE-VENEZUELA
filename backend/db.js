@@ -367,6 +367,14 @@ export async function initDb() {
   await db.run("UPDATE clientes SET ci = dni WHERE ci IS NULL OR ci = ''");
   await db.run("UPDATE clientes SET vetado = 0 WHERE vetado IS NULL");
 
+  // Auto-healing encoding cleanup for caja.metodo
+  try {
+    await db.run("UPDATE caja SET metodo = 'Pago Móvil' WHERE metodo LIKE '%M%vil%' AND metodo NOT LIKE '%Ref%'");
+    await db.run("UPDATE caja SET metodo = 'Efectivo Bolívares' WHERE metodo LIKE '%Bol%vares%'");
+    await db.run("UPDATE caja SET metodo = REPLACE(metodo, 'Mvil', 'Móvil')");
+    await db.run("UPDATE caja SET metodo = REPLACE(metodo, 'Bolvares', 'Bolívares')");
+  } catch (e) {}
+
   // Seed productos (v2 - Fase 2)
   const countProducts = await db.get('SELECT COUNT(*) as count FROM productos');
   if (countProducts.count === 0) {
