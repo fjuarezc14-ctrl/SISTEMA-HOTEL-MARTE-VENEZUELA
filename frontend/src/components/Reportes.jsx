@@ -412,19 +412,23 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center bg-slate-50 p-4 rounded-xl border border-slate-200 print:bg-white print:border-slate-800">
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Total Hospedaje</p>
-            <p className="text-lg font-black text-emerald-600">${ingresosHospedaje.toFixed(2)}</p>
+            <p className="text-lg font-black text-emerald-600">${ingresosHospedaje.toFixed(2)} USD</p>
+            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(ingresosHospedaje * tasaUsd).toFixed(2)} VES</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Total Market</p>
-            <p className="text-lg font-black text-amber-600">${ingresosMarket.toFixed(2)}</p>
+            <p className="text-lg font-black text-amber-600">${ingresosMarket.toFixed(2)} USD</p>
+            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(ingresosMarket * tasaUsd).toFixed(2)} VES</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Total Egresos</p>
-            <p className="text-lg font-black text-rose-600">${totalEgresos.toFixed(2)}</p>
+            <p className="text-lg font-black text-rose-600">${totalEgresos.toFixed(2)} USD</p>
+            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(totalEgresos * tasaUsd).toFixed(2)} VES</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Ganancia Neta</p>
-            <p className="text-lg font-black text-slate-800">${gananciaNeta.toFixed(2)}</p>
+            <p className="text-lg font-black text-slate-800">${gananciaNeta.toFixed(2)} USD</p>
+            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(gananciaNeta * tasaUsd).toFixed(2)} VES</p>
           </div>
         </div>
 
@@ -434,9 +438,10 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             <div className="border border-slate-200 rounded-b-xl p-4 flex flex-wrap gap-6">
               {Object.keys(metodosSummary).length === 0 && <span className="text-xs text-slate-400">Sin movimientos.</span>}
               {Object.entries(metodosSummary).map(([metodo, monto]) => (
-                <div key={metodo}>
+                <div key={metodo} className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 min-w-[140px]">
                   <p className="text-[11px] font-bold text-slate-500 uppercase">{metodo}</p>
-                  <p className="text-sm font-black text-slate-800">${monto.toFixed(2)}</p>
+                  <p className="text-sm font-black text-slate-800">${monto.toFixed(2)} USD</p>
+                  <p className="text-[10px] font-bold text-indigo-700">~ Bs. {(monto * tasaUsd).toFixed(2)} VES</p>
                 </div>
               ))}
             </div>
@@ -452,7 +457,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Método</th>
-                  <th className="p-2 border-b text-right">Monto USD</th>
+                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
+                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
               </thead>
               <tbody>
@@ -461,7 +467,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                     <td className="p-2">{t.hora}</td>
                     <td className="p-2 font-semibold">{t.concepto}</td>
                     <td className="p-2">{cleanPaymentMethodName(t.metodo)}</td>
-                    <td className="p-2 text-right font-bold text-emerald-700">${parseFloat(t.monto).toFixed(2)}</td>
+                    <td className="p-2 text-right font-bold text-emerald-700">${parseFloat(t.monto).toFixed(2)} USD</td>
+                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)} VES</td>
                   </tr>
                 ))}
               </tbody>
@@ -478,7 +485,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Método</th>
-                  <th className="p-2 border-b text-right">Monto USD</th>
+                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
+                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
               </thead>
               <tbody>
@@ -487,7 +495,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                     <td className="p-2">{t.hora}</td>
                     <td className="p-2 font-semibold">{t.concepto}</td>
                     <td className="p-2">{t.metodo}</td>
-                    <td className="p-2 text-right font-bold text-amber-600">${t.monto.toFixed(2)}</td>
+                    <td className="p-2 text-right font-bold text-amber-600">${parseFloat(t.monto).toFixed(2)} USD</td>
+                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)} VES</td>
                   </tr>
                 ))}
               </tbody>
@@ -504,7 +513,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Responsable</th>
-                  <th className="p-2 border-b text-right">Monto USD</th>
+                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
+                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
               </thead>
               <tbody>
@@ -513,7 +523,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                     <td className="p-2">{t.hora}</td>
                     <td className="p-2 font-semibold">{t.concepto}</td>
                     <td className="p-2">{t.usuarioNombre || 'Desconocido'}</td>
-                    <td className="p-2 text-right font-bold text-rose-600">${t.monto.toFixed(2)}</td>
+                    <td className="p-2 text-right font-bold text-rose-600">${parseFloat(t.monto).toFixed(2)} USD</td>
+                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)} VES</td>
                   </tr>
                 ))}
               </tbody>
