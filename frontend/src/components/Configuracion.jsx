@@ -767,14 +767,56 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
             </div>
 
             <form onSubmit={handleProductSubmit} className="space-y-4">
+              {/* Product Selector Dropdown */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase">
+                  <i className="fa-solid fa-list text-slate-500 mr-1.5"></i> Seleccionar Producto del Catálogo
+                </label>
+                <select
+                  value={editingProduct ? editingProduct.id : 'new'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'new') {
+                      setEditingProduct(null);
+                      setProdNombre('');
+                      setProdPrecio('');
+                      setProdStock('0');
+                      setNuevoLote('0');
+                    } else {
+                      const found = productos.find(p => p.id === val);
+                      if (found) {
+                        setEditingProduct(found);
+                        setProdNombre(found.nombre);
+                        setProdPrecio(found.precio_venta.toString());
+                        setProdStock(found.stock.toString());
+                        setNuevoLote('0');
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white outline-none focus:ring-1 focus:ring-[#ff331f]"
+                >
+                  <option value="new">➕ -- Crear Nuevo Producto --</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>
+                      📦 {p.nombre} (${parseFloat(p.precio_venta).toFixed(2)} USD - Stock: {p.stock} uds)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre del Producto</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                  Nombre del Producto {editingProduct && !isAdmin && <span className="text-[9px] text-amber-600 font-normal">(Seleccionado del catálogo)</span>}
+                </label>
                 <input 
                   type="text" 
                   value={prodNombre}
                   onChange={(e) => setProdNombre(e.target.value)}
+                  readOnly={editingProduct && !isAdmin}
                   placeholder="Ej: Cerveza Pilsen 350ml"
-                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-semibold"
+                  className={`w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold ${
+                    editingProduct && !isAdmin ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                  }`}
                   required
                 />
               </div>
