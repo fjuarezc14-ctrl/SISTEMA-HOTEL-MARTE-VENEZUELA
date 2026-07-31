@@ -178,8 +178,10 @@ export function AsignarDirectoModal({
   const [ci, setCi] = useState('');
   const [nombre, setNombre] = useState('');
   const [tel, setTel] = useState('');
+  const [fechaNacimientoTitular, setFechaNacimientoTitular] = useState('');
   const [fotoCi, setFotoCi] = useState('');
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Dynamic Companions Array (v5 - Fase 1)
   // [{ id, nombre, ci, fechaNacimiento, age, esMayor, recargo }]
@@ -224,6 +226,7 @@ export function AsignarDirectoModal({
       setCi('');
       setNombre('');
       setTel('');
+      setFechaNacimientoTitular('');
       setFotoCi('');
       setAcompanantes([]);
       setModalidad('4h');
@@ -297,6 +300,7 @@ export function AsignarDirectoModal({
     setCi(c.ci || c.dni || '');
     setNombre(c.nombre);
     setTel(c.tel);
+    if (c.fechaNacimiento) setFechaNacimientoTitular(c.fechaNacimiento);
     if (c.foto_ci) setFotoCi(c.foto_ci);
     setShowSuggestions(false);
     setSearchQuery('');
@@ -310,13 +314,15 @@ export function AsignarDirectoModal({
     }
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     // Digital verification code check
     const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
     if (isDigital && !codigoVerificacion.trim()) {
       alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
+      setIsSubmitting(false);
       return;
     }
 
@@ -325,10 +331,12 @@ export function AsignarDirectoModal({
       const dig = parseFloat(montoDigital) || 0;
       if (Math.abs((ef + dig) - totalMontoUsd) > 0.05) {
         alert(`⚠️ En Pago Mixto la suma ($${ef.toFixed(2)} + $${dig.toFixed(2)} = $${(ef+dig).toFixed(2)}) debe coincidir con el total ($${totalMontoUsd.toFixed(2)} USD).`);
+        setIsSubmitting(false);
         return;
       }
       if (dig > 0 && !codigoVerificacion.trim()) {
         alert('⚠️ Debe ingresar el Código de Verificación para el componente digital del Pago Mixto.');
+        setIsSubmitting(false);
         return;
       }
     }
@@ -340,12 +348,13 @@ export function AsignarDirectoModal({
       return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
     }).join(', ');
 
-    onSubmit({
+    await onSubmit({
       numHabitacion: room.num,
       ci: ci.trim(),
       dni: ci.trim(),
       nombre: nombre.trim(),
       tel: tel.trim(),
+      fechaNacimientoTitular,
       nomAcomp: acompNombres,
       ciAcomp: acompanantes.map(a => a.ci).join(', '),
       acompanantes,
@@ -356,6 +365,7 @@ export function AsignarDirectoModal({
       comprobante,
       modalidad
     });
+    setIsSubmitting(false);
   };
 
   const cleanInputCi = normalizeCi(ci);
@@ -369,6 +379,11 @@ export function AsignarDirectoModal({
            (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD))));
   });
   const isClientVetado = matchedClient && matchedClient.vetado === 1;
+
+  const edadTitular = fechaNacimientoTitular 
+    ? calcularEdad(fechaNacimientoTitular) 
+    : (matchedClient && matchedClient.fechaNacimiento ? calcularEdad(matchedClient.fechaNacimiento) : null);
+  const isTitularMenor = edadTitular !== null && edadTitular < 18;
 
   return (
     <>
@@ -400,6 +415,18 @@ export function AsignarDirectoModal({
                     (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
                   </span>
                 </div>
+              </div>
+            )}
+
+            {isTitularMenor && (
+              <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-1 my-2">
+                <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
+                  <i className="fa-solid fa-triangle-exclamation text-base"></i>
+                  Titular Menor de Edad ({edadTitular} Años) - Check-In Bloqueado
+                </div>
+                <p className="text-xs font-semibold text-rose-800">
+                  El titular principal responsable de la habitación debe ser mayor de edad (+18 años).
+                </p>
               </div>
             )}
 
@@ -450,7 +477,7 @@ export function AsignarDirectoModal({
                 {(ci || nombre || tel) && (
                   <button 
                     type="button" 
-                    onClick={() => { setCi(''); setNombre(''); setTel(''); setFotoCi(''); }} 
+                    onClick={() => { setCi(''); setNombre(''); setTel(''); setFechaNacimientoTitular(''); setFotoCi(''); }} 
                     className="text-[10px] text-blue-500 hover:underline font-bold"
                   >
                     Limpiar datos
@@ -508,7 +535,7 @@ export function AsignarDirectoModal({
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
                   <input 
                     type="text" 
@@ -517,6 +544,18 @@ export function AsignarDirectoModal({
                     required 
                     placeholder="Nombre del Huésped" 
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-green-400 bg-white font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">F. Nacimiento Titular *</label>
+                  <input 
+                    type="date" 
+                    value={fechaNacimientoTitular}
+                    onChange={(e) => setFechaNacimientoTitular(e.target.value)}
+                    required 
+                    className={`w-full px-3 py-2 rounded-xl border text-xs outline-none font-bold ${
+                      isTitularMenor ? 'border-rose-500 bg-rose-50 text-rose-900' : 'border-slate-300 bg-white'
+                    }`}
                   />
                 </div>
               </div>
@@ -750,14 +789,14 @@ export function AsignarDirectoModal({
                   </button>
                   <button 
                     type="submit"
-                    disabled={isClientVetado}
-                    className={`flex-1 font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md ${
-                      isClientVetado 
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    disabled={isClientVetado || isTitularMenor || isSubmitting}
+                    className={`flex-1 font-bold py-2.5 rounded-xl transition-colors text-xs text-white shadow-md ${
+                      isClientVetado || isTitularMenor 
+                        ? 'bg-slate-400 cursor-not-allowed' 
+                        : 'bg-emerald-600 hover:bg-emerald-700'
                     }`}
                   >
-                    {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Check-In'}
+                    {isSubmitting ? 'Procesando...' : isClientVetado ? 'Bloqueado por Veto' : isTitularMenor ? 'Bloqueado (Titular Menor de Edad)' : 'Confirmar Check-In'}
                   </button>
                 </div>
               </div>
@@ -793,7 +832,10 @@ export function NuevaReservaModal({
   const [ci, setCi] = useState('');
   const [nombre, setNombre] = useState('');
   const [tel, setTel] = useState('');
+  const [fechaNacimientoTitular, setFechaNacimientoTitular] = useState('');
   const [hora, setHora] = useState('');
+  const [fechaIngreso, setFechaIngreso] = useState('');
+  const [fechaSalida, setFechaSalida] = useState('');
   const [fotoCi, setFotoCi] = useState('');
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
 
@@ -822,6 +864,7 @@ export function NuevaReservaModal({
       setCi('');
       setNombre('');
       setTel('');
+      setFechaNacimientoTitular('');
       setFotoCi('');
       setAcompanantes([]);
       setMonto('0');
@@ -830,6 +873,12 @@ export function NuevaReservaModal({
       setSearchQuery('');
       setCategoriaFiltro('Todas');
       setShowSuggestions(false);
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setFechaIngreso(todayStr);
+      setFechaSalida(tomorrow.toISOString().split('T')[0]);
       
       const now = new Date();
       const hh = String(now.getHours()).padStart(2, '0');
@@ -881,10 +930,20 @@ export function NuevaReservaModal({
   };
 
   const currentCategory = modalidad === '4h' ? selectedHabTipo : (selectedHabTipo || 'Matrimonial');
-  const baseStayPrice = getStayBasePrice(currentCategory, modalidad);
+  const baseStayPricePerNight = getStayBasePrice(currentCategory, modalidad);
+
+  // Compute Pernocta Stay Nights
+  const calculateNoches = () => {
+    if (!fechaIngreso || !fechaSalida) return 1;
+    const start = new Date(fechaIngreso);
+    const end = new Date(fechaSalida);
+    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 1;
+  };
+  const nochesPernocta = modalidad === 'pernocta' ? calculateNoches() : 1;
 
   // Compute companion surcharges (50% of base stay price for 3rd+ adult guest)
-  const recargoIndividualReserva = baseStayPrice * 0.50;
+  const recargoIndividualReserva = baseStayPricePerNight * 0.50;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2;
     const age = calcularEdad(a.fechaNacimiento);
@@ -895,7 +954,7 @@ export function NuevaReservaModal({
     return sum;
   }, 0);
 
-  const totalStayPriceUSD = baseStayPrice + companionSurcharges;
+  const totalStayPriceUSD = (baseStayPricePerNight * nochesPernocta) + companionSurcharges;
   const totalStayPriceVES = (totalStayPriceUSD * tasaUsd).toFixed(2);
 
   const adelantoNum = parseFloat(monto) || 0;
@@ -948,6 +1007,7 @@ export function NuevaReservaModal({
     setCi(doc);
     setNombre(c.nombre);
     setTel(c.tel);
+    if (c.fechaNacimiento) setFechaNacimientoTitular(c.fechaNacimiento);
     if (c.foto_ci) setFotoCi(c.foto_ci);
     setShowSuggestions(false);
     setSearchQuery('');
@@ -999,10 +1059,14 @@ export function NuevaReservaModal({
       dni: ci.trim(),
       nombre: nombre.trim(),
       tel: tel.trim(),
+      fechaNacimientoTitular,
       nomAcomp: acompNombres,
       ciAcomp: acompanantes.map(a => a.ci).join(', '),
       acompanantes,
       hora,
+      fechaIngreso: modalidad === 'pernocta' ? fechaIngreso : undefined,
+      fechaSalida: modalidad === 'pernocta' ? fechaSalida : undefined,
+      nochesPernocta,
       monto: adelantoNum,
       metodo: isDigital && adelantoNum > 0 ? `${metodo} - Ref: ${codigoVerificacion}` : metodo,
       codigoVerificacion,
@@ -1015,13 +1079,20 @@ export function NuevaReservaModal({
 
   const cleanInputCi = normalizeCi(ci);
   const matchedClient = clientes.find(c => {
+    if (ci && (c.ci === ci || c.dni === ci)) return true;
+    if (nombre && c.nombre && c.nombre.toLowerCase().trim() === nombre.toLowerCase().trim()) return true;
     if (!cleanInputCi) return false;
     const cleanC = normalizeCi(c.ci);
     const cleanD = normalizeCi(c.dni);
-    return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)) || (cleanInputCi.length >= 4 && cleanC.endsWith(cleanC)))) ||
-           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD)) || (cleanInputCi.length >= 4 && cleanD.endsWith(cleanInputCi))));
+    return (cleanC && (cleanC === cleanInputCi || (cleanC.length >= 4 && cleanInputCi.endsWith(cleanC)))) ||
+           (cleanD && (cleanD === cleanInputCi || (cleanD.length >= 4 && cleanInputCi.endsWith(cleanD))));
   });
   const isClientVetado = matchedClient && matchedClient.vetado === 1 && matchedClient.monto_deuda_usd > 0;
+
+  const edadTitular = fechaNacimientoTitular 
+    ? calcularEdad(fechaNacimientoTitular) 
+    : (matchedClient && matchedClient.fechaNacimiento ? calcularEdad(matchedClient.fechaNacimiento) : null);
+  const isTitularMenor = edadTitular !== null && edadTitular < 18;
 
   return (
     <>
@@ -1053,6 +1124,18 @@ export function NuevaReservaModal({
                     (~ Bs. {(matchedClient.monto_deuda_usd * tasaUsd).toFixed(2)})
                   </span>
                 </div>
+              </div>
+            )}
+
+            {isTitularMenor && (
+              <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-1 my-2">
+                <div className="flex items-center justify-center gap-2 text-rose-700 font-black text-xs uppercase">
+                  <i className="fa-solid fa-triangle-exclamation text-base"></i>
+                  Titular Menor de Edad ({edadTitular} Años) - Reserva Bloqueada
+                </div>
+                <p className="text-xs font-semibold text-rose-800">
+                  El titular principal responsable de la reserva debe ser mayor de edad (+18 años).
+                </p>
               </div>
             )}
 
@@ -1178,10 +1261,58 @@ export function NuevaReservaModal({
               </div>
             )}
 
+            {/* Pernocta Date Range Selection */}
+            {modalidad === 'pernocta' && (
+              <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-200 space-y-3">
+                <h4 className="text-xs font-bold text-indigo-900 uppercase flex items-center gap-1.5">
+                  <i className="fa-solid fa-calendar-days text-indigo-600"></i> Fechas y Horario de Estadía (Pernocta)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Ingreso (Llegada)</label>
+                    <input 
+                      type="date"
+                      value={fechaIngreso}
+                      onChange={(e) => setFechaIngreso(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Salida (Check-Out)</label>
+                    <input 
+                      type="date"
+                      value={fechaSalida}
+                      min={fechaIngreso}
+                      onChange={(e) => setFechaSalida(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hora Llegada Estimada</label>
+                    <input 
+                      type="time"
+                      value={hora}
+                      onChange={(e) => setHora(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="text-[11px] font-bold text-indigo-800 flex items-center justify-between border-t border-indigo-100 pt-2">
+                  <span>Duración de Reserva: <strong>{nochesPernocta} Noche(s)</strong></span>
+                  <span>Tarifa Pernocta (${baseStayPricePerNight} × {nochesPernocta}N): <strong>${(baseStayPricePerNight * nochesPernocta).toFixed(2)} USD</strong></span>
+                </div>
+              </div>
+            )}
+
             {/* Total Stay Price Summary Banner */}
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex justify-between items-center text-indigo-900 font-bold">
               <div>
-                <span className="text-[10px] text-indigo-600 block">Estadía {modalidad === '4h' ? '4 Horas' : 'Pernocta'}</span>
+                <span className="text-[10px] text-indigo-600 block">
+                  Estadía {modalidad === '4h' ? '4 Horas' : `Pernocta (${nochesPernocta} Noche${nochesPernocta > 1 ? 's' : ''})`}
+                </span>
                 <span className="text-base font-black">
                   {modalidad === '4h' ? `Cat. ${selectedHabTipo}` : `Hab. ${selectedHabNum || 'Por seleccionar'} (${selectedHabTipo})`}
                 </span>
@@ -1248,16 +1379,17 @@ export function NuevaReservaModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hora de Llegada Estimada *</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Celular / Teléfono</label>
                   <input 
-                    type="time" 
-                    value={hora}
-                    onChange={(e) => setHora(e.target.value)}
+                    type="text" 
+                    value={tel}
+                    onChange={(e) => setTel(e.target.value)}
                     required 
+                    placeholder="Ej: 0412-1234567" 
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Completo Titular</label>
                   <input 
                     type="text" 
@@ -1268,15 +1400,16 @@ export function NuevaReservaModal({
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Celular / Teléfono</label>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">F. Nacimiento Titular *</label>
                   <input 
-                    type="text" 
-                    value={tel}
-                    onChange={(e) => setTel(e.target.value)}
+                    type="date" 
+                    value={fechaNacimientoTitular}
+                    onChange={(e) => setFechaNacimientoTitular(e.target.value)}
                     required 
-                    placeholder="Ej: 0412-1234567" 
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white font-bold"
+                    className={`w-full px-3 py-2 rounded-xl border text-xs outline-none font-bold ${
+                      isTitularMenor ? 'border-rose-500 bg-rose-50 text-rose-900' : 'border-slate-300 bg-white'
+                    }`}
                   />
                 </div>
               </div>
@@ -1458,14 +1591,14 @@ export function NuevaReservaModal({
                   </button>
                   <button 
                     type="submit" 
-                    disabled={isClientVetado}
-                    className={`flex-1 font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs ${
-                      isClientVetado 
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    disabled={isClientVetado || isTitularMenor}
+                    className={`flex-1 font-bold py-2.5 rounded-xl shadow-md transition-colors text-xs text-white ${
+                      isClientVetado || isTitularMenor 
+                        ? 'bg-slate-400 cursor-not-allowed' 
+                        : 'bg-indigo-600 hover:bg-indigo-700'
                     }`}
                   >
-                    {isClientVetado ? 'Bloqueado por Veto' : 'Confirmar Reserva'}
+                    {isClientVetado ? 'Bloqueado por Veto' : isTitularMenor ? 'Bloqueado (Titular Menor de Edad)' : 'Confirmar Reserva'}
                   </button>
                 </div>
               </div>

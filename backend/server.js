@@ -50,6 +50,20 @@ function getFechaHoraActual() {
   return `${day}/${month}/${year}, ${hours}:${minutes}`;
 }
 
+// Helper: Calculate age from birthdate YYYY-MM-DD
+function calcularEdadBackend(fechaNacStr) {
+  if (!fechaNacStr) return 18;
+  const birth = new Date(fechaNacStr);
+  if (isNaN(birth.getTime())) return 18;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 // Helper: Format full name to reception shorthand (e.g., "Laura Medina" -> "L. Medina")
 function formatGuestName(fullName) {
   if (!fullName) return '';
@@ -730,7 +744,7 @@ function getDigitsOnly(str) {
 
 // 2. POST /api/checkin-directo - Process immediate walk-in check-in (v3 - Fase 1)
 app.post('/api/checkin-directo', requireAuth, async (req, res) => {
-  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor } = req.body;
+  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor, fechaNacimientoTitular } = req.body;
   const numDoc = (ci || dni || '').trim();
 
   if (!numDoc || !nombre || !tel || !numHabitacion) {
@@ -762,17 +776,22 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       });
     }
 
+    const birthdateToCheck = fechaNacimientoTitular || (cliente ? cliente.fechaNacimiento : null);
+    if (birthdateToCheck && calcularEdadBackend(birthdateToCheck) < 18) {
+      return res.status(400).json({ error: 'El titular de la reserva/hospedaje debe ser mayor de edad (+18 años).' });
+    }
+
     const clientId = cliente ? cliente.id : 'c_' + Date.now();
     
     if (!cliente) {
       await db.run(
-        'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas) VALUES (?, ?, ?, ?, ?, ?)',
-        [clientId, nombre.trim(), numDoc, numDoc, tel.trim(), 1]
+        'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas, fechaNacimiento) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [clientId, nombre.trim(), numDoc, numDoc, tel.trim(), 1, fechaNacimientoTitular || '']
       );
     } else {
       await db.run(
-        'UPDATE clientes SET visitas = visitas + 1, nombre = ?, tel = ?, ci = ? WHERE id = ?',
-        [nombre.trim(), tel.trim(), numDoc, clientId]
+        'UPDATE clientes SET visitas = visitas + 1, nombre = ?, tel = ?, ci = ?, fechaNacimiento = COALESCE(NULLIF(?, ""), fechaNacimiento) WHERE id = ?',
+        [nombre.trim(), tel.trim(), numDoc, fechaNacimientoTitular || '', clientId]
       );
     }
 
@@ -895,7 +914,7 @@ app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => 
 
 // 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
 app.post('/api/reservar', requireAuth, async (req, res) => {
-  const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante } = req.body;
+  const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante, fechaNacimientoTitular, fechaIngreso, fechaSalida } = req.body;
   const numDoc = (ci || dni || '').trim();
 
   if (!numHabitacion || !numDoc || !nombre || !tel || !hora) {
@@ -925,6 +944,11 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
         vetado: true,
         clienteVetado: cliente
       });
+    }
+
+    const birthdateToCheck = fechaNacimientoTitular || (cliente ? cliente.fechaNacimiento : null);
+    if (birthdateToCheck && calcularEdadBackend(birthdateToCheck) < 18) {
+      return res.status(400).json({ error: 'El titular de la reserva/hospedaje debe ser mayor de edad (+18 años).' });
     }
 
     const clientId = cliente ? cliente.id : 'c_' + Date.now();

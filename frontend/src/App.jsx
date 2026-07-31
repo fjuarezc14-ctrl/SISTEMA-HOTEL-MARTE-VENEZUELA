@@ -909,6 +909,7 @@ export default function App() {
               {activeTab === 'configuracion' && canAccessTab('configuracion') && (
                 <Configuracion 
                   token={token}
+                  currentUser={user}
                   appState={appState}
                   onStateChange={fetchState}
                 />

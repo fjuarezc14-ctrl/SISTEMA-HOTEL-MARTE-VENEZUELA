@@ -2,6 +2,8 @@
 export function getStayExpirationStatus(salidaStr) {
   if (!salidaStr) return null;
 
+  const isNextDay = salidaStr.toLowerCase().includes('mañana') || salidaStr.toLowerCase().includes('manana');
+
   // Clean string like "12:00 PM (Mañana)" or "14:30" or "02:30 PM"
   const cleanSalida = salidaStr.split('(')[0].trim();
   if (!cleanSalida) return null;
@@ -30,14 +32,18 @@ export function getStayExpirationStatus(salidaStr) {
   const targetTime = new Date();
   targetTime.setHours(hours, minutes, 0, 0);
 
+  // If departure is explicitly marked as next day (Mañana)
+  if (isNextDay) {
+    if (now.getHours() >= hours) {
+      targetTime.setDate(targetTime.getDate() + 1);
+    } else if (now.getHours() < hours && now.getHours() < 12) {
+      // Check-in happened this morning, departure is tomorrow morning
+      targetTime.setDate(targetTime.getDate() + 1);
+    }
+  }
+
   let diffMs = targetTime.getTime() - now.getTime();
   let diffMin = Math.round(diffMs / (1000 * 60));
-
-  if (diffMin < -720) { // More than 12 hours ago, assume standard next day
-    diffMin += 1440;
-  } else if (diffMin > 720) { // More than 12 hours in future, assume previous day
-    diffMin -= 1440;
-  }
 
   if (diffMin < 0) {
     const absOverdue = Math.abs(diffMin);
@@ -59,7 +65,7 @@ export function getStayExpirationStatus(salidaStr) {
       isExpired: false,
       isWarning: false,
       minutesLeft: diffMin,
-      label: `Salida: ${cleanSalida}`
+      label: `Salida: ${cleanSalida}${isNextDay ? ' (Mañana)' : ''}`
     };
   }
 }

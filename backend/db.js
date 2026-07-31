@@ -364,6 +364,7 @@ export async function initDb() {
   try { await db.run("ALTER TABLE clientes ADD COLUMN monto_deuda_usd REAL DEFAULT 0"); } catch (e) {}
   try { await db.run("ALTER TABLE clientes ADD COLUMN motivo_veto TEXT DEFAULT ''"); } catch (e) {}
   try { await db.run("ALTER TABLE clientes ADD COLUMN foto_ci TEXT DEFAULT ''"); } catch (e) {}
+  try { await db.run("ALTER TABLE clientes ADD COLUMN fechaNacimiento TEXT DEFAULT ''"); } catch (e) {}
   await db.run("UPDATE clientes SET ci = dni WHERE ci IS NULL OR ci = ''");
   await db.run("UPDATE clientes SET vetado = 0 WHERE vetado IS NULL");
 

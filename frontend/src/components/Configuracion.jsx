@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 
-export default function Configuracion({ token, appState, onStateChange }) {
+export default function Configuracion({ token, currentUser, appState, onStateChange }) {
   const { productos = [], tarifas = [], habitaciones = [], tablaDanos = [] } = appState;
+
+  const isAdmin = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Superadmin');
 
   // Products states
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -9,6 +11,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
   const [prodNombre, setProdNombre] = useState('');
   const [prodPrecio, setProdPrecio] = useState('');
   const [prodStock, setProdStock] = useState('0');
+  const [nuevoLote, setNuevoLote] = useState('0');
 
   // Rates edit state
   const [editingRateType, setEditingRateType] = useState(null);
@@ -35,6 +38,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
     setProdNombre('');
     setProdPrecio('');
     setProdStock('0');
+    setNuevoLote('0');
     setIsProductModalOpen(true);
   };
 
@@ -43,6 +47,7 @@ export default function Configuracion({ token, appState, onStateChange }) {
     setProdNombre(prod.nombre);
     setProdPrecio(prod.precio_venta.toString());
     setProdStock(prod.stock.toString());
+    setNuevoLote('0');
     setIsProductModalOpen(true);
   };
 
@@ -74,10 +79,13 @@ export default function Configuracion({ token, appState, onStateChange }) {
       return;
     }
 
+    const baseStock = parseInt(prodStock) || 0;
+    const addLote = parseInt(nuevoLote) || 0;
+
     const payload = {
       nombre: prodNombre.trim(),
       precio_venta: parseFloat(prodPrecio),
-      stock: parseInt(prodStock) || 0
+      stock: baseStock + addLote
     };
 
     try {
@@ -786,18 +794,45 @@ export default function Configuracion({ token, appState, onStateChange }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Stock Inicial</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                    Stock Actual {editingProduct && !isAdmin && <span className="text-[9px] text-amber-600 font-normal">(Solo lectura)</span>}
+                  </label>
                   <input 
                     type="number" 
                     value={prodStock}
                     onChange={(e) => setProdStock(e.target.value)}
+                    readOnly={editingProduct && !isAdmin}
                     min="0"
                     placeholder="Ej: 30"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+                    className={`w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-bold ${
+                      editingProduct && !isAdmin ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                    }`}
                     required
                   />
                 </div>
               </div>
+
+              {editingProduct && (
+                <div className="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-200 space-y-1">
+                  <label className="block text-xs font-bold text-emerald-800 uppercase">
+                    <i className="fa-solid fa-[#c5920c] fa-box-archive mr-1"></i> Agregar Nuevo Lote (+ Cantidad)
+                  </label>
+                  <p className="text-[10px] text-emerald-700 font-medium">
+                    Ingrese las unidades del nuevo lote recibido para sumarlas automáticamente al stock actual.
+                  </p>
+                  <input 
+                    type="number" 
+                    value={nuevoLote}
+                    onChange={(e) => setNuevoLote(e.target.value)}
+                    min="0"
+                    placeholder="Ej: 20"
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 text-xs font-black bg-white outline-none focus:ring-2 focus:ring-emerald-500 text-emerald-900"
+                  />
+                  <span className="text-[10px] font-bold text-emerald-800 block pt-1">
+                    Stock Total Resultante: <strong className="text-sm font-black text-emerald-900">{(parseInt(prodStock) || 0) + (parseInt(nuevoLote) || 0)} unidades</strong>
+                  </span>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 flex gap-3">
                 <button 
