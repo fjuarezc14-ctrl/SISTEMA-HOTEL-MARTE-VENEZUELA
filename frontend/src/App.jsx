@@ -406,75 +406,104 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
+      <div className="min-h-screen w-full bg-slate-950 flex items-center justify-center p-4 md:p-8 relative overflow-hidden font-sans">
         {/* Decorative subtle background gradients */}
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-[#ff331f]/10 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-[#c5920c]/10 rounded-full blur-[120px] pointer-events-none"></div>
-        
-        <div className="bg-slate-900/60 border border-slate-800 backdrop-blur-xl rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col gap-6 fade-in">
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="bg-white p-3.5 rounded-2xl shadow-inner max-w-[130px] border border-slate-700">
-              <img src="/logo.png" alt="Hotel Marte Logo" className="h-14 w-auto object-contain" />
+        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-[#ff331f]/15 rounded-full blur-[140px] pointer-events-none"></div>
+        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-[#c5920c]/15 rounded-full blur-[140px] pointer-events-none"></div>
+
+        {/* Main Split Grid Card */}
+        <div className="bg-slate-900/80 border border-slate-800/80 backdrop-blur-2xl rounded-3xl w-full max-w-5xl overflow-hidden shadow-2xl grid grid-cols-1 md:grid-cols-12 fade-in min-h-[580px]">
+          
+          {/* Left Column: Login Form */}
+          <div className="md:col-span-5 lg:col-span-4 p-8 sm:p-10 flex flex-col justify-center gap-6 border-b md:border-b-0 md:border-r border-slate-800/80 bg-slate-900/40">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="bg-white p-3 rounded-2xl shadow-lg max-w-[120px] border border-slate-700">
+                <img src="/logo.png" alt="Hotel Marte Logo" className="h-12 w-auto object-contain" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white tracking-tight">Hotel Marte</h2>
+                <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">Sistema PMS de Gestión</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-black text-white tracking-tight">Hotel Marte</h2>
-              <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">Sistema PMS de Gestión</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Usuario</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+                    <i className="fa-solid fa-user"></i>
+                  </span>
+                  <input 
+                    type="text" 
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="Ingrese su usuario"
+                    autoComplete="off"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:ring-2 focus:ring-[#ff331f] font-semibold transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Contraseña</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+                    <i className="fa-solid fa-lock"></i>
+                  </span>
+                  <input 
+                    type="password" 
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:ring-2 focus:ring-[#ff331f] font-semibold transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              {loginError && (
+                <div className="bg-rose-950/50 border border-rose-900 text-rose-300 p-3 rounded-xl text-xs font-bold text-center">
+                  <i className="fa-solid fa-triangle-exclamation mr-1.5"></i> {loginError}
+                </div>
+              )}
+
+              <button 
+                type="button"
+                onClick={() => handleLoginSubmit()}
+                className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-black py-3.5 rounded-xl text-xs shadow-lg transition-all uppercase tracking-widest mt-2 hover:scale-[1.01] active:scale-[0.99]"
+              >
+                Iniciar Sesión
+              </button>
+            </div>
+
+            <div className="text-center pt-2">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                © Hotel Marte Venezuela
+              </span>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Usuario</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
-                  <i className="fa-solid fa-user"></i>
-                </span>
-                <input 
-                  type="text" 
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                  placeholder="Ingrese su usuario"
-                  autoComplete="off"
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold"
-                  required
-                />
-              </div>
+          {/* Right Column: Hero Banner Image Presentation */}
+          <div className="md:col-span-7 lg:col-span-8 relative min-h-[350px] md:min-h-full bg-slate-950 flex items-center justify-center p-6 sm:p-8 overflow-hidden">
+            {/* Ambient Lighting & Glow effects around artwork */}
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/80 z-0"></div>
+            <div className="absolute w-[400px] h-[400px] bg-[#ff331f]/20 rounded-full blur-[100px] z-0 pointer-events-none"></div>
+            <div className="absolute w-[350px] h-[350px] bg-[#c5920c]/20 rounded-full blur-[90px] z-0 pointer-events-none"></div>
+
+            {/* Artwork Container */}
+            <div className="relative z-10 w-full h-full max-w-lg flex flex-col items-center justify-center">
+              <img 
+                src="/banner-marte.png" 
+                alt="Hotel Marte Branding" 
+                className="w-full h-auto max-h-[520px] object-contain rounded-2xl shadow-2xl border border-amber-500/20 hover:scale-[1.01] transition-transform duration-500"
+              />
             </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Contraseña</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
-                  <i className="fa-solid fa-lock"></i>
-                </span>
-                <input 
-                  type="password" 
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold"
-                  required
-                />
-              </div>
-            </div>
-
-            {loginError && (
-              <div className="bg-rose-950/40 border border-rose-900 text-rose-300 p-3 rounded-xl text-xs font-bold text-center">
-                <i className="fa-solid fa-triangle-exclamation mr-1.5"></i> {loginError}
-              </div>
-            )}
-
-            <button 
-              type="button"
-              onClick={() => handleLoginSubmit()}
-              className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-black py-3 rounded-xl text-xs shadow-md transition-all uppercase tracking-widest mt-2"
-            >
-              Iniciar Sesión
-            </button>
           </div>
+
         </div>
       </div>
     );
