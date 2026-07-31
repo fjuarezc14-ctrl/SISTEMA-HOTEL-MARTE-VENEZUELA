@@ -80,43 +80,12 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return true;
   };
 
-  const filteredCaja = (caja || []).filter(t => isDateInRange(t.hora));
-
-  // Compute metrics for General Report
-  const ingresosHospedaje = filteredCaja.filter(t => t.tipo === 'Ingreso' && t.origen === 'Hospedaje').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const ingresosMarket = filteredCaja.filter(t => t.tipo === 'Ingreso' && t.origen === 'Market').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const totalEgresos = filteredCaja.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
-
-  // Helper to clean encoding errors and group by base payment method category
-  const cleanPaymentMethodName = (m) => {
-    if (!m) return 'EFECTIVO BOLÍVARES';
-    let str = m
-      .replace(/M[^\w\s]?vil/gi, 'Móvil')
-      .replace(/Bol[^\w\s]?vares/gi, 'Bolívares')
-      .replace(/\uFFFD/g, '');
-    
-    const match = str.match(/^(.*?)(?:\s*[-–—]\s*|\s*\(\s*|\s+)(?:Ref:?|Ref\s*#?|Referencia:?)/i);
-    if (match && match[1] && match[1].trim().length > 0) {
-      str = match[1].trim();
-    }
-    return str.trim().toUpperCase();
-  };
-
-  // Breakdown by method
-  const metodosSummary = {};
-  filteredCaja.forEach(t => {
-    if (t.tipo === 'Ingreso') {
-      const key = cleanPaymentMethodName(t.metodo);
-      if (!metodosSummary[key]) metodosSummary[key] = 0;
-      metodosSummary[key] += (parseFloat(t.monto) || 0);
-    }
-  });
+  const filteredCaja = caja.filter(t => isDateInRange(t.hora));
 
   // Build unique receptionists list from caja & historial
   const recepList = Array.from(new Set([
-    ...(caja || []).map(t => t.usuarioNombre).filter(Boolean),
-    ...(historial || []).map(h => h.recepcionistaNombre).filter(Boolean)
+    ...caja.map(t => t.usuarioNombre).filter(Boolean),
+    ...historial.map(h => h.recepcionistaNombre).filter(Boolean)
   ]));
 
   // Strictly filter TODAY's transactions for Receptionist Sales Report (No past days accumulated)
