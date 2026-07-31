@@ -31,23 +31,22 @@ try {
   process.exit(1);
 }
 
-// Helper: Get current time as HH:MM
+// Helper: Get current time as HH:MM in Venezuela Timezone (America/Caracas UTC-4)
 function getHoraActual() {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+  const options = { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: false };
+  const parts = new Intl.DateTimeFormat('es-VE', options).formatToParts(new Date());
+  const map = {};
+  parts.forEach(p => map[p.type] = p.value);
+  return `${map.hour}:${map.minute}`;
 }
 
-// Helper: Get current date & time as DD/MM/YYYY, HH:MM for precise filtering
+// Helper: Get current date & time as DD/MM/YYYY, HH:MM in Venezuela Timezone (America/Caracas UTC-4)
 function getFechaHoraActual() {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  return `${day}/${month}/${year}, ${hours}:${minutes}`;
+  const options = { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+  const parts = new Intl.DateTimeFormat('es-VE', options).formatToParts(new Date());
+  const map = {};
+  parts.forEach(p => map[p.type] = p.value);
+  return `${map.day}/${map.month}/${map.year}, ${map.hour}:${map.minute}`;
 }
 
 // Helper: Calculate age from birthdate YYYY-MM-DD

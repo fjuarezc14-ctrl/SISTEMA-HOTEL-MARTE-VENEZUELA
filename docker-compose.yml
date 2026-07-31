@@ -17,6 +17,7 @@ services:
       - PORT=3010
       - DB_PATH=/app/data/hotel.db
       - JWT_SECRET=superSecretMarteHotel2026
+      - TZ=America/Caracas
     command: npm run dev
 
   frontend:
