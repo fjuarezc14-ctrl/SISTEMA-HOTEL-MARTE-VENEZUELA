@@ -50,10 +50,20 @@ export default function EntregaTurnos({
   // Calculate my shift's expected cash from caja array
   const myMovements = currentUser ? caja.filter(t => t.usuarioId === currentUser.id) : caja;
   const myEfectivoUSD = myMovements
-    .filter(t => t.metodo === 'Efectivo ($)' && t.tipo === 'Ingreso')
-    .reduce((s, t) => s + parseFloat(t.monto), 0);
+    .filter(t => t.tipo === 'Ingreso')
+    .reduce((sum, t) => {
+      if (t.metodo === 'Efectivo ($)') return sum + parseFloat(t.monto);
+      if (t.metodo && t.metodo.includes('Pago Mixto')) {
+        const matchEf = t.metodo.match(/Ef:\s*\$?([\d.]+)/i);
+        if (matchEf && matchEf[1]) {
+          return sum + parseFloat(matchEf[1]);
+        }
+      }
+      return sum;
+    }, 0);
+
   const myEfectivoVES = myMovements
-    .filter(t => t.metodo === 'Efectivo (Bs)' && t.tipo === 'Ingreso')
+    .filter(t => (t.metodo === 'Efectivo (Bs)' || t.metodo === 'Efectivo') && t.tipo === 'Ingreso')
     .reduce((s, t) => s + parseFloat(t.monto), 0);
 
   // Auto-fill cash values when clicking button

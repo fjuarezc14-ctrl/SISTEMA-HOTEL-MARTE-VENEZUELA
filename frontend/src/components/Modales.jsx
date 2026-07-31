@@ -1772,6 +1772,12 @@ export function CheckoutModal({
   const [metodoPago, setMetodoPago] = useState('Efectivo (Bs)');
   const [vetarCliente, setVetarCliente] = useState(false);
 
+  // Mixed Payment & Verification Code states for Checkout
+  const [montoEfectivoCheckout, setMontoEfectivoCheckout] = useState('0');
+  const [montoDigitalCheckout, setMontoDigitalCheckout] = useState('0');
+  const [metodoDigitalCheckout, setMetodoDigitalCheckout] = useState('Pago Móvil');
+  const [codigoVerificacionCheckout, setCodigoVerificacionCheckout] = useState('');
+
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
   // Filter consumptions for this room
@@ -1799,6 +1805,10 @@ export function CheckoutModal({
       setMontoHabitacion('0.00');
       setMetodoPago('Efectivo (Bs)');
       setVetarCliente(false);
+      setMontoEfectivoCheckout('0');
+      setMontoDigitalCheckout('0');
+      setMetodoDigitalCheckout('Pago Móvil');
+      setCodigoVerificacionCheckout('');
     }
   }, [isOpen]);
 
@@ -1857,6 +1867,29 @@ export function CheckoutModal({
   const handleFormSubmit = (e) => {
     e.preventDefault();
     
+    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago);
+    if (isDigital && totalCobrarEnCaja > 0 && !codigoVerificacionCheckout.trim()) {
+      alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
+      return;
+    }
+
+    if (metodoPago === 'Pago Mixto') {
+      const ef = parseFloat(montoEfectivoCheckout) || 0;
+      const dig = parseFloat(montoDigitalCheckout) || 0;
+      if (Math.abs((ef + dig) - totalCobrarEnCaja) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma ($${ef.toFixed(2)} + $${dig.toFixed(2)} = $${(ef+dig).toFixed(2)}) debe coincidir con el total a cobrar ($${totalCobrarEnCaja.toFixed(2)} USD).`);
+        return;
+      }
+      if (dig > 0 && !codigoVerificacionCheckout.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la parte digital del Pago Mixto.');
+        return;
+      }
+    }
+
+    const finalMetodoPago = metodoPago === 'Pago Mixto'
+      ? `Pago Mixto (Ef: $${montoEfectivoCheckout} + ${metodoDigitalCheckout}: $${montoDigitalCheckout}) - Ref: ${codigoVerificacionCheckout}`
+      : (isDigital && codigoVerificacionCheckout.trim() ? `${metodoPago} - Ref: ${codigoVerificacionCheckout}` : metodoPago);
+
     let finalDetalle = detallePenalidad.trim();
     if (montoHorasExtras > 0) {
       const overNote = `Horas extras por tiempo excedido (${expirationStatus.minutesOverdue}m = ${hoursOverdue}h): +$${montoHorasExtras.toFixed(2)} USD`;
@@ -1879,7 +1912,7 @@ export function CheckoutModal({
       detallePenalidad: finalDetalle,
       montoConsumos: totalConsumos,
       montoHabitacion: finalHab,
-      metodoPago,
+      metodoPago: finalMetodoPago,
       vetarCliente,
       clienteId: room.clienteId,
       clienteCi: room.clienteCi,
@@ -1987,20 +2020,95 @@ export function CheckoutModal({
           </div>
 
           {/* Payment Method selector */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Método de Pago para Liquidación</label>
-            <select 
-              value={metodoPago}
-              onChange={(e) => setMetodoPago(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
-              required
-            >
-              <option value="Efectivo (Bs)">Efectivo (Bs)</option>
-              <option value="Pago Móvil">Pago Móvil</option>
-              <option value="Punto de Venta">Punto de Venta</option>
-              <option value="Efectivo ($)">Efectivo ($)</option>
-              <option value="Zelle">Zelle</option>
-            </select>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Método de Pago para Liquidación</label>
+              <select 
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
+                required
+              >
+                <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                <option value="Efectivo ($)">Efectivo ($)</option>
+                <option value="Pago Móvil">Pago Móvil</option>
+                <option value="Punto de Venta">Punto de Venta</option>
+                <option value="Zelle">Zelle</option>
+                <option value="Pago Mixto">Pago Mixto (Efectivo + Digital)</option>
+              </select>
+            </div>
+
+            {/* Reference Code field for digital payments */}
+            {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago) && (
+              <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                <label className="block text-[10px] font-black text-amber-900 uppercase mb-1">
+                  Código de Verificación / Referencia Bancaria *
+                </label>
+                <input 
+                  type="text" 
+                  value={codigoVerificacionCheckout}
+                  onChange={(e) => setCodigoVerificacionCheckout(e.target.value)}
+                  placeholder="Ej. Ref 987654 / Baucher #1234" 
+                  required
+                  className="w-full px-3 py-1.5 rounded border border-amber-300 text-xs font-bold bg-white text-slate-800"
+                />
+              </div>
+            )}
+
+            {/* Mixed Payment Breakdown */}
+            {metodoPago === 'Pago Mixto' && (
+              <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-200 space-y-2">
+                <p className="text-[10px] font-black text-indigo-900 uppercase">Desglose de Pago Mixto</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Efectivo ($ USD)</label>
+                    <input 
+                      type="number"
+                      step="0.50"
+                      value={montoEfectivoCheckout}
+                      onChange={(e) => setMontoEfectivoCheckout(e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Monto Digital ($ USD)</label>
+                    <input 
+                      type="number"
+                      step="0.50"
+                      value={montoDigitalCheckout}
+                      onChange={(e) => setMontoDigitalCheckout(e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Canal Digital</label>
+                    <select 
+                      value={metodoDigitalCheckout}
+                      onChange={(e) => setMetodoDigitalCheckout(e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                    >
+                      <option value="Pago Móvil">Pago Móvil</option>
+                      <option value="Punto de Venta">Punto de Venta</option>
+                      <option value="Zelle">Zelle</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Código de Ref. Digital *</label>
+                    <input 
+                      type="text"
+                      value={codigoVerificacionCheckout}
+                      onChange={(e) => setCodigoVerificacionCheckout(e.target.value)}
+                      placeholder="Ej. Ref 123456"
+                      required
+                      className="w-full px-2 py-1 rounded border border-indigo-300 font-bold bg-white text-indigo-900"
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] font-bold text-indigo-700 text-right pt-1 border-t border-indigo-200/60">
+                  Suma: ${((parseFloat(montoEfectivoCheckout)||0) + (parseFloat(montoDigitalCheckout)||0)).toFixed(2)} / ${totalCobrarEnCaja.toFixed(2)} USD
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Inspection Checklist */}
