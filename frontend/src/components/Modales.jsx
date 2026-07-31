@@ -366,6 +366,19 @@ export function AsignarDirectoModal({
       ? `Pago Mixto (${metodoParteA}: $${montoParteA}${refAStr} + ${metodoParteB}: $${montoParteB}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
       : (isDigital && codigoVerificacion.trim() ? `${metodo} - Ref: ${codigoVerificacion}` : metodo);
 
+    const confirmCheckin = window.confirm(
+      `¿Está seguro de procesar el Check-In del cliente?\n\n` +
+      `• Huésped Titular: ${nombre.trim()}\n` +
+      `• CI / Documento: ${ci.trim()}\n` +
+      `• Habitación: ${room.num} (${room.tipo})\n` +
+      `• Modalidad: ${modalidad === '4h' ? '4 Horas' : 'Pernocta'}\n` +
+      `• Monto Total: $${totalMontoUsd.toFixed(2)} USD (~ Bs. ${montoVes})`
+    );
+    if (!confirmCheckin) {
+      setIsSubmitting(false);
+      return;
+    }
+
     await onSubmit({
       numHabitacion: room.num,
       ci: ci.trim(),
@@ -1124,6 +1137,16 @@ export function NuevaReservaModal({
       return;
     }
 
+    const confirmReserva = window.confirm(
+      `¿Está seguro de registrar la Reserva para el cliente?\n\n` +
+      `• Huésped Titular: ${nombre.trim()}\n` +
+      `• CI / Documento: ${ci.trim()}\n` +
+      `• Habitación Asignada: ${finalRoomNum} (${selectedHabTipo})\n` +
+      `• Modalidad: ${modalidad === '4h' ? '4 Horas' : `Pernocta (${nochesPernocta} Noche(s))`}\n` +
+      `• Adelanto Registrado: $${adelantoNum.toFixed(2)} USD`
+    );
+    if (!confirmReserva) return;
+
     const acompNombres = acompanantes.map((a, i) => {
       const age = calcularEdad(a.fechaNacimiento);
       const isAdult = age >= 18;
@@ -1741,6 +1764,10 @@ export function AccionesReservaModal({
         <div className="space-y-2 pt-2">
           <button
             onClick={() => {
+              const confirmCheckinRes = window.confirm(
+                `¿Confirmar la entrada y entrega de llaves de la Habitación ${room.num} para el huésped reservado ${reserva.cliente?.nombre || 'Huésped'}?`
+              );
+              if (!confirmCheckinRes) return;
               onCheckinReserva(room.num);
               onClose();
             }}
