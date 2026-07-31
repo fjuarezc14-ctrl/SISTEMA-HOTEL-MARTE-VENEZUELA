@@ -925,7 +925,9 @@ export default function App() {
               )}
               {activeTab === 'reportes' && canAccessTab('reportes') && (
                 <Reportes 
-                  caja={appState.caja} 
+                  caja={appState.caja}
+                  historial={appState.historial}
+                  currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                 />
               )}

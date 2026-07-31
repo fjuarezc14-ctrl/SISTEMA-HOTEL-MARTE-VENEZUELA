@@ -1,16 +1,29 @@
 import React, { useState, useEffect } from 'react';
 
-export default function Reportes({ caja = [], consumos = [], reservas = [], habitaciones = [], tasaUsd = 50.0 }) {
+export default function Reportes({ caja = [], historial = [], currentUser, tasaUsd = 50.0 }) {
+  // Main view tab: 'general' | 'recepcionista'
+  const [reportTab, setReportTab] = useState('general');
+
   // State for date filters
   const [dateFilter, setDateFilter] = useState('hoy'); // 'hoy', 'ayer', 'mes', 'personalizado'
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+
+  // State for receptionist daily sales report
+  const [selectedRecepcionista, setSelectedRecepcionista] = useState('TODOS');
 
   // State for report generation options
   const [showHospedaje, setShowHospedaje] = useState(true);
   const [showMarket, setShowMarket] = useState(true);
   const [showEgresos, setShowEgresos] = useState(true);
   const [showMetodos, setShowMetodos] = useState(true);
+
+  // Set default receptionist filter to current user if not Admin
+  useEffect(() => {
+    if (currentUser?.nombre && currentUser.rol !== 'Administrador') {
+      setSelectedRecepcionista(currentUser.nombre);
+    }
+  }, [currentUser]);
 
   // Parse transaction timestamp string to Date safely in local time
   const parseDate = (horaStr) => {
@@ -69,50 +82,248 @@ export default function Reportes({ caja = [], consumos = [], reservas = [], habi
 
   const filteredCaja = caja.filter(t => isDateInRange(t.hora));
 
-  // Compute metrics
-  const ingresosHospedaje = filteredCaja.filter(t => t.tipo === 'Ingreso' && t.origen === 'Hospedaje').reduce((s, t) => s + parseFloat(t.monto), 0);
-  const ingresosMarket = filteredCaja.filter(t => t.tipo === 'Ingreso' && t.origen === 'Market').reduce((s, t) => s + parseFloat(t.monto), 0);
-  const totalEgresos = filteredCaja.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + parseFloat(t.monto), 0);
-  const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
+  // Build unique receptionists list from caja & historial
+  const recepList = Array.from(new Set([
+    ...caja.map(t => t.usuarioNombre).filter(Boolean),
+    ...historial.map(h => h.recepcionistaNombre).filter(Boolean)
+  ]));
 
-  // Helper to clean encoding errors and group by base payment method category
-  const cleanPaymentMethodName = (m) => {
-    if (!m) return 'EFECTIVO BOLÍVARES';
-    let str = m
-      .replace(/M[^\w\s]?vil/gi, 'Móvil')
-      .replace(/Bol[^\w\s]?vares/gi, 'Bolívares')
-      .replace(/\uFFFD/g, '');
+  // Strictly filter TODAY's transactions for Receptionist Sales Report (No past days accumulated)
+  const todayTransactions = caja.filter(t => {
+    const d = parseDate(t.hora);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const dateToCheck = new Date(d);
+    dateToCheck.setHours(0,0,0,0);
+    return dateToCheck.getTime() === today.getTime() && t.tipo === 'Ingreso';
+  });
+
+  const recepTodayTransactions = todayTransactions.filter(t => {
+    if (selectedRecepcionista === 'TODOS') return true;
+    return (t.usuarioNombre || '').trim().toLowerCase() === selectedRecepcionista.trim().toLowerCase();
+  });
+
+  // Calculate receptionist sales breakdown by Room Type for TODAY
+  let ventasMatrimonialUSD = 0;
+  let cantMatrimonial = 0;
+  let ventasMiniSuiteUSD = 0;
+  let cantMiniSuite = 0;
+  let ventasMarketUSD = 0;
+  let cantMarket = 0;
+  let ventasOtrosUSD = 0;
+
+  recepTodayTransactions.forEach(t => {
+    const monto = parseFloat(t.monto) || 0;
+    const conc = (t.concepto || '').toLowerCase();
     
-    const match = str.match(/^(.*?)(?:\s*[-–—]\s*|\s*\(\s*|\s+)(?:Ref:?|Ref\s*#?|Referencia:?)/i);
-    if (match && match[1] && match[1].trim().length > 0) {
-      str = match[1].trim();
-    }
-    return str.trim().toUpperCase();
-  };
-
-  // Breakdown by method
-  const metodosSummary = {};
-  filteredCaja.forEach(t => {
-    if (t.tipo === 'Ingreso') {
-      const key = cleanPaymentMethodName(t.metodo);
-      if (!metodosSummary[key]) metodosSummary[key] = 0;
-      metodosSummary[key] += parseFloat(t.monto);
+    if (t.origen === 'Market' || conc.includes('tienda') || conc.includes('market')) {
+      ventasMarketUSD += monto;
+      cantMarket++;
+    } else if (conc.includes('mini suite') || conc.includes('suite')) {
+      ventasMiniSuiteUSD += monto;
+      cantMiniSuite++;
+    } else if (conc.includes('matrimonial') || conc.includes('hab 1') || conc.includes('hab 2')) {
+      ventasMatrimonialUSD += monto;
+      cantMatrimonial++;
+    } else {
+      // Default to Matrimonial if standard room stay
+      ventasMatrimonialUSD += monto;
+      cantMatrimonial++;
     }
   });
 
+  const totalVentasRecepHoyUSD = ventasMatrimonialUSD + ventasMiniSuiteUSD + ventasMarketUSD + ventasOtrosUSD;
+
   return (
     <div className="space-y-6 fade-in pb-20">
+      {/* Header Banner with Tabs */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-chart-pie text-blue-600 mr-2"></i> Reportes Generales y Analíticas</h2>
-          <p className="text-xs text-slate-500 font-semibold mt-1">Gere reportes profesionales personalizables para impresión o PDF.</p>
+          <h2 className="text-xl font-black text-slate-800"><i className="fa-solid fa-chart-pie text-blue-600 mr-2"></i> Módulo de Reportes y Analíticas</h2>
+          <p className="text-xs text-slate-500 font-semibold mt-1">Consulte ingresos generales o el desglose diario individual por recepcionista.</p>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-3">
+          {/* Tab buttons */}
+          <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200">
+            <button
+              onClick={() => setReportTab('general')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                reportTab === 'general' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <i className="fa-solid fa-file-invoice mr-1.5 text-blue-500"></i> Reporte General
+            </button>
+            <button
+              onClick={() => setReportTab('recepcionista')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                reportTab === 'recepcionista' ? 'bg-white text-indigo-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <i className="fa-solid fa-user-check mr-1.5 text-indigo-600"></i> Ventas del Día (Recepcionista)
+            </button>
+          </div>
+
           <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow flex items-center gap-2 transition-all">
-            <i className="fa-solid fa-print"></i> Imprimir / Guardar PDF
+            <i className="fa-solid fa-print"></i> Imprimir / PDF
           </button>
         </div>
       </div>
+
+      {/* VIEW 2: RECEPTIONIST DAILY SALES REPORT */}
+      {reportTab === 'recepcionista' && (
+        <div className="space-y-6 fade-in">
+          {/* Filter Bar */}
+          <div className="bg-indigo-950 text-white p-5 rounded-2xl shadow-lg border border-indigo-900 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-800/60 p-3 rounded-xl border border-indigo-700">
+                <i className="fa-solid fa-user-tie text-2xl text-amber-400"></i>
+              </div>
+              <div>
+                <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest block">Reporte Diario de Ventas por Jornada</span>
+                <h3 className="text-lg font-black">Ventas de Hoy ({new Date().toLocaleDateString('es-VE')})</h3>
+                <p className="text-xs text-indigo-200">
+                  {selectedRecepcionista === 'TODOS' 
+                    ? 'Mostrando ventas del día acumuladas de todo el personal.' 
+                    : `Mostrando únicamente ventas de hoy registradas por: ${selectedRecepcionista}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
+              <label className="text-xs font-bold text-indigo-200 whitespace-nowrap">Filtrar Recepcionista:</label>
+              <select
+                value={selectedRecepcionista}
+                onChange={(e) => setSelectedRecepcionista(e.target.value)}
+                disabled={currentUser?.rol !== 'Administrador'}
+                className="w-full sm:w-64 px-3 py-2 rounded-xl bg-slate-900 border border-indigo-700 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
+              >
+                {currentUser?.rol === 'Administrador' && (
+                  <option value="TODOS">-- Todos los Recepcionistas --</option>
+                )}
+                {recepList.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Breakdown KPI Cards by Room Type & Minimarket */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Matrimonial */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-l-4 border-l-blue-500">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Hab. Matrimoniales</span>
+                <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full">{cantMatrimonial} Venta(s)</span>
+              </div>
+              <p className="text-2xl font-black text-slate-800">${ventasMatrimonialUSD.toFixed(2)} USD</p>
+              <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(ventasMatrimonialUSD * tasaUsd).toFixed(2)} VES</p>
+            </div>
+
+            {/* Mini Suite */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-l-4 border-l-purple-500">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Hab. Mini Suite</span>
+                <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-2 py-0.5 rounded-full">{cantMiniSuite} Venta(s)</span>
+              </div>
+              <p className="text-2xl font-black text-slate-800">${ventasMiniSuiteUSD.toFixed(2)} USD</p>
+              <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(ventasMiniSuiteUSD * tasaUsd).toFixed(2)} VES</p>
+            </div>
+
+            {/* Minimarket */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-l-4 border-l-amber-500">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Ventas Minimarket</span>
+                <span className="bg-amber-50 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">{cantMarket} Venta(s)</span>
+              </div>
+              <p className="text-2xl font-black text-slate-800">${ventasMarketUSD.toFixed(2)} USD</p>
+              <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(ventasMarketUSD * tasaUsd).toFixed(2)} VES</p>
+            </div>
+
+            {/* Total Recepcionista */}
+            <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-sm border-l-4 border-l-emerald-500">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">Total Jornada Hoy</span>
+                <span className="bg-emerald-950 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                  {recepTodayTransactions.length} Mov.
+                </span>
+              </div>
+              <p className="text-2xl font-black text-white">${totalVentasRecepHoyUSD.toFixed(2)} USD</p>
+              <p className="text-[10px] text-emerald-200 font-bold">~ Bs. {(totalVentasRecepHoyUSD * tasaUsd).toFixed(2)} VES</p>
+            </div>
+          </div>
+
+          {/* Transactions Table for Receptionist */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+              <h4 className="text-sm font-black text-slate-800">
+                <i className="fa-solid fa-[#c5920c] fa-list-check mr-2"></i> Detalle de Ventas e Ingresos Registrados Hoy
+              </h4>
+              <span className="text-[10px] font-bold text-slate-400">
+                Excluye días anteriores (Solo fecha de hoy)
+              </span>
+            </div>
+
+            {recepTodayTransactions.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <i className="fa-solid fa-receipt text-3xl mb-2 block text-slate-300"></i>
+                <p className="text-xs font-bold">No hay ventas registradas el día de hoy para esta consulta.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200">
+                      <th className="p-3">Hora</th>
+                      <th className="p-3">Recepcionista</th>
+                      <th className="p-3">Concepto / Habitación</th>
+                      <th className="p-3">Categoría</th>
+                      <th className="p-3">Método de Pago</th>
+                      <th className="p-3 text-right">Monto ($ USD)</th>
+                      <th className="p-3 text-right">Monto (Bs VES)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {recepTodayTransactions.map((t, idx) => {
+                      const conc = (t.concepto || '').toLowerCase();
+                      let catLabel = 'Matrimonial';
+                      let catBadge = 'bg-blue-50 text-blue-700';
+
+                      if (t.origen === 'Market' || conc.includes('tienda') || conc.includes('market')) {
+                        catLabel = 'Minimarket';
+                        catBadge = 'bg-amber-50 text-amber-700';
+                      } else if (conc.includes('mini suite') || conc.includes('suite')) {
+                        catLabel = 'Mini Suite';
+                        catBadge = 'bg-purple-50 text-purple-700';
+                      }
+
+                      return (
+                        <tr key={t.id || idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-bold text-slate-800">{t.hora?.split(',')[1] || t.hora}</td>
+                          <td className="p-3 font-bold text-indigo-900">{t.usuarioNombre || 'Recepcionista'}</td>
+                          <td className="p-3">{t.concepto}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${catBadge}`}>
+                              {catLabel}
+                            </span>
+                          </td>
+                          <td className="p-3 font-bold text-slate-600">{t.metodo}</td>
+                          <td className="p-3 text-right font-black text-emerald-600">${parseFloat(t.monto).toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-slate-500">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 1: GENERAL EXECUTIVE REPORT */}
+      {reportTab === 'general' && (
+        <>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:hidden">
         {/* Filters Panel */}
@@ -310,13 +521,9 @@ export default function Reportes({ caja = [], consumos = [], reservas = [], habi
           </div>
         )}
 
-        <div className="hidden print:block mt-20 text-center">
-          <div className="inline-block w-48 border-t border-slate-800 pt-2 text-xs font-bold uppercase">
-            Firma Supervisor / Gerente
-          </div>
         </div>
-
-      </div>
+      </>
+      )}
     </div>
   );
 }

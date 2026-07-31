@@ -493,5 +493,16 @@ export async function initDb() {
     await db.run("ALTER TABLE caja ADD COLUMN usuario_validador_nombre TEXT DEFAULT ''");
   } catch (e) { /* Columna ya existe */ }
 
+  // Migraciones autocurativas para la tabla consumos (v7 - Pre-Consumos Minimarket)
+  try {
+    await db.run("ALTER TABLE consumos ADD COLUMN cliente_ci TEXT DEFAULT ''");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE consumos ADD COLUMN cliente_nombre TEXT DEFAULT ''");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE consumos ADD COLUMN estado TEXT DEFAULT 'cargado_habitacion'");
+  } catch (e) { /* Columna ya existe */ }
+
   return db;
 }

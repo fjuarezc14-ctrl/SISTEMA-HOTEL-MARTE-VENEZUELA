@@ -829,6 +829,22 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       );
     }
 
+    // Auto-link pre-consumos (Minimarket consumos en espera) para este cliente
+    const targetCi = (dni || ci || '').trim();
+    const targetNombre = (nombre || '').trim();
+    if (targetCi || targetNombre) {
+      await db.run(
+        `UPDATE consumos 
+         SET numHabitacion = ?, estado = 'cargado_habitacion' 
+         WHERE (numHabitacion = 'EN_ESPERA' OR estado = 'pre_consumo') 
+           AND (
+             (cliente_ci != '' AND cliente_ci = ?) OR 
+             (cliente_nombre != '' AND LOWER(cliente_nombre) = LOWER(?))
+           )`,
+        [numHabitacion, targetCi, targetNombre]
+      );
+    }
+
     res.json({ success: true, message: 'Check-in directo registrado correctamente.' });
   } catch (error) {
     console.error('Error processing walk-in check-in:', error);
@@ -1779,38 +1795,53 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
       await db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [item.cantidad, item.id]);
     }
 
-    // 2. Prepare payment breakdown
-    const pagosList = Array.isArray(pagos) ? pagos : [pagos];
-    const isPagoMixto = pagosList.length > 1;
-    
-    let conceptoItems = items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
-    let clienteInfo = clienteNombre ? ` - Cliente: ${clienteNombre.trim()}` : '';
-    if (clienteCi) clienteInfo += ` (CI: ${clienteCi.trim()})`;
+    // If pre-consumo (Minimarket order before assigning room), save items into `consumos` table under 'EN_ESPERA'
+    const isPreConsumo = req.body.isPreConsumo || false;
 
-    // Insert cash entries in `caja` for each payment method in the breakdown
-    for (const pago of pagosList) {
-      const montoPago = parseFloat(pago.monto_usd) || 0;
-      if (montoPago > 0) {
-        const transId = 't_pos_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
-        let conceptoCaja = `Venta Tienda #${saleCode} (${conceptoItems})${clienteInfo} [${comprobante || 'Ticket Interno'}]`;
-        if (isPagoMixto) {
-          conceptoCaja += ` (PAGO MIXTO: $${montoPago.toFixed(2)} USD vía ${pago.metodo})`;
-        }
-
+    if (isPreConsumo) {
+      for (const item of items) {
+        const cnsId = 'cns_pre_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
         await db.run(
-          'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO consumos (id, numHabitacion, concepto, monto, cantidad, fecha, cliente_ci, cliente_nombre, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [
-            transId,
-            'Ingreso',
-            conceptoCaja,
-            montoPago,
-            pago.metodo || 'Efectivo Bolívares',
+            cnsId,
+            'EN_ESPERA',
+            item.nombre,
+            parseFloat(item.precio_venta),
+            parseInt(item.cantidad),
             getFechaHoraActual(),
-            req.user.id,
-            req.user.nombre,
-            'Market'
+            (clienteCi || '').trim(),
+            (clienteNombre || '').trim(),
+            'pre_consumo'
           ]
         );
+      }
+    } else {
+      // Insert cash entries in `caja` for each payment method in the breakdown
+      for (const pago of pagosList) {
+        const montoPago = parseFloat(pago.monto_usd) || 0;
+        if (montoPago > 0) {
+          const transId = 't_pos_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+          let conceptoCaja = `Venta Tienda #${saleCode} (${conceptoItems})${clienteInfo} [${comprobante || 'Ticket Interno'}]`;
+          if (isPagoMixto) {
+            conceptoCaja += ` (PAGO MIXTO: $${montoPago.toFixed(2)} USD vía ${pago.metodo})`;
+          }
+
+          await db.run(
+            'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+              transId,
+              'Ingreso',
+              conceptoCaja,
+              montoPago,
+              pago.metodo || 'Efectivo Bolívares',
+              getFechaHoraActual(),
+              req.user.id,
+              req.user.nombre,
+              'Market'
+            ]
+          );
+        }
       }
     }
 
@@ -1843,7 +1874,36 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
   }
 });
 
-// 8. GET /api/consumos/:numHabitacion - Listar consumos de una habitación (Fase 5)
+// GET /api/consumos/pre-consumos - Listar consumos previos en espera de habitación
+app.get('/api/consumos/pre-consumos', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all("SELECT * FROM consumos WHERE estado = 'pre_consumo' OR numHabitacion = 'EN_ESPERA'");
+    res.json({ success: true, preConsumos: list });
+  } catch (error) {
+    console.error('Error fetching pre-consumos:', error);
+    res.status(500).json({ error: 'Error al obtener consumos previos' });
+  }
+});
+
+// POST /api/consumos/vincular - Vincular consumos en espera a una habitación asignada
+app.post('/api/consumos/vincular', requireAuth, async (req, res) => {
+  const { consumoId, numHabitacion } = req.body;
+  if (!consumoId || !numHabitacion) {
+    return res.status(400).json({ error: 'Faltan parámetros de vinculación' });
+  }
+  try {
+    await db.run(
+      "UPDATE consumos SET numHabitacion = ?, estado = 'cargado_habitacion' WHERE id = ?",
+      [numHabitacion, consumoId]
+    );
+    res.json({ success: true, message: `Consumo vinculado exitosamente a la habitación ${numHabitacion}` });
+  } catch (error) {
+    console.error('Error vincular consumo:', error);
+    res.status(500).json({ error: 'Error al vincular consumo' });
+  }
+});
+
+// GET /api/consumos/:numHabitacion - Listar consumos de una habitación
 app.get('/api/consumos/:numHabitacion', requireAuth, async (req, res) => {
   const { numHabitacion } = req.params;
   try {

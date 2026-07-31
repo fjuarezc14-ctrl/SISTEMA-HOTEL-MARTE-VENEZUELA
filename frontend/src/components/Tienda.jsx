@@ -19,6 +19,12 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
     { metodo: 'Pago Móvil', monto_usd: '' }
   ]);
 
+  // Pre-Consumo / Waiting guest state
+  const [isPreConsumo, setIsPreConsumo] = useState(false);
+  const [preConsumosList, setPreConsumosList] = useState([]);
+  const [showPreConsumosModal, setShowPreConsumosModal] = useState(false);
+  const [targetRoomToLink, setTargetRoomToLink] = useState({});
+
   // Ticket modal state after successful sale
   const [ticketModal, setTicketModal] = useState(null); // ticket data
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,6 +128,11 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
       return;
     }
 
+    if (isPreConsumo && (!clienteNombre.trim() || !clienteCi.trim())) {
+      setErrorMsg('⚠️ Para registrar un Pre-Consumo en Espera debe ingresar el Nombre y CI / Documento del cliente.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg('');
 
@@ -134,18 +145,25 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
         },
         body: JSON.stringify({
           items: cart,
-          pagos: finalPagos,
+          pagos: isPreConsumo ? [] : finalPagos,
           clienteNombre: clienteNombre.trim(),
           clienteCi: clienteCi.trim(),
-          comprobante
+          comprobante,
+          isPreConsumo
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al procesar la venta');
 
-      setTicketModal(data.ticket);
+      if (isPreConsumo) {
+        alert(`✅ Pre-Consumo en Espera registrado para ${clienteNombre.trim()} (CI: ${clienteCi.trim()}). Se vinculará automáticamente al hacer Check-In.`);
+      } else {
+        setTicketModal(data.ticket);
+      }
       clearCart();
+      setIsPreConsumo(false);
+      fetchPreConsumos();
       if (onStateChange) onStateChange();
     } catch (err) {
       setErrorMsg(`⚠️ ${err.message}`);
