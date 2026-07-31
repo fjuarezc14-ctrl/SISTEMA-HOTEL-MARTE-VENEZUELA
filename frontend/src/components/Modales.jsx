@@ -190,11 +190,13 @@ export function AsignarDirectoModal({
   const [modalidad, setModalidad] = useState('4h');
   const [metodo, setMetodo] = useState('Efectivo (Bs)');
   const [codigoVerificacion, setCodigoVerificacion] = useState('');
-  
-  // Mixed Payment states
-  const [montoEfectivo, setMontoEfectivo] = useState('0');
-  const [montoDigital, setMontoDigital] = useState('0');
-  const [metodoDigital, setMetodoDigital] = useState('Pago Móvil');
+  // Flexible Multi-Currency Mixed Payment states
+  const [metodoParteA, setMetodoParteA] = useState('Efectivo ($)');
+  const [montoParteA, setMontoParteA] = useState('0');
+  const [codigoRefParteA, setCodigoRefParteA] = useState('');
+  const [metodoParteB, setMetodoParteB] = useState('Pago Móvil');
+  const [montoParteB, setMontoParteB] = useState('0');
+  const [codigoRefParteB, setCodigoRefParteB] = useState('');
 
   const comprobante = 'Ticket Interno'; // Locked to Ticket Interno per client request
 
@@ -232,9 +234,12 @@ export function AsignarDirectoModal({
       setModalidad('4h');
       setMetodo('Efectivo (Bs)');
       setCodigoVerificacion('');
-      setMontoEfectivo('0');
-      setMontoDigital('0');
-      setMetodoDigital('Pago Móvil');
+      setMetodoParteA('Efectivo ($)');
+      setMontoParteA('0');
+      setCodigoRefParteA('');
+      setMetodoParteB('Pago Móvil');
+      setMontoParteB('0');
+      setCodigoRefParteB('');
       setSearchQuery('');
       setShowSuggestions(false);
     }
@@ -327,15 +332,20 @@ export function AsignarDirectoModal({
     }
 
     if (metodo === 'Pago Mixto') {
-      const ef = parseFloat(montoEfectivo) || 0;
-      const dig = parseFloat(montoDigital) || 0;
-      if (Math.abs((ef + dig) - totalMontoUsd) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma ($${ef.toFixed(2)} + $${dig.toFixed(2)} = $${(ef+dig).toFixed(2)}) debe coincidir con el total ($${totalMontoUsd.toFixed(2)} USD).`);
+      const pA = parseFloat(montoParteA) || 0;
+      const pB = parseFloat(montoParteB) || 0;
+      if (Math.abs((pA + pB) - totalMontoUsd) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma ($${pA.toFixed(2)} + $${pB.toFixed(2)} = $${(pA+pB).toFixed(2)}) debe coincidir con el total ($${totalMontoUsd.toFixed(2)} USD).`);
         setIsSubmitting(false);
         return;
       }
-      if (dig > 0 && !codigoVerificacion.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para el componente digital del Pago Mixto.');
+      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && pA > 0 && !codigoRefParteA.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 1 (Digital).');
+        setIsSubmitting(false);
+        return;
+      }
+      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteB) && pB > 0 && !codigoRefParteB.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 2 (Digital).');
         setIsSubmitting(false);
         return;
       }
@@ -348,6 +358,14 @@ export function AsignarDirectoModal({
       return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
     }).join(', ');
 
+    const refAStr = codigoRefParteA.trim() ? ` - Ref: ${codigoRefParteA.trim()}` : '';
+    const refBStr = codigoRefParteB.trim() ? ` - Ref: ${codigoRefParteB.trim()}` : '';
+    const refsCombined = [codigoRefParteA.trim(), codigoRefParteB.trim()].filter(Boolean).join(' / ');
+
+    const finalMetodoStr = metodo === 'Pago Mixto'
+      ? `Pago Mixto (${metodoParteA}: $${montoParteA}${refAStr} + ${metodoParteB}: $${montoParteB}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
+      : (isDigital && codigoVerificacion.trim() ? `${metodo} - Ref: ${codigoVerificacion}` : metodo);
+
     await onSubmit({
       numHabitacion: room.num,
       ci: ci.trim(),
@@ -359,8 +377,8 @@ export function AsignarDirectoModal({
       ciAcomp: acompanantes.map(a => a.ci).join(', '),
       acompanantes,
       monto: totalMontoUsd,
-      metodo: metodo === 'Pago Mixto' ? `Pago Mixto (Ef: $${montoEfectivo} + ${metodoDigital}: $${montoDigital}) - Ref: ${codigoVerificacion}` : metodo,
-      codigoVerificacion,
+      metodo: finalMetodoStr,
+      codigoVerificacion: refsCombined || codigoVerificacion,
       fotoCi,
       comprobante,
       modalidad
@@ -724,56 +742,116 @@ export function AsignarDirectoModal({
                     </div>
                   )}
 
-                  {/* Mixed Payment Breakdown */}
+                  {/* Flexible Multi-Currency Mixed Payment Breakdown */}
                   {metodo === 'Pago Mixto' && (
-                    <div className="col-span-2 bg-indigo-50 p-3 rounded-xl border border-indigo-200 space-y-2">
-                      <p className="text-[10px] font-black text-indigo-900 uppercase">Desglose de Pago Mixto</p>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-500">Efectivo ($ USD)</label>
-                          <input 
-                            type="number"
-                            step="0.50"
-                            value={montoEfectivo}
-                            onChange={(e) => setMontoEfectivo(e.target.value)}
-                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-500">Monto Digital ($ USD)</label>
-                          <input 
-                            type="number"
-                            step="0.50"
-                            value={montoDigital}
-                            onChange={(e) => setMontoDigital(e.target.value)}
-                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                          />
-                        </div>
+                    <div className="col-span-2 bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-3">
+                      <div className="flex justify-between items-center border-b border-indigo-200/60 pb-1.5">
+                        <span className="text-[10px] font-black text-indigo-900 uppercase">
+                          <i className="fa-solid fa-arrows-split-up-and-left mr-1 text-indigo-600"></i> Desglose Multimoneda (Pago Mixto)
+                        </span>
+                        <span className="text-[10px] font-bold text-indigo-700">
+                          Total Exigido: <strong>${totalMontoUsd.toFixed(2)} USD</strong> (~ Bs. {montoVes})
+                        </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-500">Método Digital</label>
-                          <select 
-                            value={metodoDigital}
-                            onChange={(e) => setMetodoDigital(e.target.value)}
-                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                          >
-                            <option value="Pago Móvil">Pago Móvil</option>
-                            <option value="Punto de Venta">Punto de Venta</option>
-                            <option value="Zelle">Zelle</option>
-                          </select>
+
+                      {/* Parte 1 */}
+                      <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 1: Método</label>
+                            <select
+                              value={metodoParteA}
+                              onChange={(e) => setMetodoParteA(e.target.value)}
+                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                            >
+                              <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                              <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                              <option value="Pago Móvil">Pago Móvil</option>
+                              <option value="Punto de Venta">Punto de Venta</option>
+                              <option value="Zelle">Zelle</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                            <input 
+                              type="number"
+                              step="0.50"
+                              value={montoParteA}
+                              onChange={(e) => setMontoParteA(e.target.value)}
+                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                            />
+                            {parseFloat(montoParteA) > 0 && (
+                              <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
+                                ~ Bs. {(parseFloat(montoParteA) * tasaUsd).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-500">Ref. Digital *</label>
-                          <input 
-                            type="text"
-                            value={codigoVerificacion}
-                            onChange={(e) => setCodigoVerificacion(e.target.value)}
-                            placeholder="Ref #123"
-                            required
-                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                          />
+                        {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && (
+                          <div>
+                            <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 1 *</label>
+                            <input 
+                              type="text"
+                              value={codigoRefParteA}
+                              onChange={(e) => setCodigoRefParteA(e.target.value)}
+                              placeholder="Ej. Ref 123456"
+                              className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
+                              required
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Parte 2 */}
+                      <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 2: Método</label>
+                            <select
+                              value={metodoParteB}
+                              onChange={(e) => setMetodoParteB(e.target.value)}
+                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                            >
+                              <option value="Pago Móvil">Pago Móvil</option>
+                              <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                              <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                              <option value="Punto de Venta">Punto de Venta</option>
+                              <option value="Zelle">Zelle</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                            <input 
+                              type="number"
+                              step="0.50"
+                              value={montoParteB}
+                              onChange={(e) => setMontoParteB(e.target.value)}
+                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                            />
+                            {parseFloat(montoParteB) > 0 && (
+                              <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
+                                ~ Bs. {(parseFloat(montoParteB) * tasaUsd).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteB) && (
+                          <div>
+                            <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 2 *</label>
+                            <input 
+                              type="text"
+                              value={codigoRefParteB}
+                              onChange={(e) => setCodigoRefParteB(e.target.value)}
+                              placeholder="Ej. Ref 789012"
+                              className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
+                              required
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 border-t border-indigo-200/60">
+                        Suma Mixta: <strong className="text-xs font-black">${((parseFloat(montoParteA)||0) + (parseFloat(montoParteB)||0)).toFixed(2)} USD</strong> / ${totalMontoUsd.toFixed(2)} USD
                       </div>
                     </div>
                   )}
@@ -1772,10 +1850,13 @@ export function CheckoutModal({
   const [metodoPago, setMetodoPago] = useState('Efectivo (Bs)');
   const [vetarCliente, setVetarCliente] = useState(false);
 
-  // Mixed Payment & Verification Code states for Checkout
-  const [montoEfectivoCheckout, setMontoEfectivoCheckout] = useState('0');
-  const [montoDigitalCheckout, setMontoDigitalCheckout] = useState('0');
-  const [metodoDigitalCheckout, setMetodoDigitalCheckout] = useState('Pago Móvil');
+  // Flexible Multi-Currency Mixed Payment states for Checkout
+  const [metodoParteACheckout, setMetodoParteACheckout] = useState('Efectivo ($)');
+  const [montoParteACheckout, setMontoParteACheckout] = useState('0');
+  const [codigoRefParteACheckout, setCodigoRefParteACheckout] = useState('');
+  const [metodoParteBCheckout, setMetodoParteBCheckout] = useState('Pago Móvil');
+  const [montoParteBCheckout, setMontoParteBCheckout] = useState('0');
+  const [codigoRefParteBCheckout, setCodigoRefParteBCheckout] = useState('');
   const [codigoVerificacionCheckout, setCodigoVerificacionCheckout] = useState('');
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
@@ -1805,9 +1886,12 @@ export function CheckoutModal({
       setMontoHabitacion('0.00');
       setMetodoPago('Efectivo (Bs)');
       setVetarCliente(false);
-      setMontoEfectivoCheckout('0');
-      setMontoDigitalCheckout('0');
-      setMetodoDigitalCheckout('Pago Móvil');
+      setMetodoParteACheckout('Efectivo ($)');
+      setMontoParteACheckout('0');
+      setCodigoRefParteACheckout('');
+      setMetodoParteBCheckout('Pago Móvil');
+      setMontoParteBCheckout('0');
+      setCodigoRefParteBCheckout('');
       setCodigoVerificacionCheckout('');
     }
   }, [isOpen]);
@@ -1874,20 +1958,28 @@ export function CheckoutModal({
     }
 
     if (metodoPago === 'Pago Mixto') {
-      const ef = parseFloat(montoEfectivoCheckout) || 0;
-      const dig = parseFloat(montoDigitalCheckout) || 0;
-      if (Math.abs((ef + dig) - totalCobrarEnCaja) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma ($${ef.toFixed(2)} + $${dig.toFixed(2)} = $${(ef+dig).toFixed(2)}) debe coincidir con el total a cobrar ($${totalCobrarEnCaja.toFixed(2)} USD).`);
+      const pA = parseFloat(montoParteACheckout) || 0;
+      const pB = parseFloat(montoParteBCheckout) || 0;
+      if (Math.abs((pA + pB) - totalCobrarEnCaja) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma ($${pA.toFixed(2)} + $${pB.toFixed(2)} = $${(pA+pB).toFixed(2)}) debe coincidir con el total a cobrar ($${totalCobrarEnCaja.toFixed(2)} USD).`);
         return;
       }
-      if (dig > 0 && !codigoVerificacionCheckout.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para la parte digital del Pago Mixto.');
+      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteACheckout) && pA > 0 && !codigoRefParteACheckout.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 1 (Digital).');
+        return;
+      }
+      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteBCheckout) && pB > 0 && !codigoRefParteBCheckout.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 2 (Digital).');
         return;
       }
     }
 
+    const refAStr = codigoRefParteACheckout.trim() ? ` - Ref: ${codigoRefParteACheckout.trim()}` : '';
+    const refBStr = codigoRefParteBCheckout.trim() ? ` - Ref: ${codigoRefParteBCheckout.trim()}` : '';
+    const refsCombined = [codigoRefParteACheckout.trim(), codigoRefParteBCheckout.trim()].filter(Boolean).join(' / ');
+
     const finalMetodoPago = metodoPago === 'Pago Mixto'
-      ? `Pago Mixto (Ef: $${montoEfectivoCheckout} + ${metodoDigitalCheckout}: $${montoDigitalCheckout}) - Ref: ${codigoVerificacionCheckout}`
+      ? `Pago Mixto (${metodoParteACheckout}: $${montoParteACheckout}${refAStr} + ${metodoParteBCheckout}: $${montoParteBCheckout}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
       : (isDigital && codigoVerificacionCheckout.trim() ? `${metodoPago} - Ref: ${codigoVerificacionCheckout}` : metodoPago);
 
     let finalDetalle = detallePenalidad.trim();
@@ -2055,57 +2147,116 @@ export function CheckoutModal({
               </div>
             )}
 
-            {/* Mixed Payment Breakdown */}
+            {/* Flexible Multi-Currency Mixed Payment Breakdown */}
             {metodoPago === 'Pago Mixto' && (
-              <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-200 space-y-2">
-                <p className="text-[10px] font-black text-indigo-900 uppercase">Desglose de Pago Mixto</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-500">Efectivo ($ USD)</label>
-                    <input 
-                      type="number"
-                      step="0.50"
-                      value={montoEfectivoCheckout}
-                      onChange={(e) => setMontoEfectivoCheckout(e.target.value)}
-                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-500">Monto Digital ($ USD)</label>
-                    <input 
-                      type="number"
-                      step="0.50"
-                      value={montoDigitalCheckout}
-                      onChange={(e) => setMontoDigitalCheckout(e.target.value)}
-                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-500">Canal Digital</label>
-                    <select 
-                      value={metodoDigitalCheckout}
-                      onChange={(e) => setMetodoDigitalCheckout(e.target.value)}
-                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                    >
-                      <option value="Pago Móvil">Pago Móvil</option>
-                      <option value="Punto de Venta">Punto de Venta</option>
-                      <option value="Zelle">Zelle</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-500">Código de Ref. Digital *</label>
-                    <input 
-                      type="text"
-                      value={codigoVerificacionCheckout}
-                      onChange={(e) => setCodigoVerificacionCheckout(e.target.value)}
-                      placeholder="Ej. Ref 123456"
-                      required
-                      className="w-full px-2 py-1 rounded border border-indigo-300 font-bold bg-white text-indigo-900"
-                    />
-                  </div>
+              <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-3">
+                <div className="flex justify-between items-center border-b border-indigo-200/60 pb-1.5">
+                  <span className="text-[10px] font-black text-indigo-900 uppercase">
+                    <i className="fa-solid fa-arrows-split-up-and-left mr-1 text-indigo-600"></i> Desglose Multimoneda (Pago Mixto)
+                  </span>
+                  <span className="text-[10px] font-bold text-indigo-700">
+                    Total: <strong>${totalCobrarEnCaja.toFixed(2)} USD</strong>
+                  </span>
                 </div>
-                <div className="text-[10px] font-bold text-indigo-700 text-right pt-1 border-t border-indigo-200/60">
-                  Suma: ${((parseFloat(montoEfectivoCheckout)||0) + (parseFloat(montoDigitalCheckout)||0)).toFixed(2)} / ${totalCobrarEnCaja.toFixed(2)} USD
+
+                {/* Parte 1 */}
+                <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 1: Método</label>
+                      <select
+                        value={metodoParteACheckout}
+                        onChange={(e) => setMetodoParteACheckout(e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                      >
+                        <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                        <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                        <option value="Pago Móvil">Pago Móvil</option>
+                        <option value="Punto de Venta">Punto de Venta</option>
+                        <option value="Zelle">Zelle</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                      <input 
+                        type="number"
+                        step="0.50"
+                        value={montoParteACheckout}
+                        onChange={(e) => setMontoParteACheckout(e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                      />
+                      {parseFloat(montoParteACheckout) > 0 && (
+                        <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
+                          ~ Bs. {(parseFloat(montoParteACheckout) * tasaUsd).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteACheckout) && (
+                    <div>
+                      <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 1 *</label>
+                      <input 
+                        type="text"
+                        value={codigoRefParteACheckout}
+                        onChange={(e) => setCodigoRefParteACheckout(e.target.value)}
+                        placeholder="Ej. Ref 123456"
+                        className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Parte 2 */}
+                <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 2: Método</label>
+                      <select
+                        value={metodoParteBCheckout}
+                        onChange={(e) => setMetodoParteBCheckout(e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                      >
+                        <option value="Pago Móvil">Pago Móvil</option>
+                        <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                        <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                        <option value="Punto de Venta">Punto de Venta</option>
+                        <option value="Zelle">Zelle</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                      <input 
+                        type="number"
+                        step="0.50"
+                        value={montoParteBCheckout}
+                        onChange={(e) => setMontoParteBCheckout(e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                      />
+                      {parseFloat(montoParteBCheckout) > 0 && (
+                        <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
+                          ~ Bs. {(parseFloat(montoParteBCheckout) * tasaUsd).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteBCheckout) && (
+                    <div>
+                      <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 2 *</label>
+                      <input 
+                        type="text"
+                        value={codigoRefParteBCheckout}
+                        onChange={(e) => setCodigoRefParteBCheckout(e.target.value)}
+                        placeholder="Ej. Ref 789012"
+                        className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 border-t border-indigo-200/60">
+                  Suma Mixta: <strong className="text-xs font-black">${((parseFloat(montoParteACheckout)||0) + (parseFloat(montoParteBCheckout)||0)).toFixed(2)} USD</strong> / ${totalCobrarEnCaja.toFixed(2)} USD
                 </div>
               </div>
             )}

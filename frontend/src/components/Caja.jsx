@@ -6,10 +6,13 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState('Efectivo (Bs)');
 
-  // Mixed Payment & Reference Code states for manual transactions
-  const [montoEfectivo, setMontoEfectivo] = useState('0');
-  const [montoDigital, setMontoDigital] = useState('0');
-  const [metodoDigital, setMetodoDigital] = useState('Pago Móvil');
+  // Flexible Multi-Currency Mixed Payment states for manual transactions
+  const [metodoParteA, setMetodoParteA] = useState('Efectivo ($)');
+  const [montoParteA, setMontoParteA] = useState('0');
+  const [codigoRefParteA, setCodigoRefParteA] = useState('');
+  const [metodoParteB, setMetodoParteB] = useState('Pago Móvil');
+  const [montoParteB, setMontoParteB] = useState('0');
+  const [codigoRefParteB, setCodigoRefParteB] = useState('');
   const [codigoVerificacion, setCodigoVerificacion] = useState('');
 
   // Filter state ('all' vs 'mine')
@@ -144,20 +147,28 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
     }
 
     if (metodo === 'Pago Mixto') {
-      const ef = parseFloat(montoEfectivo) || 0;
-      const dig = parseFloat(montoDigital) || 0;
-      if (Math.abs((ef + dig) - totalMonto) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma ($${ef.toFixed(2)} + $${dig.toFixed(2)} = $${(ef+dig).toFixed(2)}) debe coincidir con el monto total ($${totalMonto.toFixed(2)} USD).`);
+      const pA = parseFloat(montoParteA) || 0;
+      const pB = parseFloat(montoParteB) || 0;
+      if (Math.abs((pA + pB) - totalMonto) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma ($${pA.toFixed(2)} + $${pB.toFixed(2)} = $${(pA+pB).toFixed(2)}) debe coincidir con el monto total ($${totalMonto.toFixed(2)} USD).`);
         return;
       }
-      if (dig > 0 && !codigoVerificacion.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para la parte digital del Pago Mixto.');
+      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && pA > 0 && !codigoRefParteA.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 1 (Digital).');
+        return;
+      }
+      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteB) && pB > 0 && !codigoRefParteB.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 2 (Digital).');
         return;
       }
     }
 
+    const refAStr = codigoRefParteA.trim() ? ` - Ref: ${codigoRefParteA.trim()}` : '';
+    const refBStr = codigoRefParteB.trim() ? ` - Ref: ${codigoRefParteB.trim()}` : '';
+    const refsCombined = [codigoRefParteA.trim(), codigoRefParteB.trim()].filter(Boolean).join(' / ');
+
     const finalMetodo = metodo === 'Pago Mixto'
-      ? `Pago Mixto (Ef: $${montoEfectivo} + ${metodoDigital}: $${montoDigital}) - Ref: ${codigoVerificacion}`
+      ? `Pago Mixto (${metodoParteA}: $${montoParteA}${refAStr} + ${metodoParteB}: $${montoParteB}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
       : (isDigital && codigoVerificacion.trim() ? `${metodo} - Ref: ${codigoVerificacion}` : metodo);
 
     onCajaMovimiento({
@@ -169,9 +180,12 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
 
     setConcepto('');
     setMonto('');
-    setMontoEfectivo('0');
-    setMontoDigital('0');
-    setMetodoDigital('Pago Móvil');
+    setMetodoParteA('Efectivo ($)');
+    setMontoParteA('0');
+    setCodigoRefParteA('');
+    setMetodoParteB('Pago Móvil');
+    setMontoParteB('0');
+    setCodigoRefParteB('');
     setCodigoVerificacion('');
   };
 
@@ -566,54 +580,116 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                 </div>
               )}
 
-              {/* Mixed payment breakdown */}
+              {/* Flexible Multi-Currency Mixed Payment Breakdown */}
               {metodo === 'Pago Mixto' && (
-                <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-200 space-y-2">
-                  <p className="text-[10px] font-black text-indigo-900 uppercase">Desglose de Pago Mixto</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500">Efectivo ($ USD)</label>
-                      <input 
-                        type="number"
-                        step="0.50"
-                        value={montoEfectivo}
-                        onChange={(e) => setMontoEfectivo(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                      />
+                <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-3">
+                  <div className="flex justify-between items-center border-b border-indigo-200/60 pb-1.5">
+                    <span className="text-[10px] font-black text-indigo-900 uppercase">
+                      <i className="fa-solid fa-arrows-split-up-and-left mr-1 text-indigo-600"></i> Desglose Multimoneda (Pago Mixto)
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-700">
+                      Total: <strong>${parseFloat(monto || '0').toFixed(2)} USD</strong>
+                    </span>
+                  </div>
+
+                  {/* Parte 1 */}
+                  <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 1: Método</label>
+                        <select
+                          value={metodoParteA}
+                          onChange={(e) => setMetodoParteA(e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                        >
+                          <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                          <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                          <option value="Pago Móvil">Pago Móvil</option>
+                          <option value="Punto de Venta">Punto de Venta</option>
+                          <option value="Zelle">Zelle</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                        <input 
+                          type="number"
+                          step="0.50"
+                          value={montoParteA}
+                          onChange={(e) => setMontoParteA(e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                        />
+                        {parseFloat(montoParteA) > 0 && (
+                          <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
+                            ~ Bs. {(parseFloat(montoParteA) * tasaUsd).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500">Monto Digital ($ USD)</label>
-                      <input 
-                        type="number"
-                        step="0.50"
-                        value={montoDigital}
-                        onChange={(e) => setMontoDigital(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                      />
+                    {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && (
+                      <div>
+                        <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 1 *</label>
+                        <input 
+                          type="text"
+                          value={codigoRefParteA}
+                          onChange={(e) => setCodigoRefParteA(e.target.value)}
+                          placeholder="Ej. Ref 123456"
+                          className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Parte 2 */}
+                  <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 2: Método</label>
+                        <select
+                          value={metodoParteB}
+                          onChange={(e) => setMetodoParteB(e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                        >
+                          <option value="Pago Móvil">Pago Móvil</option>
+                          <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                          <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                          <option value="Punto de Venta">Punto de Venta</option>
+                          <option value="Zelle">Zelle</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                        <input 
+                          type="number"
+                          step="0.50"
+                          value={montoParteB}
+                          onChange={(e) => setMontoParteB(e.target.value)}
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                        />
+                        {parseFloat(montoParteB) > 0 && (
+                          <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
+                            ~ Bs. {(parseFloat(montoParteB) * tasaUsd).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500">Canal Digital</label>
-                      <select 
-                        value={metodoDigital}
-                        onChange={(e) => setMetodoDigital(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                      >
-                        <option value="Pago Móvil">Pago Móvil</option>
-                        <option value="Punto de Venta">Punto de Venta</option>
-                        <option value="Zelle">Zelle</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500">Código de Ref. Digital *</label>
-                      <input 
-                        type="text"
-                        value={codigoVerificacion}
-                        onChange={(e) => setCodigoVerificacion(e.target.value)}
-                        placeholder="Ej. Ref 123456"
-                        required
-                        className="w-full px-2 py-1 rounded border border-indigo-300 font-bold bg-white text-indigo-900"
-                      />
-                    </div>
+                    {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteB) && (
+                      <div>
+                        <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 2 *</label>
+                        <input 
+                          type="text"
+                          value={codigoRefParteB}
+                          onChange={(e) => setCodigoRefParteB(e.target.value)}
+                          placeholder="Ej. Ref 789012"
+                          className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 border-t border-indigo-200/60">
+                    Suma Mixta: <strong className="text-xs font-black">${((parseFloat(montoParteA)||0) + (parseFloat(montoParteB)||0)).toFixed(2)} USD</strong> / ${parseFloat(monto || '0').toFixed(2)} USD
                   </div>
                 </div>
               )}
