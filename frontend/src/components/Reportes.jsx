@@ -92,6 +92,12 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return true;
   };
 
+  // Helper for safe numbers
+  const safeNum = (val) => {
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
+  };
+
   const safeCaja = Array.isArray(caja) ? caja : [];
   const safeHistorial = Array.isArray(historial) ? historial : [];
 
@@ -100,21 +106,21 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   // Helper to clean payment method display string
   const cleanPaymentMethodName = (metodoStr) => {
     if (!metodoStr) return 'N/A';
-    return metodoStr;
+    return String(metodoStr);
   };
 
   // General executive calculations for filteredCaja
   const ingresosHospedaje = filteredCaja
     .filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))))
-    .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
+    .reduce((sum, t) => sum + safeNum(t.monto), 0);
 
   const ingresosMarket = filteredCaja
     .filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
-    .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
+    .reduce((sum, t) => sum + safeNum(t.monto), 0);
 
   const totalEgresos = filteredCaja
     .filter(t => t && t.tipo === 'Egreso')
-    .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
+    .reduce((sum, t) => sum + safeNum(t.monto), 0);
 
   const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
 
@@ -122,7 +128,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     .filter(t => t && t.tipo === 'Ingreso')
     .reduce((acc, t) => {
       const m = t.metodo || 'Otros';
-      acc[m] = (acc[m] || 0) + (parseFloat(t.monto) || 0);
+      acc[m] = (acc[m] || 0) + safeNum(t.monto);
       return acc;
     }, {});
 
@@ -143,10 +149,11 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return dateToCheck.getTime() === today.getTime() && t.tipo === 'Ingreso';
   });
 
+  const activeSel = (selectedRecepcionista || 'TODOS').toString().trim().toLowerCase();
   const recepTodayTransactions = todayTransactions.filter(t => {
     if (!t) return false;
-    if (selectedRecepcionista === 'TODOS') return true;
-    return (t.usuarioNombre || '').trim().toLowerCase() === selectedRecepcionista.trim().toLowerCase();
+    if (activeSel === 'todos') return true;
+    return (t.usuarioNombre || '').toString().trim().toLowerCase() === activeSel;
   });
 
   // Calculate receptionist sales breakdown by Room Type for TODAY
@@ -159,7 +166,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   let ventasOtrosUSD = 0;
 
   recepTodayTransactions.forEach(t => {
-    const monto = parseFloat(t.monto) || 0;
+    const monto = safeNum(t.monto);
     const conc = (t.concepto || '').toLowerCase();
     
     if (t.origen === 'Market' || conc.includes('tienda') || conc.includes('market')) {
@@ -172,7 +179,6 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
       ventasMatrimonialUSD += monto;
       cantMatrimonial++;
     } else {
-      // Default to Matrimonial if standard room stay
       ventasMatrimonialUSD += monto;
       cantMatrimonial++;
     }
@@ -213,10 +219,11 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     if (matchHab) numHab = matchHab[1];
 
     let ref = 'N/A';
-    if (t.metodo && t.metodo.includes('Ref:')) {
-      ref = t.metodo.split('Ref:')[1].trim();
+    if (t.metodo && typeof t.metodo === 'string' && t.metodo.includes('Ref:')) {
+      const parts = t.metodo.split('Ref:');
+      if (parts[1]) ref = parts[1].trim() || 'N/A';
     } else if (t.referenciaBancaria) {
-      ref = t.referenciaBancaria;
+      ref = String(t.referenciaBancaria).trim() || 'N/A';
     }
 
     const montoUsd = parseFloat(t.monto) || 0;
@@ -443,8 +450,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                             </span>
                           </td>
                           <td className="p-3 font-bold text-slate-600">{t.metodo}</td>
-                          <td className="p-3 text-right font-black text-emerald-600">${parseFloat(t.monto).toFixed(2)}</td>
-                          <td className="p-3 text-right font-bold text-slate-500">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)}</td>
+                          <td className="p-3 text-right font-black text-emerald-600">${safeNum(t.monto).toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-slate-500">Bs. {(safeNum(t.monto) * safeNum(tasaUsd || 50)).toFixed(2)}</td>
                         </tr>
                       );
                     })}
