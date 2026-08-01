@@ -976,6 +976,7 @@ export default function App() {
         isOpen={isAsignarDirectoOpen}
         room={selectedRoom}
         clientes={appState.clientes}
+        productos={appState.productos || []}
         configuracion={appState.configuracion}
         tarifas={appState.tarifas || []}
         onClose={() => setIsAsignarDirectoOpen(false)}

@@ -170,6 +170,7 @@ export function AsignarDirectoModal({
   isOpen, 
   room, 
   clientes, 
+  productos = [],
   configuracion,
   tarifas = [],
   onClose, 
@@ -182,6 +183,11 @@ export function AsignarDirectoModal({
   const [fotoCi, setFotoCi] = useState('');
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Market products selection before Check-In
+  const [selectedMarketProdId, setSelectedMarketProdId] = useState('');
+  const [selectedMarketQty, setSelectedMarketQty] = useState(1);
+  const [marketItemsCart, setMarketItemsCart] = useState([]);
 
   // Dynamic Companions Array (v5 - Fase 1)
   // [{ id, nombre, ci, fechaNacimiento, age, esMayor, recargo }]
@@ -231,6 +237,7 @@ export function AsignarDirectoModal({
       setFechaNacimientoTitular('');
       setFotoCi('');
       setAcompanantes([]);
+      setMarketItemsCart([]);
       setModalidad('4h');
       setMetodo('Efectivo (Bs)');
       setCodigoVerificacion('');
@@ -249,8 +256,8 @@ export function AsignarDirectoModal({
 
   const basePrice = getBasePrice(room.tipo, modalidad);
 
-  // Compute total companion surcharges ($5.00 USD fixed per night for 3rd+ adult guest; $0 for minors)
-  const recargoIndividual = 5.00;
+  // Compute total companion surcharges (50% of base stay price for 3rd+ adult guest; $0 for minors)
+  const recargoIndividual = basePrice * 0.50;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2; // Guest 1 = primary, Guest 2 = 1st companion, Guest 3+ = additional
     const age = calcularEdad(a.fechaNacimiento);
@@ -261,7 +268,8 @@ export function AsignarDirectoModal({
     return sum;
   }, 0);
 
-  const totalMontoUsd = basePrice + companionSurcharges;
+  const marketTotalUSD = marketItemsCart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
+  const totalMontoUsd = basePrice + companionSurcharges + marketTotalUSD;
   const montoVes = (totalMontoUsd * tasaUsd).toFixed(2);
 
   // Handlers for companion dynamic list
@@ -283,6 +291,15 @@ export function AsignarDirectoModal({
 
   const handleUpdateAcompanante = (id, field, value) => {
     setAcompanantes(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
+  };
+
+  const handleAddMarketItem = () => {
+    if (!selectedMarketProdId) return;
+    const prod = productos.find(p => p.id == selectedMarketProdId);
+    if (!prod) return;
+    setMarketItemsCart(prev => [...prev, { ...prod, cantidad: selectedMarketQty }]);
+    setSelectedMarketProdId('');
+    setSelectedMarketQty(1);
   };
 
   const handleSearchChange = (val) => {
@@ -354,7 +371,7 @@ export function AsignarDirectoModal({
     const acompNombres = acompanantes.map((a, i) => {
       const age = calcularEdad(a.fechaNacimiento);
       const isAdult = age >= 18;
-      const surchargeNote = (i + 2 >= 3 && isAdult) ? ' [18+ Adulto +$5]' : (age > 0 && age < 18 ? ' [Menor de Edad]' : '');
+      const surchargeNote = (i + 2 >= 3 && isAdult) ? ' [18+ Adulto +50%]' : (age > 0 && age < 18 ? ' [Menor de Edad - $0]' : '');
       return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
     }).join(', ');
 
@@ -394,7 +411,8 @@ export function AsignarDirectoModal({
       codigoVerificacion: refsCombined || codigoVerificacion,
       fotoCi,
       comprobante,
-      modalidad
+      modalidad,
+      marketItems: marketItemsCart
     });
     setIsSubmitting(false);
   };
@@ -705,6 +723,49 @@ export function AsignarDirectoModal({
                 )}
               </div>
 
+              {/* Minimarket Add-on Section */}
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <p className="text-xs font-black text-amber-700 uppercase flex items-center gap-1.5">
+                  <i className="fa-solid fa-basket-shopping"></i> Minimarket (Cargo Extra)
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <select 
+                    value={selectedMarketProdId}
+                    onChange={(e) => setSelectedMarketProdId(e.target.value)}
+                    className="col-span-2 px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold"
+                  >
+                    <option value="">Seleccionar Producto...</option>
+                    {productos.map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre} (${p.precio_venta})</option>
+                    ))}
+                  </select>
+                  <input 
+                    type="number"
+                    min="1"
+                    value={selectedMarketQty}
+                    onChange={(e) => setSelectedMarketQty(parseInt(e.target.value) || 1)}
+                    className="px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+                <button 
+                  type="button"
+                  onClick={handleAddMarketItem}
+                  className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg"
+                >
+                  <i className="fa-solid fa-plus mr-1"></i> Agregar al consumo
+                </button>
+                {marketItemsCart.length > 0 && (
+                  <div className="bg-amber-50 p-2 rounded-xl text-[10px] border border-amber-200">
+                    {marketItemsCart.map((item, i) => (
+                      <div key={i} className="flex justify-between py-1 border-b last:border-none border-amber-200 font-bold">
+                        <span>{item.cantidad}x {item.nombre}</span>
+                        <span>${(item.precio_venta * item.cantidad).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Payment Section */}
               <div className="border-t border-slate-200 pt-3 space-y-3">
                 <p className="text-xs font-bold text-[#c5920c] uppercase flex items-center gap-1">
@@ -715,7 +776,7 @@ export function AsignarDirectoModal({
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto Total ($ USD)</label>
                     <input 
                       type="number" 
-                      value={totalMontoUsd}
+                      value={totalMontoUsd.toFixed(2)}
                       readOnly
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-black text-slate-800 bg-slate-100 cursor-not-allowed outline-none"
                     />
@@ -1033,8 +1094,8 @@ export function NuevaReservaModal({
   };
   const nochesPernocta = modalidad === 'pernocta' ? calculateNoches() : 1;
 
-  // Compute companion surcharges ($5.00 USD fixed per night for 3rd+ adult guest; $0 for minors)
-  const recargoIndividualReserva = 5.00;
+  // Compute companion surcharges (50% of base stay price per night for 3rd+ adult guest; $0 for minors)
+  const recargoIndividualReserva = baseStayPricePerNight * 0.50;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2;
     const age = calcularEdad(a.fechaNacimiento);
