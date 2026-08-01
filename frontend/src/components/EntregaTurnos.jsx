@@ -50,6 +50,9 @@ export default function EntregaTurnos({
   const [conDiscrepancia, setConDiscrepancia] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
+  // Printable Report state
+  const [printableReport, setPrintableReport] = useState(null);
+
   // Calculate my shift's expected cash from caja array
   const myMovements = currentUser ? caja.filter(t => t.usuarioId === currentUser.id) : caja;
   const myEfectivoUSD = myMovements
@@ -95,6 +98,61 @@ export default function EntregaTurnos({
       ...prev,
       [productId]: Math.max(0, parseInt(val) || 0)
     }));
+  };
+
+  // Generate / Print Shift Report PDF
+  const handlePrintCurrentShift = () => {
+    const reportData = {
+      titulo: 'REPORTE DE CIERRE DE TURNO (PREVIO A ENTREGA)',
+      fecha: new Date().toLocaleString('es-VE'),
+      recepcionista: currentUser?.nombre || 'Recepcionista',
+      rol: currentUser?.rol || 'Recepción',
+      saldoUsd: parseFloat(saldoUsd) || 0,
+      saldoVes: parseFloat(saldoVes) || 0,
+      saldoPagoMovil: parseFloat(saldoPagoMovil) || 0,
+      saldoPunto: parseFloat(saldoPunto) || 0,
+      saldoZelle: parseFloat(saldoZelle) || 0,
+      esperadoUsd: myEfectivoUSD,
+      ventasMarket: myMarketSales,
+      lenceria,
+      equipamiento,
+      novedades: novedades.trim() || 'Sin novedades declaradas'
+    };
+    setPrintableReport(reportData);
+    setTimeout(() => {
+      window.print();
+    }, 300);
+  };
+
+  const handlePrintHistoryShift = (t) => {
+    let lenceriaObj = {};
+    try { lenceriaObj = typeof t.lenceriaRecepcionConteo === 'string' ? JSON.parse(t.lenceriaRecepcionConteo) : t.lenceriaRecepcionConteo || {}; } catch(e){}
+
+    let equipObj = {};
+    try { equipObj = typeof t.llavesHerramientasConteo === 'string' ? JSON.parse(t.llavesHerramientasConteo) : t.llavesHerramientasConteo || {}; } catch(e){}
+
+    const reportData = {
+      titulo: `REPORTE DE ENTREGA DE TURNO N° ${t.id}`,
+      fecha: new Date(t.fechaHoraEntrega).toLocaleString('es-VE'),
+      recepcionista: t.usuarioSalienteNombre || 'Recepcionista',
+      entrante: t.usuarioEntranteNombre || 'Pendiente',
+      estado: t.estado,
+      saldoUsd: parseFloat(t.saldoEfectivoUsd) || 0,
+      saldoVes: parseFloat(t.saldoEfectivoVes) || 0,
+      saldoPagoMovil: 0,
+      saldoPunto: 0,
+      saldoZelle: 0,
+      esperadoUsd: parseFloat(t.saldoEfectivoUsd) || 0,
+      ventasMarket: 0,
+      lenceria: lenceriaObj,
+      equipamiento: equipObj,
+      novedades: t.novedades || 'Sin novedades',
+      obsConfirmacion: t.observacionesConfirmacion
+    };
+    setPrintableReport(reportData);
+    setTimeout(() => {
+      window.print();
+    }, 300);
   };
 
   const handleSubmitEntrega = async (e) => {
@@ -466,19 +524,29 @@ export default function EntregaTurnos({
                   className="w-full p-3 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f]"
                 ></textarea>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <>
-                      <i className="fa-solid fa-paper-plane"></i> Finalizar & Entregar Turno
-                    </>
-                  )}
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handlePrintCurrentShift}
+                    className="w-full bg-indigo-900 hover:bg-indigo-950 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-file-pdf text-amber-400"></i> Generar PDF / Reporte de Turno
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-paper-plane"></i> Finalizar & Entregar Turno
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -576,19 +644,28 @@ export default function EntregaTurnos({
                       )}
                     </div>
 
-                    {/* Bottom Action for Pending Turno */}
-                    {isPending && (
+                    <div className="pt-2 border-t border-slate-100 flex gap-2">
                       <button
-                        onClick={() => {
-                          setSelectedEntrega(t);
-                          setObsConfirmacion('');
-                          setConDiscrepancia(false);
-                        }}
-                        className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2"
+                        type="button"
+                        onClick={() => handlePrintHistoryShift(t)}
+                        className="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-indigo-200"
                       >
-                        <i className="fa-solid fa-check-to-slot"></i> Recibir & Confirmar Turno
+                        <i className="fa-solid fa-print text-indigo-600"></i> Imprimir PDF
                       </button>
-                    )}
+
+                      {isPending && (
+                        <button
+                          onClick={() => {
+                            setSelectedEntrega(t);
+                            setObsConfirmacion('');
+                            setConDiscrepancia(false);
+                          }}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <i className="fa-solid fa-check-to-slot"></i> Confirmar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -663,6 +740,115 @@ export default function EntregaTurnos({
                   'Confirmar Recepción'
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* PRINTABLE SHIFT REPORT (PRINT ONLY) */}
+      {printableReport && (
+        <div className="hidden print:block fixed inset-0 bg-white p-8 text-black z-50 font-sans text-xs">
+          <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-start">
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-widest text-slate-900">HOTEL MARTE VENEZUELA</h1>
+              <h2 className="text-sm font-bold uppercase text-slate-700">{printableReport.titulo}</h2>
+              <p className="text-[10px] text-slate-500 mt-1">Generado el: {printableReport.fecha} | Tasa USD: Bs. {tasaUsd.toFixed(2)}</p>
+            </div>
+            <div className="text-right">
+              <span className="font-bold text-slate-800 block text-xs">Recepcionista: {printableReport.recepcionista}</span>
+              <span className="text-[10px] text-slate-500">Rol: {printableReport.rol || 'Recepción'}</span>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Cash & Digital Breakdown Table */}
+            <div>
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">1. Arqueo y Declaración de Caja</h3>
+              <table className="w-full text-left border border-black text-xs">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-black font-bold">
+                    <th className="p-2 border-r border-black">Canal de Pago / Concepto</th>
+                    <th className="p-2 border-r border-black text-right">Monto ($ USD)</th>
+                    <th className="p-2 text-right">Equivalente (Bs. VES)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-slate-300">
+                    <td className="p-2 border-r border-slate-300 font-bold">Efectivo Físico ($ USD)</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoUsd.toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoUsd * tasaUsd).toFixed(2)}</td>
+                  </tr>
+                  <tr className="border-b border-slate-300">
+                    <td className="p-2 border-r border-slate-300 font-bold">Efectivo Físico en Bolívares (Bs)</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${(printableReport.saldoVes / tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">Bs. {printableReport.saldoVes.toFixed(2)}</td>
+                  </tr>
+                  <tr className="border-b border-slate-300">
+                    <td className="p-2 border-r border-slate-300 font-bold">Ventas por Pago Móvil</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoPagoMovil.toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoPagoMovil * tasaUsd).toFixed(2)}</td>
+                  </tr>
+                  <tr className="border-b border-slate-300">
+                    <td className="p-2 border-r border-slate-300 font-bold">Ventas por Punto de Venta</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoPunto.toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoPunto * tasaUsd).toFixed(2)}</td>
+                  </tr>
+                  <tr className="border-b border-slate-300">
+                    <td className="p-2 border-r border-slate-300 font-bold">Ventas por Zelle</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoZelle.toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">N/A</td>
+                  </tr>
+                  <tr className="bg-slate-50 font-black">
+                    <td className="p-2 border-r border-black uppercase">Ventas Minimarket / Snacks (Mi Turno)</td>
+                    <td className="p-2 border-r border-black text-right text-sm">${printableReport.ventasMarket.toFixed(2)}</td>
+                    <td className="p-2 text-right text-xs">~ Bs. {(printableReport.ventasMarket * tasaUsd).toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Lencería y Equipamiento */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">2. Lencería en Recepción</h3>
+                <ul className="space-y-1 text-xs font-semibold">
+                  <li>• Toallas de Baño: <strong>{printableReport.lenceria?.toallasBanio || 0}</strong></li>
+                  <li>• Toallas de Mano: <strong>{printableReport.lenceria?.toallasMano || 0}</strong></li>
+                  <li>• Sábanas Repuesto: <strong>{printableReport.lenceria?.sabanasRepuesto || 0}</strong></li>
+                  <li>• Fundas Almohada: <strong>{printableReport.lenceria?.fundasAlmohada || 0}</strong></li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">3. Equipamiento</h3>
+                <ul className="space-y-1 text-xs font-semibold">
+                  <li>• Llaves de Habitaciones: <strong>{printableReport.equipamiento?.llavesHabitaciones ? 'Entregadas OK' : 'Faltantes'}</strong></li>
+                  <li>• POS Inalámbrico: <strong>{printableReport.equipamiento?.posInalambrico ? 'Operativo OK' : 'No entregado'}</strong></li>
+                  <li>• Cargador POS: <strong>{printableReport.equipamiento?.cargadorPos ? 'Presente' : 'Faltante'}</strong></li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Novedades */}
+            <div>
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">4. Novedades y Observaciones de Recepción</h3>
+              <div className="p-3 border border-black rounded bg-slate-50 italic text-xs font-medium">
+                "{printableReport.novedades}"
+              </div>
+            </div>
+
+            {/* Signatures */}
+            <div className="pt-16 grid grid-cols-2 gap-12 text-center text-xs font-bold">
+              <div className="border-t border-black pt-2">
+                _______________________________________
+                <p className="mt-1 font-black">Firma Recepcionista Saliente</p>
+                <p className="text-[10px] text-slate-600">{printableReport.recepcionista}</p>
+              </div>
+
+              <div className="border-t border-black pt-2">
+                _______________________________________
+                <p className="mt-1 font-black">Firma Recepcionista Entrante / Gerencia</p>
+                <p className="text-[10px] text-slate-600">{printableReport.entrante || 'Conforme'}</p>
+              </div>
             </div>
           </div>
         </div>
