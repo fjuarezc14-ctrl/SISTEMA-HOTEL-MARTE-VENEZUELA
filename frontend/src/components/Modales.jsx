@@ -348,6 +348,30 @@ export function AsignarDirectoModal({
     e.preventDefault();
     setIsSubmitting(true);
 
+    if (!ci.trim()) {
+      alert('⚠️ Debe ingresar el Número de Cédula / Documento de Identidad del cliente.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!nombre.trim()) {
+      alert('⚠️ Debe ingresar el Nombre y Apellido completo del cliente.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!tel.trim()) {
+      alert('⚠️ Debe ingresar el Número de Teléfono / Celular de contacto del cliente.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!fechaNacimientoTitular) {
+      alert('⚠️ Debe ingresar la Fecha de Nacimiento del titular.');
+      setIsSubmitting(false);
+      return;
+    }
+
     // Digital verification code check
     const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
     if (isDigital && !codigoVerificacion.trim()) {
@@ -1294,6 +1318,26 @@ export function NuevaReservaModal({
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
+
+    if (!ci.trim()) {
+      alert('⚠️ Debe ingresar el Número de Cédula / Documento de Identidad del cliente.');
+      return;
+    }
+
+    if (!nombre.trim()) {
+      alert('⚠️ Debe ingresar el Nombre y Apellido completo del cliente.');
+      return;
+    }
+
+    if (!tel.trim()) {
+      alert('⚠️ Debe ingresar el Número de Teléfono / Celular de contacto del cliente.');
+      return;
+    }
+
+    if (!fechaNacimientoTitular) {
+      alert('⚠️ Debe ingresar la Fecha de Nacimiento del titular.');
+      return;
+    }
 
     if (modalidad === 'pernocta' && !selectedHabNum) {
       alert("⚠️ ¡Para reservación Pernocta debe seleccionar una habitación específica!");
