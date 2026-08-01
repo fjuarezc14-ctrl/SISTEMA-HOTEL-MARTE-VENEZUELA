@@ -87,16 +87,30 @@
     padding: 0 !important;
   }
 
-  .print\:p-0 {
+  /* When printing a modal like #printable-planilla */
+  .fixed.inset-0 {
+    position: static !important;
+    background: white !important;
     padding: 0 !important;
-  }
-
-  .print\:border-none {
-    border: none !important;
-  }
-
-  .print\:shadow-none {
+    margin: 0 !important;
+    display: block !important;
     box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  #printable-planilla,
+  .printable-modal {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
   }
 
   @page {

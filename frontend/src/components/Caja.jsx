@@ -286,7 +286,8 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   };
 
   return (
-    <div className="space-[#ff331f] space-y-6 fade-in">
+    <>
+      <div className="space-y-6 fade-in print:hidden">
       {/* Header controls & Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
@@ -760,6 +761,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
           </form>
         </div>
       </div>
+      </div>
 
       {/* CIERRE DE TURNO & PLANILLA DE CONCILIACIÓN MODAL */}
       {isCierreModalOpen && (
@@ -985,6 +987,6 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
