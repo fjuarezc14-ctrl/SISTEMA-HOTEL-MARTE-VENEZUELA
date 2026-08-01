@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 
 export default function Reportes({ caja = [], historial = [], currentUser, tasaUsd = 50.0 }) {
-  // Main view tab: 'general' | 'recepcionista'
+  // Main view tab: 'general' | 'recepcionista' | 'planillaMarte'
   const [reportTab, setReportTab] = useState('general');
+
+  // State for Control de Ingreso Clientes Diario (Planilla Marte)
+  const [marteFechaFilter, setMarteFechaFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [marteGrupo, setMarteGrupo] = useState('1');
+  const [marteFondoDivisas, setMarteFondoDivisas] = useState('100.00');
+  const [marteFondoBs, setMarteFondoBs] = useState('100.00');
 
   // State for date filters
   const [dateFilter, setDateFilter] = useState('hoy'); // 'hoy', 'ayer', 'mes', 'personalizado'
@@ -161,7 +167,88 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     }
   });
 
-  const totalVentasRecepHoyUSD = ventasMatrimonialUSD + ventasMiniSuiteUSD + ventasMarketUSD + ventasOtrosUSD;
+  // Calculations for Control de Ingreso Clientes Diario (Planilla Marte)
+  const marteTargetDateStr = marteFechaFilter ? marteFechaFilter.split('-').reverse().join('/') : '';
+  const marteDayMovements = (caja || []).filter(t => {
+    if (!t.hora) return false;
+    if (marteTargetDateStr && !t.hora.includes(marteTargetDateStr)) return false;
+    return t.tipo === 'Ingreso';
+  });
+
+  const pmTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('pago móvil')).reduce((s, t) => s + parseFloat(t.monto), 0);
+  const ptovTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('punto')).reduce((s, t) => s + parseFloat(t.monto), 0);
+  const zelleTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('zelle')).reduce((s, t) => s + parseFloat(t.monto), 0);
+  const divisasTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo ($)').reduce((s, t) => s + parseFloat(t.monto), 0);
+  const bsEfectivoTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo (Bs)').reduce((s, t) => s + parseFloat(t.monto), 0);
+
+  const marteRows = marteDayMovements.map((t, idx) => {
+    const conc = t.concepto || '';
+    
+    let nombre = t.usuarioNombre || 'Cliente';
+    const matchNombre = conc.match(/(?:Hab\s*\d+\s*\(([^)]+)\)|Cliente:\s*([^)]+))/i);
+    if (matchNombre) {
+      nombre = (matchNombre[1] || matchNombre[2] || '').split('-')[0].trim();
+    }
+
+    let ci = 'S/CI';
+    const matchCi = conc.match(/CI:\s*([\d.]+)/i);
+    if (matchCi) ci = matchCi[1];
+
+    const checkIn = t.hora?.split(',')[1]?.trim() || t.hora || '12:00';
+    const checkOut = 'Finalizado';
+
+    let numHab = 'N/A';
+    const matchHab = conc.match(/Hab\s*(\d+)/i);
+    if (matchHab) numHab = matchHab[1];
+
+    let ref = 'N/A';
+    if (t.metodo && t.metodo.includes('Ref:')) {
+      ref = t.metodo.split('Ref:')[1].trim();
+    } else if (t.referenciaBancaria) {
+      ref = t.referenciaBancaria;
+    }
+
+    const montoUsd = parseFloat(t.monto) || 0;
+    const montoBs = montoUsd * tasaUsd;
+
+    return {
+      id: t.id || idx,
+      numIndex: idx + 1,
+      nombre,
+      ci,
+      checkIn,
+      checkOut,
+      numHuesped: 2,
+      montoBsFormatted: `Bs. ${montoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`,
+      montoUsdFormatted: `$${montoUsd.toFixed(2)}`,
+      montoBsVal: montoBs,
+      montoUsdVal: montoUsd,
+      formaPago: t.metodo || 'EFECTIVO',
+      numHab,
+      ref
+    };
+  });
+
+  const handleExportCSV = () => {
+    let csv = `CONTROL DE INGRESO CLIENTES DIARIO - HOTEL MARTE\n`;
+    csv += `FECHA,${marteTargetDateStr || marteFechaFilter},GRUPO,${marteGrupo},NOMBRE,${currentUser?.nombre || 'Recepcionista'}\n`;
+    csv += `FONDO DIVISAS,$${marteFondoDivisas},FONDO BS,${marteFondoBs},DIVISAS,$${divisasTotalUsd.toFixed(2)},BS EFECTIVO,Bs. ${(bsEfectivoTotalUsd * tasaUsd).toFixed(2)}\n`;
+    csv += `PAGO MOVIL,$${pmTotalUsd.toFixed(2)},PUNTO DE VENTA,$${ptovTotalUsd.toFixed(2)},ZELLE,$${zelleTotalUsd.toFixed(2)}\n\n`;
+    csv += `N°,NOMBRE Y APELLIDO,C. IDENTIDAD,CHECK IN,CHECK OUT,N° HUESPED,MONTO BS,MONTO $,FORMA DE PAGO,N° HAB,REF\n`;
+
+    marteRows.forEach(r => {
+      csv += `${r.numIndex},"${r.nombre}","${r.ci}","${r.checkIn}","${r.checkOut}","${r.numHuesped}","${r.montoBsFormatted}","${r.montoUsdFormatted}","${r.formaPago}","${r.numHab}","${r.ref}"\n`;
+    });
+
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Control_Ingreso_Hotel_Marte_${marteFechaFilter}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="space-y-6 fade-in pb-20">
@@ -174,7 +261,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
         <div className="flex items-center gap-3">
           {/* Tab buttons */}
-          <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200">
+          <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap gap-1 border border-slate-200">
             <button
               onClick={() => setReportTab('general')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -189,7 +276,15 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 reportTab === 'recepcionista' ? 'bg-white text-indigo-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <i className="fa-solid fa-user-check mr-1.5 text-indigo-600"></i> Ventas del Día (Recepcionista)
+              <i className="fa-solid fa-user-check mr-1.5 text-indigo-600"></i> Ventas del Día
+            </button>
+            <button
+              onClick={() => setReportTab('planillaMarte')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                reportTab === 'planillaMarte' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <i className="fa-solid fa-table-cells mr-1.5 text-amber-400"></i> Control de Ingreso (Excel Marte)
             </button>
           </div>
 
@@ -346,6 +441,167 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 3: CONTROL DE INGRESO CLIENTES DIARIO (PLANILLA MARTE EXCEL) */}
+      {reportTab === 'planillaMarte' && (
+        <div className="space-y-6 fade-in">
+          {/* Filter controls */}
+          <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-lg border border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 print:hidden">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-500/20 p-3 rounded-xl border border-amber-500/30">
+                <i className="fa-solid fa-file-excel text-2xl text-amber-400"></i>
+              </div>
+              <div>
+                <h3 className="text-base font-black uppercase text-amber-400">Planilla Oficial: Control de Ingreso Clientes Diario</h3>
+                <p className="text-xs text-slate-300">Plantilla automatizada de cierre de caja en formato Excel oficial de Hotel Marte.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Fecha</label>
+                <input
+                  type="date"
+                  value={marteFechaFilter}
+                  onChange={(e) => setMarteFechaFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Grupo / Turno</label>
+                <select
+                  value={marteGrupo}
+                  onChange={(e) => setMarteGrupo(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white outline-none"
+                >
+                  <option value="1">Grupo 1 (Mañana)</option>
+                  <option value="2">Grupo 2 (Tarde)</option>
+                  <option value="3">Grupo 3 (Noche)</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-4 md:pt-0">
+                <button
+                  onClick={handleExportCSV}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-file-csv"></i> Descargar Excel (.csv)
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-print"></i> Imprimir PDF
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Official Excel Sheet Table (Matching exact screenshot styling) */}
+          <div className="bg-slate-950 p-6 rounded-2xl shadow-xl border border-slate-800 overflow-x-auto text-white print:p-0 print:bg-white print:text-black">
+            {/* Header Box */}
+            <div className="border border-slate-700 rounded-xl overflow-hidden mb-6 bg-slate-900 print:bg-white print:border-black">
+              <div className="bg-black text-center py-2.5 border-b border-slate-700 print:border-black flex justify-between items-center px-4">
+                <span className="text-sm font-black tracking-widest text-amber-400 uppercase print:text-black">CONTROL DE INGRESO CLIENTES DIARIO</span>
+                <span className="text-xs font-bold text-white uppercase print:text-black">HOTEL MARTE</span>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y divide-slate-700 text-xs font-bold print:divide-black print:border-black">
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">FECHA</span>
+                  <span className="text-white text-sm font-black print:text-black">{marteTargetDateStr || marteFechaFilter}</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">GRUPO / TURNO</span>
+                  <span className="text-white text-sm font-black print:text-black">Grupo {marteGrupo}</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white col-span-2">
+                  <span className="text-[10px] text-slate-400 uppercase block">NOMBRE RECEPCIONISTA</span>
+                  <span className="text-amber-400 text-sm font-black print:text-black">{currentUser?.nombre || 'SARAHI SIFONTES'}</span>
+                </div>
+
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">FONDO DIVISAS</span>
+                  <span className="text-emerald-400 font-black print:text-black">${marteFondoDivisas}</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">FONDO BS</span>
+                  <span className="text-blue-400 font-black print:text-black">Bs. {marteFondoBs}</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">PAGO MOVIL</span>
+                  <span className="text-purple-400 font-black print:text-black">${pmTotalUsd.toFixed(2)} (~ Bs. {(pmTotalUsd * tasaUsd).toFixed(2)})</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">PUNTO DE VENTA</span>
+                  <span className="text-indigo-400 font-black print:text-black">${ptovTotalUsd.toFixed(2)} (~ Bs. {(ptovTotalUsd * tasaUsd).toFixed(2)})</span>
+                </div>
+
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">ZELLE</span>
+                  <span className="text-amber-400 font-black print:text-black">${zelleTotalUsd.toFixed(2)}</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white">
+                  <span className="text-[10px] text-slate-400 uppercase block">DIVISAS EFECTIVO ($)</span>
+                  <span className="text-emerald-400 font-black print:text-black">${divisasTotalUsd.toFixed(2)}</span>
+                </div>
+                <div className="p-2.5 bg-slate-900 print:bg-white col-span-2">
+                  <span className="text-[10px] text-slate-400 uppercase block">BS EFECTIVO (VES)</span>
+                  <span className="text-blue-400 font-black print:text-black">Bs. {(bsEfectivoTotalUsd * tasaUsd).toFixed(2)} (${bsEfectivoTotalUsd.toFixed(2)} USD)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Guest Ledger Table */}
+            <div className="border border-slate-700 rounded-xl overflow-hidden print:border-black">
+              <table className="w-full text-left text-xs font-medium border-collapse">
+                <thead>
+                  <tr className="bg-black text-amber-400 uppercase text-[9px] font-black border-b border-slate-700 print:bg-black print:text-white">
+                    <th className="p-2.5 border-r border-slate-700 text-center">N°</th>
+                    <th className="p-2.5 border-r border-slate-700">NOMBRE Y APELLIDO</th>
+                    <th className="p-2.5 border-r border-slate-700">C. IDENTIDAD</th>
+                    <th className="p-2.5 border-r border-slate-700 text-center">CHECK IN</th>
+                    <th className="p-2.5 border-r border-slate-700 text-center">CHECK OUT</th>
+                    <th className="p-2.5 border-r border-slate-700 text-center">N° HUESPED</th>
+                    <th className="p-2.5 border-r border-slate-700 text-right">MONTO BS</th>
+                    <th className="p-2.5 border-r border-slate-700 text-right">MONTO $</th>
+                    <th className="p-2.5 border-r border-slate-700 text-center">FORMA DE PAGO</th>
+                    <th className="p-2.5 border-r border-slate-700 text-center">N° HAB</th>
+                    <th className="p-2.5 text-center">REF</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 text-slate-200 print:divide-black print:text-black">
+                  {marteRows.length === 0 ? (
+                    <tr>
+                      <td colSpan="11" className="text-center py-8 text-slate-400 font-bold">
+                        No hay registros de ingreso de clientes guardados en la fecha seleccionada ({marteTargetDateStr || marteFechaFilter}).
+                      </td>
+                    </tr>
+                  ) : (
+                    marteRows.map((r) => (
+                      <tr key={r.id} className="hover:bg-slate-900/60 print:hover:bg-transparent">
+                        <td className="p-2.5 border-r border-slate-800 text-center font-bold">{r.numIndex}</td>
+                        <td className="p-2.5 border-r border-slate-800 font-black uppercase text-white print:text-black">{r.nombre}</td>
+                        <td className="p-2.5 border-r border-slate-800 font-bold">{r.ci}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-center font-bold text-emerald-400 print:text-black">{r.checkIn}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-center font-bold text-rose-400 print:text-black">{r.checkOut}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-center font-bold">{r.numHuesped}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-right font-bold text-blue-300 print:text-black">{r.montoBsFormatted}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-right font-black text-emerald-400 print:text-black">{r.montoUsdFormatted}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-center font-black uppercase text-amber-300 print:text-black">{r.formaPago}</td>
+                        <td className="p-2.5 border-r border-slate-800 text-center font-black text-white print:text-black">{r.numHab}</td>
+                        <td className="p-2.5 text-center font-mono text-xs text-slate-300 print:text-black">{r.ref}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -560,10 +816,9 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             </table>
           </div>
         )}
-
-        </div>
-      </>
-      )}
-    </div>
+      </div>
+    </>
+  )}
+</div>
   );
 }
