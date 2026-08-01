@@ -92,7 +92,10 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return true;
   };
 
-  const filteredCaja = (caja || []).filter(t => isDateInRange(t.hora));
+  const safeCaja = Array.isArray(caja) ? caja : [];
+  const safeHistorial = Array.isArray(historial) ? historial : [];
+
+  const filteredCaja = safeCaja.filter(t => t && isDateInRange(t.hora));
 
   // Helper to clean payment method display string
   const cleanPaymentMethodName = (metodoStr) => {
@@ -102,21 +105,21 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   // General executive calculations for filteredCaja
   const ingresosHospedaje = filteredCaja
-    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))))
+    .filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))))
     .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
 
   const ingresosMarket = filteredCaja
-    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
+    .filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
     .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
 
   const totalEgresos = filteredCaja
-    .filter(t => t.tipo === 'Egreso')
+    .filter(t => t && t.tipo === 'Egreso')
     .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
 
   const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
 
   const metodosSummary = filteredCaja
-    .filter(t => t.tipo === 'Ingreso')
+    .filter(t => t && t.tipo === 'Ingreso')
     .reduce((acc, t) => {
       const m = t.metodo || 'Otros';
       acc[m] = (acc[m] || 0) + (parseFloat(t.monto) || 0);
@@ -125,12 +128,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   // Build unique receptionists list from caja & historial
   const recepList = Array.from(new Set([
-    ...caja.map(t => t.usuarioNombre).filter(Boolean),
-    ...historial.map(h => h.recepcionistaNombre).filter(Boolean)
+    ...safeCaja.map(t => t?.usuarioNombre).filter(Boolean),
+    ...safeHistorial.map(h => h?.recepcionistaNombre).filter(Boolean)
   ]));
 
   // Strictly filter TODAY's transactions for Receptionist Sales Report (No past days accumulated)
-  const todayTransactions = caja.filter(t => {
+  const todayTransactions = safeCaja.filter(t => {
+    if (!t || !t.hora) return false;
     const d = parseDate(t.hora);
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -140,6 +144,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   });
 
   const recepTodayTransactions = todayTransactions.filter(t => {
+    if (!t) return false;
     if (selectedRecepcionista === 'TODOS') return true;
     return (t.usuarioNombre || '').trim().toLowerCase() === selectedRecepcionista.trim().toLowerCase();
   });
@@ -181,11 +186,11 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return t.tipo === 'Ingreso';
   });
 
-  const pmTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('pago móvil')).reduce((s, t) => s + parseFloat(t.monto), 0);
-  const ptovTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('punto')).reduce((s, t) => s + parseFloat(t.monto), 0);
-  const zelleTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('zelle')).reduce((s, t) => s + parseFloat(t.monto), 0);
-  const divisasTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo ($)').reduce((s, t) => s + parseFloat(t.monto), 0);
-  const bsEfectivoTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo (Bs)').reduce((s, t) => s + parseFloat(t.monto), 0);
+  const pmTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('pago móvil')).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const ptovTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('punto')).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const zelleTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('zelle')).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const divisasTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo ($)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const bsEfectivoTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo (Bs)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
 
   const marteRows = marteDayMovements.map((t, idx) => {
     const conc = t.concepto || '';
@@ -429,7 +434,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
                       return (
                         <tr key={t.id || idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-bold text-slate-800">{t.hora?.split(',')[1] || t.hora}</td>
+                          <td className="p-3 font-bold text-slate-800">{typeof t.hora === 'string' ? (t.hora.includes(',') ? t.hora.split(',')[1].trim() : t.hora) : 'N/A'}</td>
                           <td className="p-3 font-bold text-indigo-900">{t.usuarioNombre || 'Recepcionista'}</td>
                           <td className="p-3">{t.concepto}</td>
                           <td className="p-3">
