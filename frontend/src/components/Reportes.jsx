@@ -31,19 +31,25 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     }
   }, [currentUser]);
 
-  // Parse transaction timestamp string to Date safely in local time
+  // Parse transaction timestamp string to Date safely in local time or ISO format
   const parseDate = (horaStr) => {
     if (!horaStr) return new Date();
     try {
-      const datePart = horaStr.split(',')[0].trim();
-      const parts = datePart.split('/');
-      if (parts.length === 3) {
-        const day = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10) - 1;
-        const year = parseInt(parts[2], 10);
-        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          return new Date(year, month, day);
+      if (typeof horaStr === 'string') {
+        if (horaStr.includes('/')) {
+          const datePart = horaStr.split(',')[0].trim();
+          const parts = datePart.split('/');
+          if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+              return new Date(year, month, day);
+            }
+          }
         }
+        const d = new Date(horaStr);
+        if (!isNaN(d.getTime())) return d;
       }
     } catch (e) {
       return new Date();
@@ -381,7 +387,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
               <h4 className="text-sm font-black text-slate-800">
-                <i className="fa-solid fa-[#c5920c] fa-list-check mr-2"></i> Detalle de Ventas e Ingresos Registrados Hoy
+                <i className="fa-solid fa-list-check text-[#c5920c] mr-2"></i> Detalle de Ventas e Ingresos Registrados Hoy
               </h4>
               <span className="text-[10px] font-bold text-slate-400">
                 Excluye días anteriores (Solo fecha de hoy)
@@ -747,13 +753,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 </tr>
               </thead>
               <tbody>
-                {filteredCaja.filter(t => t.tipo === 'Ingreso' && t.origen === 'Hospedaje').map(t => (
+                {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market')))).map(t => (
                   <tr key={t.id} className="border-b">
                     <td className="p-2">{t.hora}</td>
                     <td className="p-2 font-semibold">{t.concepto}</td>
                     <td className="p-2">{cleanPaymentMethodName(t.metodo)}</td>
-                    <td className="p-2 text-right font-bold text-emerald-700">${parseFloat(t.monto).toFixed(2)} USD</td>
-                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)} VES</td>
+                    <td className="p-2 text-right font-bold text-emerald-700">${parseFloat(t.monto || 0).toFixed(2)} USD</td>
+                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto || 0) * tasaUsd).toFixed(2)} VES</td>
                   </tr>
                 ))}
               </tbody>
@@ -775,13 +781,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 </tr>
               </thead>
               <tbody>
-                {filteredCaja.filter(t => t.tipo === 'Ingreso' && t.origen === 'Market').map(t => (
+                {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))).map(t => (
                   <tr key={t.id} className="border-b">
                     <td className="p-2">{t.hora}</td>
                     <td className="p-2 font-semibold">{t.concepto}</td>
-                    <td className="p-2">{t.metodo}</td>
-                    <td className="p-2 text-right font-bold text-amber-600">${parseFloat(t.monto).toFixed(2)} USD</td>
-                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto) * tasaUsd).toFixed(2)} VES</td>
+                    <td className="p-2">{cleanPaymentMethodName(t.metodo)}</td>
+                    <td className="p-2 text-right font-bold text-amber-600">${parseFloat(t.monto || 0).toFixed(2)} USD</td>
+                    <td className="p-2 text-right font-bold text-slate-600">Bs. {(parseFloat(t.monto || 0) * tasaUsd).toFixed(2)} VES</td>
                   </tr>
                 ))}
               </tbody>
