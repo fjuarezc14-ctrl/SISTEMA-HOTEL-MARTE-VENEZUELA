@@ -56,15 +56,26 @@
 
 /* Print & PDF Export Styles */
 @media print {
-  /* Hide non-printable UI elements (Sidebar, Topbar, Filter Controls, Buttons) */
+  /* Hide non-printable UI elements (Sidebar, Topbar, Filter Controls, Forms, Buttons, Inputs) */
   aside,
   header,
+  nav,
+  form,
+  button,
+  input,
+  select,
+  textarea,
   .print\:hidden {
     display: none !important;
   }
 
+  /* Force display for print-only elements */
+  .print\:block {
+    display: block !important;
+  }
+
   /* Reset layout constraints for printing */
-  html, body, #root, main, div {
+  html, body, #root, main {
     overflow: visible !important;
     height: auto !important;
     max-width: 100% !important;
@@ -72,12 +83,8 @@
     color: black !important;
     box-shadow: none !important;
     position: static !important;
-  }
-
-  main {
     margin: 0 !important;
     padding: 0 !important;
-    width: 100% !important;
   }
 
   .print\:p-0 {
@@ -93,7 +100,7 @@
   }
 
   @page {
-    margin: 1.5cm;
+    margin: 1cm;
     size: auto;
   }
 }

@@ -235,7 +235,7 @@ export default function EntregaTurnos({
   return (
     <div className="space-y-6 fade-in">
       {/* Top Bar Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm print:hidden">
         <div>
           <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
             <i className="fa-solid fa-handshake text-[#ff331f]"></i> Entrega & Recepción de Turno
@@ -273,7 +273,7 @@ export default function EntregaTurnos({
 
       {/* SUBTAB 1: NUEVA ENTREGA DE TURNO */}
       {activeSubTab === 'nueva' && (
-        <form onSubmit={handleSubmitEntrega} className="space-y-6">
+        <form onSubmit={handleSubmitEntrega} className="space-y-6 print:hidden">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Left Column: Cash & Shift Info */}
@@ -556,7 +556,7 @@ export default function EntregaTurnos({
 
       {/* SUBTAB 2: HISTORIAL Y CONFIRMACIÓN DE ENTREGA */}
       {activeSubTab === 'historial' && (
-        <div className="space-y-4">
+        <div className="space-y-4 print:hidden">
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 text-xs">
             <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px] mr-2">Filtrar por Estado:</span>
