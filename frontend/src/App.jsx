@@ -158,8 +158,29 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handler: Room click actions (dynamic depending on state)
+  // Handler: Room click actions (dynamic depending on state & user role)
   const handleRoomClick = (room) => {
+    const isCamarero = user?.rol === 'Camarero' || user?.rol === 'Camarera';
+
+    if (isCamarero) {
+      if (room.estado === 'Libre' || room.estado === 'Reservada') {
+        alert('🔒 Acceso Denegado: El rol Camarero(a) solo puede realizar el Check-Out de habitaciones ocupadas y cambiar el estado de Limpieza a Libre.');
+        return;
+      }
+      if (room.estado === 'Ocupada') {
+        setSelectedRoom(room);
+        setIsCheckoutOpen(true); // Open Check-Out directly for camareros
+        return;
+      }
+      if (room.estado === 'Limpieza') {
+        const confirmClean = window.confirm(`¿La limpieza de la Habitación ${room.num} ha terminado? Se cambiará a estado Libre.`);
+        if (confirmClean) {
+          handleLimpiezaTerminada(room.num);
+        }
+        return;
+      }
+    }
+
     if (room.estado === 'Libre') {
       setSelectedRoom(room);
       setIsAsignarDirectoOpen(true);

@@ -249,8 +249,8 @@ export function AsignarDirectoModal({
 
   const basePrice = getBasePrice(room.tipo, modalidad);
 
-  // Compute total companion surcharges (50% of base stay price for 3rd+ adult guest)
-  const recargoIndividual = basePrice * 0.50;
+  // Compute total companion surcharges ($5.00 USD fixed per night for 3rd+ adult guest; $0 for minors)
+  const recargoIndividual = 5.00;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2; // Guest 1 = primary, Guest 2 = 1st companion, Guest 3+ = additional
     const age = calcularEdad(a.fechaNacimiento);
@@ -1033,14 +1033,14 @@ export function NuevaReservaModal({
   };
   const nochesPernocta = modalidad === 'pernocta' ? calculateNoches() : 1;
 
-  // Compute companion surcharges (50% of base stay price for 3rd+ adult guest)
-  const recargoIndividualReserva = baseStayPricePerNight * 0.50;
+  // Compute companion surcharges ($5.00 USD fixed per night for 3rd+ adult guest; $0 for minors)
+  const recargoIndividualReserva = 5.00;
   const companionSurcharges = acompanantes.reduce((sum, a, idx) => {
     const guestNumber = idx + 2;
     const age = calcularEdad(a.fechaNacimiento);
     const isAdult = age >= 18;
     if (guestNumber >= 3 && isAdult) {
-      return sum + recargoIndividualReserva;
+      return sum + (recargoIndividualReserva * nochesPernocta);
     }
     return sum;
   }, 0);

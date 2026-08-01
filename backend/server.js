@@ -829,6 +829,39 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       );
     }
 
+    // 4. Handle Market items attached to Check-In (Venta Inmediata de Market en Check-In)
+    const { marketItems } = req.body;
+    if (marketItems && Array.isArray(marketItems) && marketItems.length > 0) {
+      let totalMarketSale = 0;
+      let conceptList = [];
+      for (const mItem of marketItems) {
+        const cant = parseInt(mItem.cantidad) || 1;
+        const price = parseFloat(mItem.precio_venta) || 0;
+        totalMarketSale += price * cant;
+        conceptList.push(`${cant}x ${mItem.nombre}`);
+        if (mItem.id) {
+          await db.run('UPDATE productos SET stock = MAX(0, stock - ?) WHERE id = ?', [cant, mItem.id]);
+        }
+      }
+      if (totalMarketSale > 0) {
+        const mTransId = 't_mkt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+        await db.run(
+          'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            mTransId,
+            'Ingreso',
+            `Venta Market Check-In Hab ${numHabitacion} (${conceptList.join(', ')}) [Cliente: ${nombre.trim()}]`,
+            totalMarketSale,
+            metodo || 'Efectivo Bolívares',
+            getFechaHoraActual(),
+            req.user.id,
+            req.user.nombre,
+            'Market'
+          ]
+        );
+      }
+    }
+
     // Auto-link pre-consumos (Minimarket consumos en espera) para este cliente
     const targetCi = (dni || ci || '').trim();
     const targetNombre = (nombre || '').trim();
@@ -892,7 +925,7 @@ app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => 
         [
           transactionId,
           'Ingreso',
-          `Recargo 3er Huésped (50%) Hab ${num} (${acompName})`,
+          `Recargo 3er Huésped ($5 USD) Hab ${num} (${acompName})`,
           finalMonto,
           metodoTexto || 'Efectivo Bolívares',
           getFechaHoraActual(),
@@ -1372,6 +1405,49 @@ app.put('/api/caja/:id/validar', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error al validar pago:', error);
     res.status(500).json({ error: 'Error al procesar la validación del pago.' });
+  }
+});
+
+// PUT /api/caja/:id/metodo - Editar método de pago de una transacción en Caja (Exclusivo Super Admin / Admin)
+app.put('/api/caja/:id/metodo', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { nuevoMetodo } = req.body;
+
+  if (req.user.rol !== 'Administrador' && req.user.rol !== 'Super Admin') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Super Admin o Administrador para editar el método de pago.' });
+  }
+
+  if (!nuevoMetodo || !nuevoMetodo.trim()) {
+    return res.status(400).json({ error: 'Debe especificar el nuevo método de pago.' });
+  }
+
+  try {
+    const txn = await db.get('SELECT * FROM caja WHERE id = ?', [id]);
+    if (!txn) {
+      return res.status(404).json({ error: 'Movimiento de caja no encontrado.' });
+    }
+
+    const metodoAnterior = txn.metodo;
+    const metodoActualizado = nuevoMetodo.trim();
+
+    await db.run('UPDATE caja SET metodo = ? WHERE id = ?', [metodoActualizado, id]);
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Edición Método de Pago (Caja)',
+      `Transacción #${id} (${txn.concepto}): Método cambiado de "${metodoAnterior}" a "${metodoActualizado}"`,
+      req.ip
+    );
+
+    res.json({
+      success: true,
+      message: `Método de pago actualizado correctamente a "${metodoActualizado}".`
+    });
+  } catch (error) {
+    console.error('Error al editar método de pago en caja:', error);
+    res.status(500).json({ error: 'Error al actualizar el método de pago.' });
   }
 });
 

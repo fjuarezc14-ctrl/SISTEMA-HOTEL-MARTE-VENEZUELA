@@ -13,9 +13,12 @@ export default function EntregaTurnos({
   const [activeSubTab, setActiveSubTab] = useState('nueva'); // 'nueva' | 'historial'
   const [filterState, setFilterState] = useState('Todos'); // 'Todos' | 'Pendientes' | 'Conformes' | 'Discrepancias'
 
-  // Form State for Nueva Entrega
+  // Form State for Nueva Entrega (All payment methods breakdown)
   const [saldoUsd, setSaldoUsd] = useState('');
   const [saldoVes, setSaldoVes] = useState('');
+  const [saldoPagoMovil, setSaldoPagoMovil] = useState('');
+  const [saldoPunto, setSaldoPunto] = useState('');
+  const [saldoZelle, setSaldoZelle] = useState('');
   const [novedades, setNovedades] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -62,14 +65,29 @@ export default function EntregaTurnos({
       return sum;
     }, 0);
 
-  const myEfectivoVES = myMovements
-    .filter(t => (t.metodo === 'Efectivo (Bs)' || t.metodo === 'Efectivo') && t.tipo === 'Ingreso')
+  const myPagoMovil = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.metodo || '').toLowerCase().includes('pago móvil'))
     .reduce((s, t) => s + parseFloat(t.monto), 0);
 
-  // Auto-fill cash values when clicking button
+  const myPunto = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.metodo || '').toLowerCase().includes('punto'))
+    .reduce((s, t) => s + parseFloat(t.monto), 0);
+
+  const myZelle = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.metodo || '').toLowerCase().includes('zelle'))
+    .reduce((s, t) => s + parseFloat(t.monto), 0);
+
+  const myMarketSales = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
+    .reduce((s, t) => s + parseFloat(t.monto), 0);
+
+  // Auto-fill cash values and all payment methods from current shift sales
   const handleAutoFillCaja = () => {
     setSaldoUsd(myEfectivoUSD.toString());
     setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2).toString());
+    setSaldoPagoMovil(myPagoMovil.toFixed(2).toString());
+    setSaldoPunto(myPunto.toFixed(2).toString());
+    setSaldoZelle(myZelle.toFixed(2).toString());
   };
 
   const handleStockCountChange = (productId, val) => {
@@ -246,6 +264,55 @@ export default function EntregaTurnos({
                       ~ Equivalente: ${(parseFloat(saldoVes) / tasaUsd).toFixed(2)} USD
                     </span>
                   )}
+                </div>
+
+                {/* Digital Payment Channels Breakdown */}
+                <div className="pt-2 border-t border-slate-100 space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Pago Móvil Recibido ($ USD)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={saldoPagoMovil}
+                      onChange={(e) => setSaldoPagoMovil(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold bg-indigo-50/40 text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Punto de Venta Recibido ($ USD)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={saldoPunto}
+                      onChange={(e) => setSaldoPunto(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold bg-indigo-50/40 text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Zelle Recibido ($ USD)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={saldoZelle}
+                      onChange={(e) => setSaldoZelle(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold bg-indigo-50/40 text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Market / Snacks Sales Summary */}
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 flex justify-between items-center">
+                  <div>
+                    <span className="font-bold uppercase block text-[10px]">Ventas de Minimarket / Snacks (Mi Turno)</span>
+                    <span className="text-[10px] text-amber-700">Autocompletado con ventas del día</span>
+                  </div>
+                  <span className="text-base font-black text-amber-900">${myMarketSales.toFixed(2)} USD</span>
                 </div>
               </div>
 

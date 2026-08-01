@@ -22,6 +22,12 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   // Validation filter ('all', 'pending', 'validated')
   const [valFilter, setValFilter] = useState('all');
 
+  // Super Admin Edit Payment Method state
+  const [editingTxn, setEditingTxn] = useState(null);
+  const [editMetodoVal, setEditMetodoVal] = useState('Efectivo ($)');
+  const [editRefVal, setEditRefVal] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
   // Helper function to detect digital payments with reference code strings
   const isDigitalPayment = (m) => {
     if (!m) return false;
@@ -206,6 +212,45 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
       alert(`⚠️ ${err.message}`);
     } finally {
       setValidatingId(null);
+    }
+  };
+
+  const handleOpenEditMetodo = (txn) => {
+    const { cleanMetodo, refCode } = parseMetodoAndRef(txn.metodo);
+    setEditingTxn(txn);
+    setEditMetodoVal(cleanMetodo || 'Efectivo ($)');
+    setEditRefVal(refCode !== '-' ? refCode : '');
+  };
+
+  const handleSaveEditMetodo = async (e) => {
+    e.preventDefault();
+    if (!editingTxn) return;
+
+    const finalMetodoStr = editRefVal.trim() 
+      ? `${editMetodoVal} (Ref: ${editRefVal.trim()})` 
+      : editMetodoVal;
+
+    setIsSubmittingEdit(true);
+    try {
+      const res = await fetch(`/api/caja/${editingTxn.id}/metodo`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ nuevoMetodo: finalMetodoStr })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar método');
+
+      alert(`✅ ${data.message}`);
+      setEditingTxn(null);
+      if (onStateChange) await onStateChange();
+    } catch (err) {
+      alert(`⚠️ ${err.message}`);
+    } finally {
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -417,9 +462,20 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                           </span>
                         </td>
                         <td className="p-4 text-center">
-                          <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold inline-block">
-                            {cleanMetodo}
-                          </span>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold inline-block">
+                              {cleanMetodo}
+                            </span>
+                            {(currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin') && (
+                              <button
+                                onClick={() => handleOpenEditMetodo(t)}
+                                title="Editar método de pago (Super Admin)"
+                                className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black px-1.5 py-1 rounded border border-amber-300 transition-all"
+                              >
+                                <i className="fa-solid fa-[#c5920c] fa-pen"></i>
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4 text-center font-mono">
                           {refCode !== '-' ? (
@@ -850,6 +906,82 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL DE EDICIÓN DE MÉTODO DE PAGO PARA SUPER ADMIN / ADMIN */}
+      {editingTxn && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-[#c5920c] fa-pen-to-square text-amber-600"></i> Editar Método de Pago (Super Admin)
+              </h3>
+              <button onClick={() => setEditingTxn(null)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+              <p className="font-bold">Movimiento: <span className="font-semibold text-slate-800">{editingTxn.concepto}</span></p>
+              <p className="font-bold">Monto: <span className="font-black text-emerald-700">${parseFloat(editingTxn.monto).toFixed(2)} USD</span> (~ Bs. {(parseFloat(editingTxn.monto) * tasaUsd).toFixed(2)})</p>
+              <p className="text-[10px] text-amber-700">Método Actual: <strong className="underline">{editingTxn.metodo}</strong></p>
+            </div>
+
+            <form onSubmit={handleSaveEditMetodo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nuevo Método de Pago</label>
+                <select
+                  value={editMetodoVal}
+                  onChange={(e) => setEditMetodoVal(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="Efectivo ($)">Efectivo ($ USD)</option>
+                  <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
+                  <option value="Pago Móvil">Pago Móvil</option>
+                  <option value="Punto de Venta">Punto de Venta</option>
+                  <option value="Zelle">Zelle</option>
+                  <option value="Pago Mixto">Pago Mixto</option>
+                </select>
+              </div>
+
+              {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(editMetodoVal) && (
+                <div>
+                  <label className="block text-xs font-bold text-amber-900 uppercase mb-1">Código de Referencia / Comprobante *</label>
+                  <input
+                    type="text"
+                    value={editRefVal}
+                    onChange={(e) => setEditRefVal(e.target.value)}
+                    placeholder="Ej. Ref 998877"
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white text-slate-800 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTxn(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit}
+                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow flex items-center justify-center gap-1.5"
+                >
+                  {isSubmittingEdit ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-floppy-disk"></i> Guardar Cambio
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
