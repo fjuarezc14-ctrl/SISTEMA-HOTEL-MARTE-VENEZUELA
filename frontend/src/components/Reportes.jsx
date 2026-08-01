@@ -80,7 +80,36 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return true;
   };
 
-  const filteredCaja = caja.filter(t => isDateInRange(t.hora));
+  const filteredCaja = (caja || []).filter(t => isDateInRange(t.hora));
+
+  // Helper to clean payment method display string
+  const cleanPaymentMethodName = (metodoStr) => {
+    if (!metodoStr) return 'N/A';
+    return metodoStr;
+  };
+
+  // General executive calculations for filteredCaja
+  const ingresosHospedaje = filteredCaja
+    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))))
+    .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
+
+  const ingresosMarket = filteredCaja
+    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
+    .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
+
+  const totalEgresos = filteredCaja
+    .filter(t => t.tipo === 'Egreso')
+    .reduce((sum, t) => sum + (parseFloat(t.monto) || 0), 0);
+
+  const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
+
+  const metodosSummary = filteredCaja
+    .filter(t => t.tipo === 'Ingreso')
+    .reduce((acc, t) => {
+      const m = t.metodo || 'Otros';
+      acc[m] = (acc[m] || 0) + (parseFloat(t.monto) || 0);
+      return acc;
+    }, {});
 
   // Build unique receptionists list from caja & historial
   const recepList = Array.from(new Set([
