@@ -1795,6 +1795,14 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
       await db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [item.cantidad, item.id]);
     }
 
+    // 2. Prepare payment breakdown & metadata
+    const pagosList = Array.isArray(pagos) ? pagos : (pagos ? [pagos] : []);
+    const isPagoMixto = pagosList.length > 1;
+    
+    let conceptoItems = items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+    let clienteInfo = clienteNombre ? ` - Cliente: ${clienteNombre.trim()}` : '';
+    if (clienteCi) clienteInfo += ` (CI: ${clienteCi.trim()})`;
+
     // If pre-consumo (Minimarket order before assigning room), save items into `consumos` table under 'EN_ESPERA'
     const isPreConsumo = req.body.isPreConsumo || false;
 
