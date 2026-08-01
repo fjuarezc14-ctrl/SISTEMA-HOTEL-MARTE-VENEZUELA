@@ -98,6 +98,17 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return isNaN(n) ? 0 : n;
   };
 
+  // Helper for safe strings (prevents Object as React Child crash)
+  const safeStr = (val, fallback = '') => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+      return val.nombre || val.name || val.usuario || fallback;
+    }
+    return String(val);
+  };
+
   const safeCaja = Array.isArray(caja) ? caja : [];
   const safeHistorial = Array.isArray(historial) ? historial : [];
 
@@ -134,8 +145,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   // Build unique receptionists list from caja & historial
   const recepList = Array.from(new Set([
-    ...safeCaja.map(t => t?.usuarioNombre).filter(Boolean),
-    ...safeHistorial.map(h => h?.recepcionistaNombre).filter(Boolean)
+    ...safeCaja.map(t => safeStr(t?.usuarioNombre)).filter(Boolean),
+    ...safeHistorial.map(h => safeStr(h?.recepcionistaNombre)).filter(Boolean)
   ]));
 
   // Strictly filter TODAY's transactions for Receptionist Sales Report (No past days accumulated)
@@ -343,8 +354,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 {currentUser?.rol === 'Administrador' && (
                   <option value="TODOS">-- Todos los Recepcionistas --</option>
                 )}
-                {recepList.map(name => (
-                  <option key={name} value={name}>{name}</option>
+                {recepList.map((name, idx) => (
+                  <option key={idx} value={String(name)}>{String(name)}</option>
                 ))}
               </select>
             </div>
@@ -442,14 +453,14 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                       return (
                         <tr key={t.id || idx} className="hover:bg-slate-50 transition-colors">
                           <td className="p-3 font-bold text-slate-800">{typeof t.hora === 'string' ? (t.hora.includes(',') ? t.hora.split(',')[1].trim() : t.hora) : 'N/A'}</td>
-                          <td className="p-3 font-bold text-indigo-900">{t.usuarioNombre || 'Recepcionista'}</td>
-                          <td className="p-3">{t.concepto}</td>
+                          <td className="p-3 font-bold text-indigo-900">{safeStr(t.usuarioNombre, 'Recepcionista')}</td>
+                          <td className="p-3">{safeStr(t.concepto, 'Sin concepto')}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${catBadge}`}>
                               {catLabel}
                             </span>
                           </td>
-                          <td className="p-3 font-bold text-slate-600">{t.metodo}</td>
+                          <td className="p-3 font-bold text-slate-600">{safeStr(t.metodo, 'EFECTIVO')}</td>
                           <td className="p-3 text-right font-black text-emerald-600">${safeNum(t.monto).toFixed(2)}</td>
                           <td className="p-3 text-right font-bold text-slate-500">Bs. {(safeNum(t.monto) * safeNum(tasaUsd || 50)).toFixed(2)}</td>
                         </tr>
