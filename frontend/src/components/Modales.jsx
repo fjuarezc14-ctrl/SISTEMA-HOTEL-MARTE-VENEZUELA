@@ -191,18 +191,22 @@ export function AsignarDirectoModal({
 
   // Dynamic Companions Array (v5 - Fase 1)
   // [{ id, nombre, ci, fechaNacimiento, age, esMayor, recargo }]
-  const [acompanantes, setAcompanantes] = useState([]);
-
+  const [acompanantes, setAcompanantes] = useState([]);  
   const [modalidad, setModalidad] = useState('4h');
   const [metodo, setMetodo] = useState('Efectivo (Bs)');
   const [codigoVerificacion, setCodigoVerificacion] = useState('');
-  // Flexible Multi-Currency Mixed Payment states
-  const [metodoParteA, setMetodoParteA] = useState('Efectivo ($)');
-  const [montoParteA, setMontoParteA] = useState('0');
-  const [codigoRefParteA, setCodigoRefParteA] = useState('');
-  const [metodoParteB, setMetodoParteB] = useState('Pago Móvil');
-  const [montoParteB, setMontoParteB] = useState('0');
-  const [codigoRefParteB, setCodigoRefParteB] = useState('');
+  
+  // Flexible Multi-Channel Mixed Payment states (3+ methods)
+  const [pagosMixtosChannels, setPagosMixtosChannels] = useState({
+    efectivoUsd: '',
+    efectivoVes: '',
+    pagoMovil: '',
+    pagoMovilRef: '',
+    punto: '',
+    puntoRef: '',
+    zelle: '',
+    zelleRef: ''
+  });
 
   const comprobante = 'Ticket Interno'; // Locked to Ticket Interno per client request
 
@@ -241,12 +245,16 @@ export function AsignarDirectoModal({
       setModalidad('4h');
       setMetodo('Efectivo (Bs)');
       setCodigoVerificacion('');
-      setMetodoParteA('Efectivo ($)');
-      setMontoParteA('0');
-      setCodigoRefParteA('');
-      setMetodoParteB('Pago Móvil');
-      setMontoParteB('0');
-      setCodigoRefParteB('');
+      setPagosMixtosChannels({
+        efectivoUsd: '',
+        efectivoVes: '',
+        pagoMovil: '',
+        pagoMovilRef: '',
+        punto: '',
+        puntoRef: '',
+        zelle: '',
+        zelleRef: ''
+      });
       setSearchQuery('');
       setShowSuggestions(false);
     }
@@ -349,20 +357,31 @@ export function AsignarDirectoModal({
     }
 
     if (metodo === 'Pago Mixto') {
-      const pA = parseFloat(montoParteA) || 0;
-      const pB = parseFloat(montoParteB) || 0;
-      if (Math.abs((pA + pB) - totalMontoUsd) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma ($${pA.toFixed(2)} + $${pB.toFixed(2)} = $${(pA+pB).toFixed(2)}) debe coincidir con el total ($${totalMontoUsd.toFixed(2)} USD).`);
+      const sumMixtoUSD = 
+        (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+        (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
+        (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
+        (parseFloat(pagosMixtosChannels.punto) || 0) +
+        (parseFloat(pagosMixtosChannels.zelle) || 0);
+
+      if (Math.abs(sumMixtoUSD - totalMontoUsd) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${totalMontoUsd.toFixed(2)} USD).`);
         setIsSubmitting(false);
         return;
       }
-      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && pA > 0 && !codigoRefParteA.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 1 (Digital).');
+
+      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef.trim()) {
+        alert('⚠️ Debe ingresar el Código de Referencia para la parte de Pago Móvil.');
         setIsSubmitting(false);
         return;
       }
-      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteB) && pB > 0 && !codigoRefParteB.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 2 (Digital).');
+      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef.trim()) {
+        alert('⚠️ Debe ingresar el Código de Referencia / Baucher para la parte de Punto de Venta.');
+        setIsSubmitting(false);
+        return;
+      }
+      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef.trim()) {
+        alert('⚠️ Debe ingresar la Referencia / Confirmación para la parte de Zelle.');
         setIsSubmitting(false);
         return;
       }
@@ -375,13 +394,35 @@ export function AsignarDirectoModal({
       return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
     }).join(', ');
 
-    const refAStr = codigoRefParteA.trim() ? ` - Ref: ${codigoRefParteA.trim()}` : '';
-    const refBStr = codigoRefParteB.trim() ? ` - Ref: ${codigoRefParteB.trim()}` : '';
-    const refsCombined = [codigoRefParteA.trim(), codigoRefParteB.trim()].filter(Boolean).join(' / ');
+    // Build dynamic payment summary for Pago Mixto
+    let finalMetodoStr = metodo;
+    if (metodo === 'Pago Mixto') {
+      const parts = [];
+      const refs = [];
 
-    const finalMetodoStr = metodo === 'Pago Mixto'
-      ? `Pago Mixto (${metodoParteA}: $${montoParteA}${refAStr} + ${metodoParteB}: $${montoParteB}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
-      : (isDigital && codigoVerificacion.trim() ? `${metodo} - Ref: ${codigoVerificacion}` : metodo);
+      if ((parseFloat(pagosMixtosChannels.efectivoUsd) || 0) > 0) {
+        parts.push(`Efectivo ($): $${parseFloat(pagosMixtosChannels.efectivoUsd).toFixed(2)}`);
+      }
+      if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
+        parts.push(`Efectivo (Bs): $${parseFloat(pagosMixtosChannels.efectivoVes).toFixed(2)}`);
+      }
+      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
+        parts.push(`Pago Móvil: $${parseFloat(pagosMixtosChannels.pagoMovil).toFixed(2)} (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
+        refs.push(pagosMixtosChannels.pagoMovilRef.trim());
+      }
+      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
+        parts.push(`Punto: $${parseFloat(pagosMixtosChannels.punto).toFixed(2)} (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
+        refs.push(pagosMixtosChannels.puntoRef.trim());
+      }
+      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
+        parts.push(`Zelle: $${parseFloat(pagosMixtosChannels.zelle).toFixed(2)} (Ref: ${pagosMixtosChannels.zelleRef.trim()})`);
+        refs.push(pagosMixtosChannels.zelleRef.trim());
+      }
+
+      finalMetodoStr = `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ') || 'N/A'}`;
+    } else if (isDigital && codigoVerificacion.trim()) {
+      finalMetodoStr = `${metodo} - Ref: ${codigoVerificacion}`;
+    }
 
     const confirmCheckin = window.confirm(
       `¿Está seguro de procesar el Check-In del cliente?\n\n` +
@@ -408,7 +449,7 @@ export function AsignarDirectoModal({
       acompanantes,
       monto: totalMontoUsd,
       metodo: finalMetodoStr,
-      codigoVerificacion: refsCombined || codigoVerificacion,
+      codigoVerificacion: metodo === 'Pago Mixto' ? [pagosMixtosChannels.pagoMovilRef, pagosMixtosChannels.puntoRef, pagosMixtosChannels.zelleRef].filter(Boolean).join(' / ') : codigoVerificacion,
       fotoCi,
       comprobante,
       modalidad,
@@ -816,119 +857,197 @@ export function AsignarDirectoModal({
                     </div>
                   )}
 
-                  {/* Flexible Multi-Currency Mixed Payment Breakdown */}
-                  {metodo === 'Pago Mixto' && (
-                    <div className="col-span-2 bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-3">
-                      <div className="flex justify-between items-center border-b border-indigo-200/60 pb-1.5">
-                        <span className="text-[10px] font-black text-indigo-900 uppercase">
-                          <i className="fa-solid fa-arrows-split-up-and-left mr-1 text-indigo-600"></i> Desglose Multimoneda (Pago Mixto)
-                        </span>
-                        <span className="text-[10px] font-bold text-indigo-700">
-                          Total Exigido: <strong>${totalMontoUsd.toFixed(2)} USD</strong> (~ Bs. {montoVes})
-                        </span>
-                      </div>
+                  {/* Flexible Multi-Channel Pago Mixto Section */}
+                  {metodo === 'Pago Mixto' && (() => {
+                    const sumMixtoUSD = 
+                      (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+                      (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
+                      (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
+                      (parseFloat(pagosMixtosChannels.punto) || 0) +
+                      (parseFloat(pagosMixtosChannels.zelle) || 0);
 
-                      {/* Parte 1 */}
-                      <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
+                    const diffMixtoUSD = totalMontoUsd - sumMixtoUSD;
+                    const isCuadreExacto = Math.abs(diffMixtoUSD) < 0.05;
+
+                    return (
+                      <div className="col-span-2 bg-indigo-50/80 p-4 rounded-2xl border border-indigo-200 space-y-4 shadow-sm">
+                        <div className="flex justify-between items-center border-b border-indigo-200/80 pb-2">
                           <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 1: Método</label>
-                            <select
-                              value={metodoParteA}
-                              onChange={(e) => setMetodoParteA(e.target.value)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                            >
-                              <option value="Efectivo ($)">Efectivo ($ USD)</option>
-                              <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
-                              <option value="Pago Móvil">Pago Móvil</option>
-                              <option value="Punto de Venta">Punto de Venta</option>
-                              <option value="Zelle">Zelle</option>
-                            </select>
+                            <span className="text-xs font-black text-indigo-950 uppercase flex items-center gap-1.5">
+                              <i className="fa-solid fa-layer-group text-indigo-600"></i> Desglose de Pago Mixto (Combinar Canales)
+                            </span>
+                            <p className="text-[10px] text-indigo-700 font-semibold mt-0.5">
+                              Indique el monto a pagar en cada canal elegido.
+                            </p>
                           </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
-                            <input 
-                              type="number"
-                              step="0.50"
-                              value={montoParteA}
-                              onChange={(e) => setMontoParteA(e.target.value)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                            />
-                            {parseFloat(montoParteA) > 0 && (
-                              <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
-                                ~ Bs. {(parseFloat(montoParteA) * tasaUsd).toFixed(2)}
+
+                          <div className="text-right">
+                            {isCuadreExacto ? (
+                              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded-full border border-emerald-300">
+                                ✅ Cuadre Exacto (${sumMixtoUSD.toFixed(2)})
+                              </span>
+                            ) : diffMixtoUSD > 0 ? (
+                              <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2.5 py-1 rounded-full border border-amber-300">
+                                ⚠️ Faltan ${diffMixtoUSD.toFixed(2)} USD
+                              </span>
+                            ) : (
+                              <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2.5 py-1 rounded-full border border-rose-300">
+                                ⚠️ Exceso de ${Math.abs(diffMixtoUSD).toFixed(2)} USD
                               </span>
                             )}
                           </div>
                         </div>
-                        {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && (
-                          <div>
-                            <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 1 *</label>
-                            <input 
-                              type="text"
-                              value={codigoRefParteA}
-                              onChange={(e) => setCodigoRefParteA(e.target.value)}
-                              placeholder="Ej. Ref 123456"
-                              className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
-                              required
-                            />
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Parte 2 */}
-                      <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 2: Método</label>
-                            <select
-                              value={metodoParteB}
-                              onChange={(e) => setMetodoParteB(e.target.value)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                            >
-                              <option value="Pago Móvil">Pago Móvil</option>
-                              <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
-                              <option value="Efectivo ($)">Efectivo ($ USD)</option>
-                              <option value="Punto de Venta">Punto de Venta</option>
-                              <option value="Zelle">Zelle</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
-                            <input 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          {/* Efectivo $ */}
+                          <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1">
+                            <label className="block text-[10px] font-black text-slate-700 uppercase flex items-center gap-1">
+                              <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Efectivo ($ USD)
+                            </label>
+                            <input
                               type="number"
                               step="0.50"
-                              value={montoParteB}
-                              onChange={(e) => setMontoParteB(e.target.value)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                              min="0"
+                              value={pagosMixtosChannels.efectivoUsd}
+                              onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoUsd: e.target.value })}
+                              placeholder="0.00"
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                             />
-                            {parseFloat(montoParteB) > 0 && (
-                              <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
-                                ~ Bs. {(parseFloat(montoParteB) * tasaUsd).toFixed(2)}
+                          </div>
+
+                          {/* Efectivo Bs */}
+                          <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1">
+                            <label className="block text-[10px] font-black text-slate-700 uppercase flex items-center gap-1">
+                              <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Efectivo (Bs / VES)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.50"
+                              min="0"
+                              value={pagosMixtosChannels.efectivoVes}
+                              onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoVes: e.target.value })}
+                              placeholder="0.00"
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                            />
+                            {parseFloat(pagosMixtosChannels.efectivoVes) > 0 && (
+                              <span className="text-[10px] text-blue-700 font-bold block">
+                                ~ Bs. {(parseFloat(pagosMixtosChannels.efectivoVes) * tasaUsd).toFixed(2)} VES
                               </span>
                             )}
                           </div>
-                        </div>
-                        {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteB) && (
-                          <div>
-                            <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 2 *</label>
-                            <input 
-                              type="text"
-                              value={codigoRefParteB}
-                              onChange={(e) => setCodigoRefParteB(e.target.value)}
-                              placeholder="Ej. Ref 789012"
-                              className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
-                              required
-                            />
-                          </div>
-                        )}
-                      </div>
 
-                      <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 border-t border-indigo-200/60">
-                        Suma Mixta: <strong className="text-xs font-black">${((parseFloat(montoParteA)||0) + (parseFloat(montoParteB)||0)).toFixed(2)} USD</strong> / ${totalMontoUsd.toFixed(2)} USD
+                          {/* Pago Móvil */}
+                          <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1.5 col-span-1 sm:col-span-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
+                                  <i className="fa-solid fa-mobile-screen-button text-indigo-600"></i> Pago Móvil ($ USD)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.50"
+                                  min="0"
+                                  value={pagosMixtosChannels.pagoMovil}
+                                  onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovil: e.target.value })}
+                                  placeholder="0.00"
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                                />
+                                {parseFloat(pagosMixtosChannels.pagoMovil) > 0 && (
+                                  <span className="text-[10px] text-indigo-700 font-bold block pt-0.5">
+                                    ~ Bs. {(parseFloat(pagosMixtosChannels.pagoMovil) * tasaUsd).toFixed(2)} VES
+                                  </span>
+                                )}
+                              </div>
+                              {parseFloat(pagosMixtosChannels.pagoMovil) > 0 && (
+                                <div>
+                                  <label className="block text-[10px] font-black text-amber-900 uppercase">Referencia Pago Móvil *</label>
+                                  <input
+                                    type="text"
+                                    value={pagosMixtosChannels.pagoMovilRef}
+                                    onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovilRef: e.target.value })}
+                                    placeholder="Ej. Ref 123456"
+                                    required
+                                    className="w-full px-3 py-1.5 rounded-lg border border-amber-300 font-bold bg-white text-xs"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Punto de Venta */}
+                          <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1.5 col-span-1 sm:col-span-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
+                                  <i className="fa-solid fa-credit-card text-purple-600"></i> Punto de Venta ($ USD)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.50"
+                                  min="0"
+                                  value={pagosMixtosChannels.punto}
+                                  onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, punto: e.target.value })}
+                                  placeholder="0.00"
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                                />
+                                {parseFloat(pagosMixtosChannels.punto) > 0 && (
+                                  <span className="text-[10px] text-purple-700 font-bold block pt-0.5">
+                                    ~ Bs. {(parseFloat(pagosMixtosChannels.punto) * tasaUsd).toFixed(2)} VES
+                                  </span>
+                                )}
+                              </div>
+                              {parseFloat(pagosMixtosChannels.punto) > 0 && (
+                                <div>
+                                  <label className="block text-[10px] font-black text-amber-900 uppercase">Referencia Baucher Punto *</label>
+                                  <input
+                                    type="text"
+                                    value={pagosMixtosChannels.puntoRef}
+                                    onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, puntoRef: e.target.value })}
+                                    placeholder="Ej. Baucher #7890"
+                                    required
+                                    className="w-full px-3 py-1.5 rounded-lg border border-amber-300 font-bold bg-white text-xs"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Zelle */}
+                          <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1.5 col-span-1 sm:col-span-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
+                                  <i className="fa-solid fa-coins text-amber-600"></i> Zelle ($ USD)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.50"
+                                  min="0"
+                                  value={pagosMixtosChannels.zelle}
+                                  onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, zelle: e.target.value })}
+                                  placeholder="0.00"
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                                />
+                              </div>
+                              {parseFloat(pagosMixtosChannels.zelle) > 0 && (
+                                <div>
+                                  <label className="block text-[10px] font-black text-amber-900 uppercase">Referencia Zelle *</label>
+                                  <input
+                                    type="text"
+                                    value={pagosMixtosChannels.zelleRef}
+                                    onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, zelleRef: e.target.value })}
+                                    placeholder="Ej. Conf #Z1234"
+                                    required
+                                    className="w-full px-3 py-1.5 rounded-lg border border-amber-300 font-bold bg-white text-xs"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 <div className="pt-2 flex gap-3">
@@ -1974,12 +2093,16 @@ export function CheckoutModal({
       setMontoHabitacion('0.00');
       setMetodoPago('Efectivo (Bs)');
       setVetarCliente(false);
-      setMetodoParteACheckout('Efectivo ($)');
-      setMontoParteACheckout('0');
-      setCodigoRefParteACheckout('');
-      setMetodoParteBCheckout('Pago Móvil');
-      setMontoParteBCheckout('0');
-      setCodigoRefParteBCheckout('');
+      setPagosMixtosChannels({
+        efectivoUsd: '',
+        efectivoVes: '',
+        pagoMovil: '',
+        pagoMovilRef: '',
+        punto: '',
+        puntoRef: '',
+        zelle: '',
+        zelleRef: ''
+      });
       setCodigoVerificacionCheckout('');
     }
   }, [isOpen]);
@@ -2046,29 +2169,60 @@ export function CheckoutModal({
     }
 
     if (metodoPago === 'Pago Mixto') {
-      const pA = parseFloat(montoParteACheckout) || 0;
-      const pB = parseFloat(montoParteBCheckout) || 0;
-      if (Math.abs((pA + pB) - totalCobrarEnCaja) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma ($${pA.toFixed(2)} + $${pB.toFixed(2)} = $${(pA+pB).toFixed(2)}) debe coincidir con el total a cobrar ($${totalCobrarEnCaja.toFixed(2)} USD).`);
+      const sumMixtoUSD = 
+        (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+        (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
+        (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
+        (parseFloat(pagosMixtosChannels.punto) || 0) +
+        (parseFloat(pagosMixtosChannels.zelle) || 0);
+
+      if (Math.abs(sumMixtoUSD - totalCobrarEnCaja) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${totalCobrarEnCaja.toFixed(2)} USD).`);
         return;
       }
-      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteACheckout) && pA > 0 && !codigoRefParteACheckout.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 1 (Digital).');
+
+      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef.trim()) {
+        alert('⚠️ Debe ingresar el Código de Referencia para la parte de Pago Móvil.');
         return;
       }
-      if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteBCheckout) && pB > 0 && !codigoRefParteBCheckout.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación para la Parte 2 (Digital).');
+      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef.trim()) {
+        alert('⚠️ Debe ingresar el Código de Referencia / Baucher para la parte de Punto de Venta.');
+        return;
+      }
+      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef.trim()) {
+        alert('⚠️ Debe ingresar la Referencia / Confirmación para la parte de Zelle.');
         return;
       }
     }
 
-    const refAStr = codigoRefParteACheckout.trim() ? ` - Ref: ${codigoRefParteACheckout.trim()}` : '';
-    const refBStr = codigoRefParteBCheckout.trim() ? ` - Ref: ${codigoRefParteBCheckout.trim()}` : '';
-    const refsCombined = [codigoRefParteACheckout.trim(), codigoRefParteBCheckout.trim()].filter(Boolean).join(' / ');
+    let finalMetodoPago = metodoPago;
+    if (metodoPago === 'Pago Mixto') {
+      const parts = [];
+      const refs = [];
 
-    const finalMetodoPago = metodoPago === 'Pago Mixto'
-      ? `Pago Mixto (${metodoParteACheckout}: $${montoParteACheckout}${refAStr} + ${metodoParteBCheckout}: $${montoParteBCheckout}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
-      : (isDigital && codigoVerificacionCheckout.trim() ? `${metodoPago} - Ref: ${codigoVerificacionCheckout}` : metodoPago);
+      if ((parseFloat(pagosMixtosChannels.efectivoUsd) || 0) > 0) {
+        parts.push(`Efectivo ($): $${parseFloat(pagosMixtosChannels.efectivoUsd).toFixed(2)}`);
+      }
+      if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
+        parts.push(`Efectivo (Bs): $${parseFloat(pagosMixtosChannels.efectivoVes).toFixed(2)}`);
+      }
+      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
+        parts.push(`Pago Móvil: $${parseFloat(pagosMixtosChannels.pagoMovil).toFixed(2)} (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
+        refs.push(pagosMixtosChannels.pagoMovilRef.trim());
+      }
+      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
+        parts.push(`Punto: $${parseFloat(pagosMixtosChannels.punto).toFixed(2)} (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
+        refs.push(pagosMixtosChannels.puntoRef.trim());
+      }
+      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
+        parts.push(`Zelle: $${parseFloat(pagosMixtosChannels.zelle).toFixed(2)} (Ref: ${pagosMixtosChannels.zelleRef.trim()})`);
+        refs.push(pagosMixtosChannels.zelleRef.trim());
+      }
+
+      finalMetodoPago = `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ') || 'N/A'}`;
+    } else if (isDigital && codigoVerificacionCheckout.trim()) {
+      finalMetodoPago = `${metodoPago} - Ref: ${codigoVerificacionCheckout}`;
+    }
 
     let finalDetalle = detallePenalidad.trim();
     if (montoHorasExtras > 0) {
@@ -2235,119 +2389,197 @@ export function CheckoutModal({
               </div>
             )}
 
-            {/* Flexible Multi-Currency Mixed Payment Breakdown */}
-            {metodoPago === 'Pago Mixto' && (
-              <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-3">
-                <div className="flex justify-between items-center border-b border-indigo-200/60 pb-1.5">
-                  <span className="text-[10px] font-black text-indigo-900 uppercase">
-                    <i className="fa-solid fa-arrows-split-up-and-left mr-1 text-indigo-600"></i> Desglose Multimoneda (Pago Mixto)
-                  </span>
-                  <span className="text-[10px] font-bold text-indigo-700">
-                    Total: <strong>${totalCobrarEnCaja.toFixed(2)} USD</strong>
-                  </span>
-                </div>
+            {/* Flexible Multi-Channel Pago Mixto Section */}
+            {metodoPago === 'Pago Mixto' && (() => {
+              const sumMixtoUSD = 
+                (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+                (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
+                (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
+                (parseFloat(pagosMixtosChannels.punto) || 0) +
+                (parseFloat(pagosMixtosChannels.zelle) || 0);
 
-                {/* Parte 1 */}
-                <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+              const diffMixtoUSD = totalCobrarEnCaja - sumMixtoUSD;
+              const isCuadreExacto = Math.abs(diffMixtoUSD) < 0.05;
+
+              return (
+                <div className="bg-indigo-50/80 p-4 rounded-2xl border border-indigo-200 space-y-4 shadow-sm mb-4">
+                  <div className="flex justify-between items-center border-b border-indigo-200/80 pb-2">
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 1: Método</label>
-                      <select
-                        value={metodoParteACheckout}
-                        onChange={(e) => setMetodoParteACheckout(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                      >
-                        <option value="Efectivo ($)">Efectivo ($ USD)</option>
-                        <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
-                        <option value="Pago Móvil">Pago Móvil</option>
-                        <option value="Punto de Venta">Punto de Venta</option>
-                        <option value="Zelle">Zelle</option>
-                      </select>
+                      <span className="text-xs font-black text-indigo-950 uppercase flex items-center gap-1.5">
+                        <i className="fa-solid fa-layer-group text-indigo-600"></i> Desglose Multicanal (Pago Mixto)
+                      </span>
+                      <p className="text-[10px] text-indigo-700 font-semibold mt-0.5">
+                        Indique el monto recibido en cada medio de pago.
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
-                      <input 
-                        type="number"
-                        step="0.50"
-                        value={montoParteACheckout}
-                        onChange={(e) => setMontoParteACheckout(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                      />
-                      {parseFloat(montoParteACheckout) > 0 && (
-                        <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
-                          ~ Bs. {(parseFloat(montoParteACheckout) * tasaUsd).toFixed(2)}
+
+                    <div className="text-right">
+                      {isCuadreExacto ? (
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded-full border border-emerald-300">
+                          ✅ Cuadre Exacto ($${sumMixtoUSD.toFixed(2)})
+                        </span>
+                      ) : diffMixtoUSD > 0 ? (
+                        <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2.5 py-1 rounded-full border border-amber-300">
+                          ⚠️ Faltan $${diffMixtoUSD.toFixed(2)} USD
+                        </span>
+                      ) : (
+                        <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2.5 py-1 rounded-full border border-rose-300">
+                          ⚠️ Exceso de $${Math.abs(diffMixtoUSD).toFixed(2)} USD
                         </span>
                       )}
                     </div>
                   </div>
-                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteACheckout) && (
-                    <div>
-                      <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 1 *</label>
-                      <input 
-                        type="text"
-                        value={codigoRefParteACheckout}
-                        onChange={(e) => setCodigoRefParteACheckout(e.target.value)}
-                        placeholder="Ej. Ref 123456"
-                        className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
 
-                {/* Parte 2 */}
-                <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-2 shadow-xs">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Parte 2: Método</label>
-                      <select
-                        value={metodoParteBCheckout}
-                        onChange={(e) => setMetodoParteBCheckout(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
-                      >
-                        <option value="Pago Móvil">Pago Móvil</option>
-                        <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
-                        <option value="Efectivo ($)">Efectivo ($ USD)</option>
-                        <option value="Punto de Venta">Punto de Venta</option>
-                        <option value="Zelle">Zelle</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
-                      <input 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {/* Efectivo $ */}
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1">
+                      <label className="block text-[10px] font-black text-slate-700 uppercase flex items-center gap-1">
+                        <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Efectivo ($ USD)
+                      </label>
+                      <input
                         type="number"
                         step="0.50"
-                        value={montoParteBCheckout}
-                        onChange={(e) => setMontoParteBCheckout(e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                        min="0"
+                        value={pagosMixtosChannels.efectivoUsd}
+                        onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoUsd: e.target.value })}
+                        placeholder="0.00"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                       />
-                      {parseFloat(montoParteBCheckout) > 0 && (
-                        <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
-                          ~ Bs. {(parseFloat(montoParteBCheckout) * tasaUsd).toFixed(2)}
+                    </div>
+
+                    {/* Efectivo Bs */}
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1">
+                      <label className="block text-[10px] font-black text-slate-700 uppercase flex items-center gap-1">
+                        <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Efectivo (Bs / VES)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.50"
+                        min="0"
+                        value={pagosMixtosChannels.efectivoVes}
+                        onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoVes: e.target.value })}
+                        placeholder="0.00"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                      />
+                      {parseFloat(pagosMixtosChannels.efectivoVes) > 0 && (
+                        <span className="text-[10px] text-blue-700 font-bold block">
+                          ~ Bs. {(parseFloat(pagosMixtosChannels.efectivoVes) * tasaUsd).toFixed(2)} VES
                         </span>
                       )}
                     </div>
-                  </div>
-                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteBCheckout) && (
-                    <div>
-                      <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 2 *</label>
-                      <input 
-                        type="text"
-                        value={codigoRefParteBCheckout}
-                        onChange={(e) => setCodigoRefParteBCheckout(e.target.value)}
-                        placeholder="Ej. Ref 789012"
-                        className="w-full px-2 py-1 rounded border border-amber-300 font-bold bg-white text-xs text-slate-800"
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
 
-                <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 border-t border-indigo-200/60">
-                  Suma Mixta: <strong className="text-xs font-black">${((parseFloat(montoParteACheckout)||0) + (parseFloat(montoParteBCheckout)||0)).toFixed(2)} USD</strong> / ${totalCobrarEnCaja.toFixed(2)} USD
+                    {/* Pago Móvil */}
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1.5 col-span-1 sm:col-span-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
+                            <i className="fa-solid fa-[#c5920c] fa-mobile-screen-button text-indigo-600"></i> Pago Móvil ($ USD)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.50"
+                            min="0"
+                            value={pagosMixtosChannels.pagoMovil}
+                            onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovil: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                          />
+                          {parseFloat(pagosMixtosChannels.pagoMovil) > 0 && (
+                            <span className="text-[10px] text-indigo-700 font-bold block pt-0.5">
+                              ~ Bs. {(parseFloat(pagosMixtosChannels.pagoMovil) * tasaUsd).toFixed(2)} VES
+                            </span>
+                          )}
+                        </div>
+                        {parseFloat(pagosMixtosChannels.pagoMovil) > 0 && (
+                          <div>
+                            <label className="block text-[10px] font-black text-amber-900 uppercase">Referencia Pago Móvil *</label>
+                            <input
+                              type="text"
+                              value={pagosMixtosChannels.pagoMovilRef}
+                              onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovilRef: e.target.value })}
+                              placeholder="Ej. Ref 123456"
+                              required
+                              className="w-full px-3 py-1.5 rounded-lg border border-amber-300 font-bold bg-white text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Punto de Venta */}
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1.5 col-span-1 sm:col-span-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
+                            <i className="fa-solid fa-credit-card text-purple-600"></i> Punto de Venta ($ USD)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.50"
+                            min="0"
+                            value={pagosMixtosChannels.punto}
+                            onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, punto: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                          />
+                          {parseFloat(pagosMixtosChannels.punto) > 0 && (
+                            <span className="text-[10px] text-purple-700 font-bold block pt-0.5">
+                              ~ Bs. {(parseFloat(pagosMixtosChannels.punto) * tasaUsd).toFixed(2)} VES
+                            </span>
+                          )}
+                        </div>
+                        {parseFloat(pagosMixtosChannels.punto) > 0 && (
+                          <div>
+                            <label className="block text-[10px] font-black text-amber-900 uppercase">Referencia Baucher Punto *</label>
+                            <input
+                              type="text"
+                              value={pagosMixtosChannels.puntoRef}
+                              onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, puntoRef: e.target.value })}
+                              placeholder="Ej. Baucher #7890"
+                              required
+                              className="w-full px-3 py-1.5 rounded-lg border border-amber-300 font-bold bg-white text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Zelle */}
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-2xs space-y-1.5 col-span-1 sm:col-span-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
+                            <i className="fa-solid fa-coins text-amber-600"></i> Zelle ($ USD)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.50"
+                            min="0"
+                            value={pagosMixtosChannels.zelle}
+                            onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, zelle: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                          />
+                        </div>
+                        {parseFloat(pagosMixtosChannels.zelle) > 0 && (
+                          <div>
+                            <label className="block text-[10px] font-black text-amber-900 uppercase">Referencia Zelle *</label>
+                            <input
+                              type="text"
+                              value={pagosMixtosChannels.zelleRef}
+                              onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, zelleRef: e.target.value })}
+                              placeholder="Ej. Conf #Z1234"
+                              required
+                              className="w-full px-3 py-1.5 rounded-lg border border-amber-300 font-bold bg-white text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Inspection Checklist */}
