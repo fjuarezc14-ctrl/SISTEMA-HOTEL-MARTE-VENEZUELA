@@ -2110,6 +2110,17 @@ export function CheckoutModal({
   const [codigoRefParteBCheckout, setCodigoRefParteBCheckout] = useState('');
   const [codigoVerificacionCheckout, setCodigoVerificacionCheckout] = useState('');
 
+  const [pagosMixtosChannels, setPagosMixtosChannels] = useState({
+    efectivoUsd: '',
+    efectivoVes: '',
+    pagoMovil: '',
+    pagoMovilRef: '',
+    punto: '',
+    puntoRef: '',
+    zelle: '',
+    zelleRef: ''
+  });
+
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
   // Filter consumptions for this room
