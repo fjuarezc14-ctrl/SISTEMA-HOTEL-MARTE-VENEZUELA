@@ -53,44 +53,94 @@ export default function EntregaTurnos({
   // Printable Report state
   const [printableReport, setPrintableReport] = useState(null);
 
+  // Helper: Get exact payment amount by method (supporting mixed payments)
+  const getAmountForMethod = (t, targetMethod) => {
+    const val = parseFloat(t.monto) || 0;
+    if (!t.metodo) return 0;
+    
+    // If it's a direct payment of that method
+    if (t.metodo === targetMethod) return val;
+    
+    // For fuzzy name matching on single payment methods
+    if (!t.metodo.includes('Pago Mixto')) {
+      if (targetMethod === 'Pago Móvil' && t.metodo.toLowerCase().includes('pago móvil')) return val;
+      if (targetMethod === 'Punto de Venta' && t.metodo.toLowerCase().includes('punto')) return val;
+      if (targetMethod === 'Zelle' && t.metodo.toLowerCase().includes('zelle')) return val;
+      if (targetMethod === 'Efectivo ($)' && t.metodo === 'Efectivo ($)') return val;
+      if (targetMethod === 'Efectivo (Bs)' && t.metodo === 'Efectivo (Bs)') return val;
+      return 0;
+    }
+    
+    // For Pago Mixto, parse the specific component
+    let regex;
+    if (targetMethod === 'Efectivo ($)') {
+      regex = /Efectivo\s*\(\$\):\s*\$?([\d.]+)/i;
+    } else if (targetMethod === 'Efectivo (Bs)') {
+      regex = /Efectivo\s*\(Bs\):\s*\$?([\d.]+)/i;
+    } else if (targetMethod === 'Pago Móvil') {
+      regex = /Pago\s*Móvil:\s*\$?([\d.]+)/i;
+    } else if (targetMethod === 'Punto de Venta') {
+      regex = /Punto:\s*\$?([\d.]+)/i;
+    } else if (targetMethod === 'Zelle') {
+      regex = /Zelle:\s*\$?([\d.]+)/i;
+    }
+    
+    if (regex) {
+      const match = t.metodo.match(regex);
+      if (match && match[1]) {
+        return parseFloat(match[1]) || 0;
+      }
+    }
+    return 0;
+  };
+
   // Calculate my shift's expected cash from caja array
   const myMovements = currentUser ? caja.filter(t => t.usuarioId === currentUser.id) : caja;
-  const myEfectivoUSD = myMovements
-    .filter(t => t.tipo === 'Ingreso')
-    .reduce((sum, t) => {
-      if (t.metodo === 'Efectivo ($)') return sum + parseFloat(t.monto);
-      if (t.metodo && t.metodo.includes('Pago Mixto')) {
-        const matchEf = t.metodo.match(/Ef:\s*\$?([\d.]+)/i);
-        if (matchEf && matchEf[1]) {
-          return sum + parseFloat(matchEf[1]);
-        }
-      }
-      return sum;
-    }, 0);
+  
+  const myEfectivoUSD = myMovements.reduce((sum, t) => {
+    if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo ($)');
+    if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo ($)');
+    return sum;
+  }, 0);
+
+  const myEfectivoVES = myMovements.reduce((sum, t) => {
+    if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo (Bs)');
+    if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo (Bs)');
+    return sum;
+  }, 0);
 
   const myPagoMovil = myMovements
-    .filter(t => t.tipo === 'Ingreso' && (t.metodo || '').toLowerCase().includes('pago móvil'))
-    .reduce((s, t) => s + parseFloat(t.monto), 0);
+    .filter(t => t.tipo === 'Ingreso')
+    .reduce((s, t) => s + getAmountForMethod(t, 'Pago Móvil'), 0);
 
   const myPunto = myMovements
-    .filter(t => t.tipo === 'Ingreso' && (t.metodo || '').toLowerCase().includes('punto'))
-    .reduce((s, t) => s + parseFloat(t.monto), 0);
+    .filter(t => t.tipo === 'Ingreso')
+    .reduce((s, t) => s + getAmountForMethod(t, 'Punto de Venta'), 0);
 
   const myZelle = myMovements
-    .filter(t => t.tipo === 'Ingreso' && (t.metodo || '').toLowerCase().includes('zelle'))
-    .reduce((s, t) => s + parseFloat(t.monto), 0);
+    .filter(t => t.tipo === 'Ingreso')
+    .reduce((s, t) => s + getAmountForMethod(t, 'Zelle'), 0);
 
   const myMarketSales = myMovements
     .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
     .reduce((s, t) => s + parseFloat(t.monto), 0);
 
-  // Auto-fill cash values and all payment methods from current shift sales
+  // Automatically load shift values on mount/update
+  React.useEffect(() => {
+    setSaldoUsd(myEfectivoUSD.toFixed(2));
+    setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2));
+    setSaldoPagoMovil(myPagoMovil.toFixed(2));
+    setSaldoPunto(myPunto.toFixed(2));
+    setSaldoZelle(myZelle.toFixed(2));
+  }, [caja, currentUser, tasaUsd]);
+
+  // Fallback trigger if needed
   const handleAutoFillCaja = () => {
-    setSaldoUsd(myEfectivoUSD.toString());
-    setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2).toString());
-    setSaldoPagoMovil(myPagoMovil.toFixed(2).toString());
-    setSaldoPunto(myPunto.toFixed(2).toString());
-    setSaldoZelle(myZelle.toFixed(2).toString());
+    setSaldoUsd(myEfectivoUSD.toFixed(2));
+    setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2));
+    setSaldoPagoMovil(myPagoMovil.toFixed(2));
+    setSaldoPunto(myPunto.toFixed(2));
+    setSaldoZelle(myZelle.toFixed(2));
   };
 
   const handleStockCountChange = (productId, val) => {
@@ -281,16 +331,11 @@ export default function EntregaTurnos({
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2 flex justify-between items-center">
                   <span><i className="fa-solid fa-vault text-amber-500 mr-2"></i> 1. Conteo de Caja Física</span>
-                  <button
-                    type="button"
-                    onClick={handleAutoFillCaja}
-                    className="text-[10px] font-bold text-[#ff331f] hover:underline"
-                    title="Cargar saldo calculado de Mi Turno"
-                  >
-                    Auto-completar <i className="fa-solid fa-[#c5920c] fa-magic"></i>
-                  </button>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    <i className="fa-solid fa-magic mr-1"></i> Calculado
+                  </span>
                 </h3>
-
+ 
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">Efectivo Físico en Divisas ($ USD)</label>
                   <input
@@ -298,13 +343,14 @@ export default function EntregaTurnos({
                     step="0.01"
                     min="0"
                     value={saldoUsd}
-                    onChange={(e) => setSaldoUsd(e.target.value)}
+                    onChange={() => {}}
+                    readOnly
                     placeholder="0.00"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-black outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-black outline-none bg-slate-100 text-slate-700 cursor-not-allowed"
                     required
                   />
                 </div>
-
+ 
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">Efectivo Físico en Bolívares (VES)</label>
                   <input
@@ -312,9 +358,10 @@ export default function EntregaTurnos({
                     step="0.01"
                     min="0"
                     value={saldoVes}
-                    onChange={(e) => setSaldoVes(e.target.value)}
+                    onChange={() => {}}
+                    readOnly
                     placeholder="0.00"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-black outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-black outline-none bg-slate-100 text-slate-700 cursor-not-allowed"
                     required
                   />
                   {saldoVes && !isNaN(parseFloat(saldoVes)) && (
@@ -323,7 +370,7 @@ export default function EntregaTurnos({
                     </span>
                   )}
                 </div>
-
+ 
                 {/* Digital Payment Channels Breakdown */}
                 <div className="pt-2 border-t border-slate-100 space-y-3">
                   <div>
@@ -333,9 +380,10 @@ export default function EntregaTurnos({
                       step="0.01"
                       min="0"
                       value={saldoPagoMovil}
-                      onChange={(e) => setSaldoPagoMovil(e.target.value)}
+                      onChange={() => {}}
+                      readOnly
                       placeholder="0.00"
-                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold bg-indigo-50/40 text-slate-800"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -345,9 +393,10 @@ export default function EntregaTurnos({
                       step="0.01"
                       min="0"
                       value={saldoPunto}
-                      onChange={(e) => setSaldoPunto(e.target.value)}
+                      onChange={() => {}}
+                      readOnly
                       placeholder="0.00"
-                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold bg-indigo-50/40 text-slate-800"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -357,23 +406,24 @@ export default function EntregaTurnos({
                       step="0.01"
                       min="0"
                       value={saldoZelle}
-                      onChange={(e) => setSaldoZelle(e.target.value)}
+                      onChange={() => {}}
+                      readOnly
                       placeholder="0.00"
-                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold bg-indigo-50/40 text-slate-800"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
                   </div>
                 </div>
-
-                {/* Market / Snacks Sales Summary */}
-                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 flex justify-between items-center">
-                  <div>
-                    <span className="font-bold uppercase block text-[10px]">Ventas de Minimarket / Snacks (Mi Turno)</span>
-                    <span className="text-[10px] text-amber-700">Autocompletado con ventas del día</span>
-                  </div>
-                  <span className="text-base font-black text-amber-900">${myMarketSales.toFixed(2)} USD</span>
-                </div>
               </div>
-
+ 
+              {/* Market / Snacks Sales Summary */}
+              <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 flex justify-between items-center">
+                <div>
+                  <span className="font-bold uppercase block text-[10px]">Ventas de Minimarket / Snacks (Mi Turno)</span>
+                  <span className="text-[10px] text-amber-700">Autocompletado con ventas del día</span>
+                </div>
+                <span className="text-base font-black text-amber-900">${myMarketSales.toFixed(2)} USD</span>
+              </div>
+ 
               {/* Lencería en Recepción */}
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">

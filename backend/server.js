@@ -727,14 +727,21 @@ app.put('/api/habitaciones/:num', requireAuth, async (req, res) => {
 
 // Helper: Calcular hora de salida según modalidad (4 Horas o Pernocta 11:00 AM)
 function calcularHoraSalida(modalidad) {
-  if (modalidad === 'pernocta') {
-    return '11:00 AM (Mañana)';
-  }
   const now = new Date();
-  const future = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-  const hh = String(future.getHours()).padStart(2, '0');
-  const mm = String(future.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+  let future;
+  if (modalidad === 'pernocta') {
+    future = new Date(now);
+    future.setDate(future.getDate() + 1);
+    future.setHours(11, 0, 0, 0);
+  } else {
+    future = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  }
+  
+  const options = { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+  const parts = new Intl.DateTimeFormat('es-VE', options).formatToParts(future);
+  const map = {};
+  parts.forEach(p => map[p.type] = p.value);
+  return `${map.day}/${map.month}/${map.year}, ${map.hour}:${map.minute}`;
 }
 
 function getDigitsOnly(str) {
@@ -806,7 +813,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       `UPDATE habitaciones 
        SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ? 
        WHERE num = ?`,
-      [formattedName, acompText, getHoraActual(), salidaCalculada, clientId, numDoc, numHabitacion]
+      [formattedName, acompText, getFechaHoraActual(), salidaCalculada, clientId, numDoc, numHabitacion]
     );
 
     // 3. Register transaction in Cash register if amount > 0
@@ -1080,9 +1087,9 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     // Update room status to Ocupada with Pernocta checkout time (11:00 AM)
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = '11:00 AM (Mañana)', clienteId = ?, clienteCi = ? 
+       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ? 
        WHERE num = ?`,
-      [reserva.nombreAcomp || '', getHoraActual(), reserva.clienteId, clientCi, numHabitacion]
+      [reserva.nombreAcomp || '', getFechaHoraActual(), calcularHoraSalida('pernocta'), reserva.clienteId, clientCi, numHabitacion]
     );
 
     // Delete reservation

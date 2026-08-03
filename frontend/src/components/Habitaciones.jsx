@@ -229,7 +229,27 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                 
                 {h.estado === 'Ocupada' && h.salida && (
                   <span className="block text-[9px] text-slate-400 font-bold mt-1">
-                    Salida: {h.salida}
+                    Salida: {(() => {
+                      if (h.salida.includes(',')) {
+                        try {
+                          const [datePart, timePart] = h.salida.split(',');
+                          const [d, m, y] = datePart.trim().split('/').map(Number);
+                          const targetDate = new Date(y, m - 1, d);
+                          const today = new Date();
+                          today.setHours(0,0,0,0);
+                          const targetDay = new Date(targetDate);
+                          targetDay.setHours(0,0,0,0);
+                          
+                          const diffDays = Math.round((targetDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                          const cleanTime = timePart.trim();
+                          
+                          if (diffDays === 0) return `${cleanTime} (Hoy)`;
+                          if (diffDays === 1) return `${cleanTime} (Mañana)`;
+                          return `${cleanTime} (${datePart.trim()})`;
+                        } catch (e) {}
+                      }
+                      return h.salida;
+                    })()}
                   </span>
                 )}
 
