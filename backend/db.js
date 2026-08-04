@@ -504,5 +504,22 @@ export async function initDb() {
     await db.run("ALTER TABLE consumos ADD COLUMN estado TEXT DEFAULT 'cargado_habitacion'");
   } catch (e) { /* Columna ya existe */ }
 
+  // Migraciones autocurativas para la tabla entrega_turnos (Corrección de cierres por Super Admin)
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN solicitudCorreccion INTEGER DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN motivoCorreccion TEXT DEFAULT ''");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN solicitudSaldoUsd REAL DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN solicitudSaldoVes REAL DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN estadoCorreccion TEXT DEFAULT ''");
+  } catch (e) { /* Columna ya existe */ }
+
   return db;
 }

@@ -53,6 +53,13 @@ export default function EntregaTurnos({
   // Printable Report state
   const [printableReport, setPrintableReport] = useState(null);
 
+  // Correction Request states (v6 - Fase 4)
+  const [correctionShiftId, setCorrectionShiftId] = useState(null);
+  const [motivoCorreccion, setMotivoCorreccion] = useState('');
+  const [solicitudUsd, setSolicitudUsd] = useState('');
+  const [solicitudVes, setSolicitudVes] = useState('');
+  const [isSubmittingCorreccion, setIsSubmittingCorreccion] = useState(false);
+
   // Helper: Get exact payment amount by method (supporting mixed payments)
   const getAmountForMethod = (t, targetMethod) => {
     const val = parseFloat(t.monto) || 0;
@@ -271,6 +278,68 @@ export default function EntregaTurnos({
       alert(`⚠️ Error: ${err.message}`);
     } finally {
       setIsConfirming(false);
+    }
+  };
+
+  const handleSubmitCorreccion = async (e) => {
+    e.preventDefault();
+    if (!motivoCorreccion.trim() || !solicitudUsd || !solicitudVes) {
+      alert('⚠️ Por favor complete todos los campos.');
+      return;
+    }
+
+    setIsSubmittingCorreccion(true);
+    try {
+      const res = await fetch(`/api/entrega-turnos/${correctionShiftId}/solicitar-correccion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          motivo: motivoCorreccion.trim(),
+          solicitudSaldoUsd: parseFloat(solicitudUsd),
+          solicitudSaldoVes: parseFloat(solicitudVes)
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al enviar solicitud');
+
+      alert('✅ Solicitud de corrección enviada con éxito.');
+      setCorrectionShiftId(null);
+      setMotivoCorreccion('');
+      setSolicitudUsd('');
+      setSolicitudVes('');
+      if (onStateChange) await onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    } finally {
+      setIsSubmittingCorreccion(false);
+    }
+  };
+
+  const handleResolverCorreccion = async (id, decision) => {
+    const isConfirmed = window.confirm(`¿Está seguro de resolver esta solicitud de corrección como "${decision}"?`);
+    if (!isConfirmed) return;
+
+    try {
+      const res = await fetch(`/api/entrega-turnos/${id}/resolver-correccion`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ decision })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al resolver la solicitud');
+
+      alert(`✅ Solicitud resuelta correctamente como "${decision}".`);
+      if (onStateChange) await onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
     }
   };
 
@@ -692,6 +761,49 @@ export default function EntregaTurnos({
                           )}
                         </div>
                       )}
+
+                      {/* Solicitud de Corrección (v6 - Fase 4) */}
+                      {t.solicitudCorreccion === 1 && (
+                        <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl text-xs space-y-1.5 mt-2 shadow-2xs">
+                          <span className="text-[10px] font-black text-purple-800 uppercase tracking-wider block flex items-center justify-between">
+                            <span><i className="fa-solid fa-screwdriver-wrench mr-1"></i> Solicitud de Corrección</span>
+                            <span className={`px-1.5 py-0.5 rounded-md font-black text-[9px] uppercase ${
+                              t.estadoCorreccion === 'Aprobado' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                              t.estadoCorreccion === 'Rechazado' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                              'bg-purple-100 text-purple-800 border border-purple-300'
+                            }`}>
+                              {t.estadoCorreccion}
+                            </span>
+                          </span>
+                          <div className="text-slate-700 font-semibold space-y-1">
+                            <div><span className="text-slate-400 font-bold">Motivo:</span> "{t.motivoCorreccion}"</div>
+                            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-purple-200/40 mt-1">
+                              <div><span className="text-slate-400 font-bold">USD Solicitado:</span> ${t.solicitudSaldoUsd.toFixed(2)}</div>
+                              <div><span className="text-slate-400 font-bold">VES Solicitado:</span> Bs. {t.solicitudSaldoVes.toFixed(2)}</div>
+                            </div>
+                          </div>
+                          
+                          {/* Admin Resolution buttons */}
+                          {t.estadoCorreccion === 'Pendiente' && (currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin') && (
+                            <div className="flex gap-2 pt-2 border-t border-purple-200/50 mt-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleResolverCorreccion(t.id, 'Aprobado')}
+                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded-lg text-[10px] shadow-xs transition-all flex items-center justify-center gap-1"
+                              >
+                                <i className="fa-solid fa-check"></i> Aprobar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResolverCorreccion(t.id, 'Rechazado')}
+                                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-1.5 rounded-lg text-[10px] shadow-xs transition-all flex items-center justify-center gap-1"
+                              >
+                                <i className="fa-solid fa-xmark"></i> Rechazar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-2 border-t border-slate-100 flex gap-2">
@@ -703,7 +815,7 @@ export default function EntregaTurnos({
                         <i className="fa-solid fa-print text-indigo-600"></i> Imprimir PDF
                       </button>
 
-                      {isPending && (
+                      {isPending ? (
                         <button
                           onClick={() => {
                             setSelectedEntrega(t);
@@ -714,6 +826,22 @@ export default function EntregaTurnos({
                         >
                           <i className="fa-solid fa-check-to-slot"></i> Confirmar
                         </button>
+                      ) : (
+                        /* If confirmed and NO pending/resolved correction request exists, show button to request correction */
+                        !t.solicitudCorreccion && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCorrectionShiftId(t.id);
+                              setMotivoCorreccion('');
+                              setSolicitudUsd(t.saldoEfectivoUsd);
+                              setSolicitudVes(t.saldoEfectivoVes);
+                            }}
+                            className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-amber-200"
+                          >
+                            <i className="fa-solid fa-pen-to-square text-amber-600"></i> Corregir
+                          </button>
+                        )
                       )}
                     </div>
                   </div>
@@ -794,6 +922,84 @@ export default function EntregaTurnos({
           </div>
         </div>
       )}
+      {/* MODAL PARA SOLICITAR CORRECCIÓN DE CIERRE (v6 - Fase 4) */}
+      {correctionShiftId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSubmitCorreccion} className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-screwdriver-wrench text-amber-600"></i> Solicitar Corrección de Cierre
+              </h3>
+              <button type="button" onClick={() => setCorrectionShiftId(null)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Motivo / Explicación del Error</label>
+                <textarea
+                  rows="3"
+                  required
+                  value={motivoCorreccion}
+                  onChange={(e) => setMotivoCorreccion(e.target.value)}
+                  placeholder="Explique el error cometido..."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 outline-none focus:ring-1 focus:ring-amber-500 font-bold"
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">Monto Correcto Efectivo USD ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={solicitudUsd}
+                    onChange={(e) => setSolicitudUsd(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none focus:ring-1 focus:ring-amber-500 font-black text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">Monto Correcto Efectivo VES (Bs.)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={solicitudVes}
+                    onChange={(e) => setSolicitudVes(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none focus:ring-1 focus:ring-amber-500 font-black text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setCorrectionShiftId(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingCorreccion}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl shadow-md flex items-center justify-center"
+              >
+                {isSubmittingCorreccion ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mx-auto"></div>
+                ) : (
+                  'Enviar Solicitud'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* PRINTABLE SHIFT REPORT (PRINT ONLY) */}
       {printableReport && (
         <div className="hidden print:block fixed inset-0 bg-white p-8 text-black z-50 font-sans text-xs">

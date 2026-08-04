@@ -1891,6 +1891,104 @@ app.put('/api/entrega-turnos/:id/confirmar', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/entrega-turnos/:id/solicitar-correccion - Recepcionista solicita corregir entrega de turno (v6 - Fase 4)
+app.post('/api/entrega-turnos/:id/solicitar-correccion', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { motivo, solicitudSaldoUsd, solicitudSaldoVes } = req.body;
+
+  if (!motivo || !motivo.trim()) {
+    return res.status(400).json({ error: 'Debe ingresar el motivo de la corrección.' });
+  }
+
+  try {
+    const entrega = await db.get('SELECT * FROM entrega_turnos WHERE id = ?', [id]);
+    if (!entrega) {
+      return res.status(404).json({ error: 'Entrega de turno no encontrada.' });
+    }
+
+    await db.run(
+      `UPDATE entrega_turnos 
+       SET solicitudCorreccion = 1, motivoCorreccion = ?, 
+           solicitudSaldoUsd = ?, solicitudSaldoVes = ?, 
+           estadoCorreccion = 'Pendiente'
+       WHERE id = ?`,
+      [
+        motivo.trim(),
+        parseFloat(solicitudSaldoUsd || 0),
+        parseFloat(solicitudSaldoVes || 0),
+        id
+      ]
+    );
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Solicitud Corrección Turno',
+      `Solicitud para entrega #${id}: USD solicitado $${solicitudSaldoUsd}, VES solicitado Bs. ${solicitudSaldoVes}. Motivo: ${motivo}`,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Solicitud de corrección enviada al Super Administrador.' });
+  } catch (error) {
+    console.error('Error al solicitar corrección de turno:', error);
+    res.status(500).json({ error: 'Error al enviar la solicitud de corrección.' });
+  }
+});
+
+// PUT /api/entrega-turnos/:id/resolver-correccion - Super Admin aprueba/rechaza corrección (v6 - Fase 4)
+app.put('/api/entrega-turnos/:id/resolver-correccion', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador' && req.user.rol !== 'Super Admin') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol Administrador.' });
+  }
+
+  const { id } = req.params;
+  const { decision } = req.body; // 'Aprobado' | 'Rechazado'
+
+  if (decision !== 'Aprobado' && decision !== 'Rechazado') {
+    return res.status(400).json({ error: 'Decisión inválida. Debe ser Aprobado o Rechazado.' });
+  }
+
+  try {
+    const entrega = await db.get('SELECT * FROM entrega_turnos WHERE id = ?', [id]);
+    if (!entrega) {
+      return res.status(404).json({ error: 'Entrega de turno no encontrada.' });
+    }
+
+    if (decision === 'Aprobado') {
+      await db.run(
+        `UPDATE entrega_turnos 
+         SET saldoEfectivoUsd = solicitudSaldoUsd, 
+             saldoEfectivoVes = solicitudSaldoVes, 
+             estadoCorreccion = 'Aprobado'
+         WHERE id = ?`,
+        [id]
+      );
+    } else {
+      await db.run(
+        `UPDATE entrega_turnos 
+         SET estadoCorreccion = 'Rechazado'
+         WHERE id = ?`,
+        [id]
+      );
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      `Resolución Corrección Turno (${decision})`,
+      `Corrección para entrega #${id} fue ${decision} por ${req.user.nombre}.`,
+      req.ip
+    );
+
+    res.json({ success: true, message: `Solicitud de corrección resuelta como: ${decision}.` });
+  } catch (error) {
+    console.error('Error al resolver corrección de turno:', error);
+    res.status(500).json({ error: 'Error al resolver la solicitud de corrección.' });
+  }
+});
+
 // 7. POST /api/limpieza-terminada - Change room status from Limpieza to Libre (or Reservada if there is a pending reservation)
 app.post('/api/limpieza-terminada', requireAuth, async (req, res) => {
   const { numHabitacion } = req.body;
