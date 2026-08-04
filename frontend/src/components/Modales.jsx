@@ -2123,8 +2123,8 @@ export function CheckoutModal({
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
 
-  // Filter consumptions for this room
-  const roomConsumos = room ? consumos.filter(c => c.numHabitacion === room.num) : [];
+  // Filter consumptions for this room (ignore immediately paid ones)
+  const roomConsumos = room ? consumos.filter(c => c.numHabitacion === room.num && c.estado !== 'pagado_inmediato') : [];
   const totalConsumos = roomConsumos.reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
 
   // Compute stay overtime extra charge
@@ -2847,7 +2847,7 @@ export function DetalleHabitacionOcupadaModal({
   if (!isOpen || !room) return null;
 
   const roomConsumos = consumos.filter(c => c.numHabitacion === room.num);
-  const totalConsumos = roomConsumos.reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
+  const totalConsumos = roomConsumos.filter(c => c.estado !== 'pagado_inmediato').reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -2932,20 +2932,29 @@ export function DetalleHabitacionOcupadaModal({
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {roomConsumos.map(c => (
                   <div key={c.id} className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">{c.cantidad}x</span>
                       <span>{c.concepto}</span>
                       <span className="text-slate-400 font-medium">({c.fecha})</span>
+                      {c.estado === 'pagado_inmediato' && (
+                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight ml-1">
+                          <i className="fa-solid fa-check mr-0.5"></i> Pagado
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-slate-800">$ {(c.monto * c.cantidad).toFixed(2)}</span>
-                      <button 
-                        onClick={() => onDeleteConsumo(c.id)}
-                        className="text-slate-400 hover:text-rose-500 transition-colors"
-                        title="Eliminar cargo"
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
+                      <span className={c.estado === 'pagado_inmediato' ? 'text-slate-400 font-medium line-through' : 'text-slate-800'}>
+                        $ {(c.monto * c.cantidad).toFixed(2)}
+                      </span>
+                      {c.estado !== 'pagado_inmediato' && (
+                        <button 
+                          onClick={() => onDeleteConsumo(c.id)}
+                          className="text-slate-400 hover:text-rose-500 transition-colors"
+                          title="Eliminar cargo"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

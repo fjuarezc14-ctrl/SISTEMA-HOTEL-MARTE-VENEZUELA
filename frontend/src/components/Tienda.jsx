@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Tienda({ productos = [], clientes = [], token, tasaUsd = 50.00, currentUser, onStateChange }) {
+export default function Tienda({ productos = [], clientes = [], habitaciones = [], token, tasaUsd = 50.00, currentUser, onStateChange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]); // [{ id, nombre, precio_venta, cantidad, stock }]
   
@@ -8,6 +8,10 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
   const [clienteNombre, setClienteNombre] = useState('');
   const [clienteCi, setClienteCi] = useState('');
   const [comprobante, setComprobante] = useState('Ticket Interno');
+
+  // Room linking states
+  const [targetRoomNum, setTargetRoomNum] = useState('');
+  const [cargarHabitacion, setCargarHabitacion] = useState(false);
 
   // Mixed Payment state
   const [tipoPago, setTipoPago] = useState('Unico'); // 'Unico' | 'Mixto'
@@ -69,6 +73,8 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
     setCart([]);
     setClienteNombre('');
     setClienteCi('');
+    setTargetRoomNum('');
+    setCargarHabitacion(false);
     setPagosMixtos([
       { metodo: 'Efectivo (Bs)', monto_usd: '' },
       { metodo: 'Pago Móvil', monto_usd: '' }
@@ -106,26 +112,28 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
     }
 
     let finalPagos = [];
-    if (tipoPago === 'Unico') {
-      finalPagos = [{ metodo: metodoUnico, monto_usd: totalUsd, monto_ves: (totalUsd * tasaUsd).toFixed(2) }];
-    } else {
-      // Validate mixed payments match total
-      if (Math.abs(diferenciaMixta) > 0.01) {
-        setErrorMsg(`⚠️ El desglose de pago mixto ($${totalPagadoMixto.toFixed(2)}) no coincide con el total de la venta ($${totalUsd.toFixed(2)}). Diferencia: $${diferenciaMixta.toFixed(2)} USD.`);
+    if (!(targetRoomNum && cargarHabitacion)) {
+      if (tipoPago === 'Unico') {
+        finalPagos = [{ metodo: metodoUnico, monto_usd: totalUsd, monto_ves: (totalUsd * tasaUsd).toFixed(2) }];
+      } else {
+        // Validate mixed payments match total
+        if (Math.abs(diferenciaMixta) > 0.01) {
+          setErrorMsg(`⚠️ El desglose de pago mixto ($${totalPagadoMixto.toFixed(2)}) no coincide con el total de la venta ($${totalUsd.toFixed(2)}). Diferencia: $${diferenciaMixta.toFixed(2)} USD.`);
+          return;
+        }
+        finalPagos = pagosMixtos
+          .map(p => ({
+            metodo: p.metodo,
+            monto_usd: parseFloat(p.monto_usd) || 0,
+            monto_ves: ((parseFloat(p.monto_usd) || 0) * tasaUsd).toFixed(2)
+          }))
+          .filter(p => p.monto_usd > 0);
+      }
+
+      if (finalPagos.length === 0) {
+        setErrorMsg('Debe ingresar un monto válido en los métodos de pago.');
         return;
       }
-      finalPagos = pagosMixtos
-        .map(p => ({
-          metodo: p.metodo,
-          monto_usd: parseFloat(p.monto_usd) || 0,
-          monto_ves: ((parseFloat(p.monto_usd) || 0) * tasaUsd).toFixed(2)
-        }))
-        .filter(p => p.monto_usd > 0);
-    }
-
-    if (finalPagos.length === 0) {
-      setErrorMsg('Debe ingresar un monto válido en los métodos de pago.');
-      return;
     }
 
     if (isPreConsumo && (!clienteNombre.trim() || !clienteCi.trim())) {
@@ -145,11 +153,13 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
         },
         body: JSON.stringify({
           items: cart,
-          pagos: isPreConsumo ? [] : finalPagos,
+          pagos: (isPreConsumo || (targetRoomNum && cargarHabitacion)) ? [] : finalPagos,
           clienteNombre: clienteNombre.trim(),
           clienteCi: clienteCi.trim(),
           comprobante,
-          isPreConsumo
+          isPreConsumo,
+          numHabitacion: targetRoomNum || null,
+          cargarHabitacion: targetRoomNum ? cargarHabitacion : false
         })
       });
 
@@ -377,7 +387,54 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
             )}
 
             {/* Form & Payment Details */}
+            {/* Form & Payment Details */}
             <form onSubmit={handleProcessSale} className="space-y-4">
+              {/* Vincular a Habitación Ocupada (v6 - Fase 2) */}
+              <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200 space-y-2">
+                <label className="block text-[10px] font-black text-amber-900 uppercase">
+                  <i className="fa-solid fa-hotel text-amber-600 mr-1.5"></i> Vincular a Habitación (Opcional)
+                </label>
+                <select
+                  value={targetRoomNum}
+                  onChange={(e) => {
+                    const roomNum = e.target.value;
+                    setTargetRoomNum(roomNum);
+                    if (roomNum) {
+                      const roomObj = habitaciones.find(h => h.num === roomNum);
+                      if (roomObj) {
+                        setClienteNombre(roomObj.huesped || '');
+                        setClienteCi(roomObj.clienteCi || '');
+                      }
+                    } else {
+                      setClienteNombre('');
+                      setClienteCi('');
+                      setCargarHabitacion(false);
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                >
+                  <option value="">Público General (Sin Habitación)</option>
+                  {habitaciones.filter(h => h.estado === 'Ocupada').map(h => (
+                    <option key={h.num} value={h.num}>Habitación {h.num} - {h.huesped}</option>
+                  ))}
+                </select>
+
+                {targetRoomNum && (
+                  <div className="flex items-center gap-2 pt-1.5 border-t border-amber-200/50 mt-1">
+                    <input 
+                      type="checkbox"
+                      id="cargarHabitacionCheck"
+                      checked={cargarHabitacion}
+                      onChange={(e) => setCargarHabitacion(e.target.checked)}
+                      className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <label htmlFor="cargarHabitacionCheck" className="text-xs font-bold text-amber-950 cursor-pointer">
+                      Cargar a la cuenta de la habitación (Pagar al Checkout)
+                    </label>
+                  </div>
+                )}
+              </div>
+
               {/* Optional Client Search */}
               <div className="relative bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Datos del Cliente (Opcional)</label>
@@ -386,15 +443,17 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
                     type="text" 
                     value={clienteNombre}
                     onChange={(e) => setClienteNombre(e.target.value)}
-                    placeholder="Nombre Cliente (Opcional)" 
+                    placeholder="Nombre Cliente" 
                     className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                    disabled={!!targetRoomNum}
                   />
                   <input 
                     type="text" 
                     value={clienteCi}
                     onChange={(e) => setClienteCi(e.target.value)}
-                    placeholder="Cédula CI (Opcional)" 
+                    placeholder="Cédula CI" 
                     className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                    disabled={!!targetRoomNum}
                   />
                 </div>
               </div>
@@ -413,133 +472,135 @@ export default function Tienda({ productos = [], clientes = [], token, tasaUsd =
               </div>
 
               {/* PAYMENT TYPE SELECTOR (Único vs Mixto) */}
-              <div className="border border-amber-200 bg-amber-50/50 p-3.5 rounded-xl space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-black text-slate-800 uppercase">Modalidad de Pago</span>
-                  <div className="flex bg-slate-200 p-0.5 rounded-lg text-xs font-bold">
-                    <button 
-                      type="button" 
-                      onClick={() => setTipoPago('Unico')}
-                      className={`px-3 py-1 rounded-md transition-all ${
-                        tipoPago === 'Unico' 
-                          ? 'bg-amber-500 text-white shadow-xs' 
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Pago Único
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setTipoPago('Mixto')}
-                      className={`px-3 py-1 rounded-md transition-all ${
-                        tipoPago === 'Mixto' 
-                          ? 'bg-amber-500 text-white shadow-xs' 
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Pago Mixto 🔀
-                    </button>
-                  </div>
-                </div>
-
-                {/* SINGLE PAYMENT FORM */}
-                {tipoPago === 'Unico' && (
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Método de Pago</label>
-                    <select 
-                      value={metodoUnico}
-                      onChange={(e) => setMetodoUnico(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
-                    >
-                      <option value="Efectivo (Bs)">Efectivo (Bs)</option>
-                      <option value="Pago Móvil">Pago Móvil</option>
-                      <option value="Punto de Venta">Punto de Venta</option>
-                      <option value="Efectivo ($)">Efectivo ($)</option>
-                      <option value="Zelle">Zelle</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* MIXED PAYMENT FORM */}
-                {tipoPago === 'Mixto' && (
-                  <div className="space-y-2.5 pt-1">
-                    <p className="text-[10px] font-semibold text-slate-600">
-                      Divida el pago total entre varios métodos de pago:
-                    </p>
-
-                    {pagosMixtos.map((pago, index) => {
-                      const montoUsdVal = parseFloat(pago.monto_usd) || 0;
-                      const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
-
-                      return (
-                        <div key={index} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-xs">
-                          <select 
-                            value={pago.metodo}
-                            onChange={(e) => handlePagoRowChange(index, 'metodo', e.target.value)}
-                            className="flex-1 px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-amber-500"
-                          >
-                            <option value="Efectivo (Bs)">Efectivo (Bs)</option>
-                            <option value="Pago Móvil">Pago Móvil</option>
-                            <option value="Punto de Venta">Punto de Venta</option>
-                            <option value="Efectivo ($)">Efectivo ($)</option>
-                            <option value="Zelle">Zelle</option>
-                          </select>
-
-                          <div className="w-28 relative">
-                            <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">$</span>
-                            <input 
-                              type="number" 
-                              value={pago.monto_usd}
-                              onChange={(e) => handlePagoRowChange(index, 'monto_usd', e.target.value)}
-                              placeholder="0.00"
-                              min="0"
-                              step="0.10"
-                              className="w-full pl-6 pr-2 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 text-right"
-                            />
-                            <span className="block text-[8px] text-slate-400 font-bold text-right mt-0.5">
-                              ~ Bs. {montoVesVal}
-                            </span>
-                          </div>
-
-                          {pagosMixtos.length > 1 && (
-                            <button 
-                              type="button" 
-                              onClick={() => handleRemovePagoRow(index)}
-                              className="text-rose-500 hover:text-rose-700 px-1 text-xs"
-                            >
-                              <i className="fa-solid fa-xmark"></i>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    <div className="flex justify-between items-center pt-2">
+              {!(targetRoomNum && cargarHabitacion) && (
+                <div className="border border-amber-200 bg-amber-50/50 p-3.5 rounded-xl space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black text-slate-800 uppercase">Modalidad de Pago</span>
+                    <div className="flex bg-slate-200 p-0.5 rounded-lg text-xs font-bold">
                       <button 
                         type="button" 
-                        onClick={handleAddPagoRow}
-                        className="text-xs font-bold text-amber-600 hover:text-amber-800 flex items-center gap-1"
+                        onClick={() => setTipoPago('Unico')}
+                        className={`px-3 py-1 rounded-md transition-all ${
+                          tipoPago === 'Unico' 
+                            ? 'bg-amber-500 text-white shadow-xs' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
                       >
-                        <i className="fa-solid fa-plus-circle"></i> Añadir Otro Método
+                        Pago Único
                       </button>
-
-                      <div className="text-right text-xs">
-                        <span className="text-[10px] text-slate-500 font-bold uppercase block">Balance Mixto</span>
-                        <span className={`font-black ${Math.abs(diferenciaMixta) < 0.01 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          ${totalPagadoMixto.toFixed(2)} / ${totalUsd.toFixed(2)} USD
-                        </span>
-                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setTipoPago('Mixto')}
+                        className={`px-3 py-1 rounded-md transition-all ${
+                          tipoPago === 'Mixto' 
+                            ? 'bg-amber-500 text-white shadow-xs' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Pago Mixto 🔀
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {/* SINGLE PAYMENT FORM */}
+                  {tipoPago === 'Unico' && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Método de Pago</label>
+                      <select 
+                        value={metodoUnico}
+                        onChange={(e) => setMetodoUnico(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                      >
+                        <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                        <option value="Pago Móvil">Pago Móvil</option>
+                        <option value="Punto de Venta">Punto de Venta</option>
+                        <option value="Efectivo ($)">Efectivo ($)</option>
+                        <option value="Zelle">Zelle</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* MIXED PAYMENT FORM */}
+                  {tipoPago === 'Mixto' && (
+                    <div className="space-y-2.5 pt-1">
+                      <p className="text-[10px] font-semibold text-slate-600">
+                        Divida el pago total entre varios métodos de pago:
+                      </p>
+
+                      {pagosMixtos.map((pago, index) => {
+                        const montoUsdVal = parseFloat(pago.monto_usd) || 0;
+                        const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
+
+                        return (
+                          <div key={index} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-xs">
+                            <select 
+                              value={pago.metodo}
+                              onChange={(e) => handlePagoRowChange(index, 'metodo', e.target.value)}
+                              className="flex-1 px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-amber-500"
+                            >
+                              <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                              <option value="Pago Móvil">Pago Móvil</option>
+                              <option value="Punto de Venta">Punto de Venta</option>
+                              <option value="Efectivo ($)">Efectivo ($)</option>
+                              <option value="Zelle">Zelle</option>
+                            </select>
+
+                            <div className="w-28 relative">
+                              <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">$</span>
+                              <input 
+                                type="number" 
+                                value={pago.monto_usd}
+                                onChange={(e) => handlePagoRowChange(index, 'monto_usd', e.target.value)}
+                                placeholder="0.00"
+                                min="0"
+                                step="0.10"
+                                className="w-full pl-6 pr-2 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 text-right"
+                              />
+                              <span className="block text-[8px] text-slate-400 font-bold text-right mt-0.5">
+                                ~ Bs. {montoVesVal}
+                              </span>
+                            </div>
+
+                            {pagosMixtos.length > 1 && (
+                              <button 
+                                type="button" 
+                                onClick={() => handleRemovePagoRow(index)}
+                                className="text-rose-500 hover:text-rose-700 px-1 text-xs"
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      <div className="flex justify-between items-center pt-2">
+                        <button 
+                          type="button" 
+                          onClick={handleAddPagoRow}
+                          className="text-xs font-bold text-amber-600 hover:text-amber-800 flex items-center gap-1"
+                        >
+                          <i className="fa-solid fa-plus-circle"></i> Añadir Otro Método
+                        </button>
+
+                        <div className="text-right text-xs">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase block">Balance Mixto</span>
+                          <span className={`font-black ${Math.abs(diferenciaMixta) < 0.01 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            ${totalPagadoMixto.toFixed(2)} / ${totalUsd.toFixed(2)} USD
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Submit Button */}
               <button 
                 type="submit" 
-                disabled={cart.length === 0 || isSubmitting || (tipoPago === 'Mixto' && Math.abs(diferenciaMixta) > 0.01)}
+                disabled={cart.length === 0 || isSubmitting || (!(targetRoomNum && cargarHabitacion) && (tipoPago === 'Mixto' && Math.abs(diferenciaMixta) > 0.01))}
                 className={`w-full font-black py-3 rounded-xl shadow-md transition-all text-sm flex items-center justify-center gap-2 ${
-                  cart.length === 0 || (tipoPago === 'Mixto' && Math.abs(diferenciaMixta) > 0.01)
+                  cart.length === 0 || (!(targetRoomNum && cargarHabitacion) && (tipoPago === 'Mixto' && Math.abs(diferenciaMixta) > 0.01))
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white'
                 }`}

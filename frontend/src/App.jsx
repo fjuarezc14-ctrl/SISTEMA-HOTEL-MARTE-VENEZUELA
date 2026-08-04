@@ -930,6 +930,7 @@ export default function App() {
                 <Tienda 
                   productos={appState.productos}
                   clientes={appState.clientes}
+                  habitaciones={appState.habitaciones || []}
                   token={token}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   currentUser={user}
