@@ -91,6 +91,9 @@ export default function InventarioLenceria({
   const [moveQty, setMoveQty] = useState('1');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // State for manual edit of lencería quantities (Requerimiento 2)
+  const [editForm, setEditForm] = useState({ en_almacen: 0, en_lavanderia: 0, en_habitaciones: 0, de_baja: 0 });
+
   // New Lencería Modal state
   const [isNewLenceriaModalOpen, setIsNewLenceriaModalOpen] = useState(false);
   const [newNombre, setNewNombre] = useState('');
@@ -176,6 +179,50 @@ export default function InventarioLenceria({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al actualizar inventario');
 
+      setSelectedItem(null);
+      if (onStateChange) await onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle Manual Edit of Lencería Quantities (Requerimiento 2)
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    const alm = parseInt(editForm.en_almacen) || 0;
+    const lav = parseInt(editForm.en_lavanderia) || 0;
+    const hab = parseInt(editForm.en_habitaciones) || 0;
+    const baj = parseInt(editForm.de_baja) || 0;
+
+    // Validaciones de no-negativos
+    if (alm < 0 || lav < 0 || hab < 0 || baj < 0) {
+      alert('⚠️ Las cantidades no pueden ser negativas.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/inventario-lenceria/${selectedItem.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          en_almacen: alm,
+          en_lavanderia: lav,
+          en_habitaciones: hab,
+          de_baja: baj
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar inventario');
+
+      alert(`✅ Inventario de "${selectedItem.nombre}" actualizado manualmente.`);
       setSelectedItem(null);
       if (onStateChange) await onStateChange();
     } catch (err) {
@@ -465,6 +512,22 @@ export default function InventarioLenceria({
                           >
                             <i className="fa-solid fa-trash-can"></i>
                           </button>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setMoveType('editar');
+                              setEditForm({
+                                en_almacen: item.en_almacen,
+                                en_lavanderia: item.en_lavanderia,
+                                en_habitaciones: item.en_habitaciones,
+                                de_baja: item.de_baja
+                              });
+                            }}
+                            className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-sm flex items-center gap-1"
+                            title="Editar manualmente las cantidades"
+                          >
+                            <i className="fa-solid fa-pen"></i> Editar
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -565,14 +628,14 @@ export default function InventarioLenceria({
         </div>
       )}
 
-      {/* MODAL TRASLADO LENCERÍA */}
+      {/* MODAL TRASLADO / EDICIÓN LENCERÍA */}
       {selectedItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-boxes-stacked text-[#ff331f]"></i> 
-                {moveType === 'a_lavanderia' ? 'Mandar a Lavandería' : moveType === 'de_lavanderia' ? 'Ingresar de Lavandería' : 'Dar de Baja'}
+                <i className={`fa-solid ${moveType === 'editar' ? 'fa-pen text-slate-700' : 'fa-boxes-stacked text-[#ff331f]'}`}></i> 
+                {moveType === 'editar' ? 'Editar Cantidades Manualmente' : moveType === 'a_lavanderia' ? 'Mandar a Lavandería' : moveType === 'de_lavanderia' ? 'Ingresar de Lavandería' : 'Dar de Baja'}
               </h3>
               <button onClick={() => setSelectedItem(null)} className="text-slate-400 hover:text-rose-500">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -582,40 +645,104 @@ export default function InventarioLenceria({
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
               <p className="font-black text-slate-800 text-sm">{selectedItem.nombre}</p>
               <p className="text-[11px] text-slate-500 font-semibold mt-1">
-                Almacén Limpio: <b className="text-emerald-700">{selectedItem.en_almacen}</b> | En Lavandería: <b className="text-blue-700">{selectedItem.en_lavanderia}</b>
+                Almacén Limpio: <b className="text-emerald-700">{selectedItem.en_almacen}</b> | En Lavandería: <b className="text-blue-700">{selectedItem.en_lavanderia}</b> | En Habitaciones: <b className="text-purple-700">{selectedItem.en_habitaciones}</b> | De Baja: <b className="text-rose-700">{selectedItem.de_baja}</b>
               </p>
             </div>
 
-            <form onSubmit={handleMoveSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Cantidad de Unidades</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={moveQty}
-                  onChange={(e) => setMoveQty(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-black text-sm outline-none focus:ring-1 focus:ring-[#ff331f]"
-                  required
-                />
-              </div>
+            {moveType === 'editar' ? (
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-600 mb-1">En Almacén Limpio</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.en_almacen}
+                      onChange={(e) => setEditForm({ ...editForm, en_almacen: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-600 mb-1">En Lavandería</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.en_lavanderia}
+                      onChange={(e) => setEditForm({ ...editForm, en_lavanderia: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-600 mb-1">En Habitaciones</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.en_habitaciones}
+                      onChange={(e) => setEditForm({ ...editForm, en_habitaciones: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-600 mb-1">De Baja / Rota</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.de_baja}
+                      onChange={(e) => setEditForm({ ...editForm, de_baja: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    />
+                  </div>
+                </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedItem(null)}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
-                >
-                  Confirmar Traslado
-                </button>
-              </div>
-            </form>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItem(null)}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-slate-700 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleMoveSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Cantidad de Unidades</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={moveQty}
+                    onChange={(e) => setMoveQty(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-black text-sm outline-none focus:ring-1 focus:ring-[#ff331f]"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItem(null)}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-2.5 rounded-xl text-xs shadow-md"
+                  >
+                    Confirmar Traslado
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

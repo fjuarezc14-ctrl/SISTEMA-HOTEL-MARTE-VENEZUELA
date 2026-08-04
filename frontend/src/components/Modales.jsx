@@ -2091,6 +2091,8 @@ export function CheckoutModal({
   const [sabanas, setSabanas] = useState(true);
   const [control, setControl] = useState(true);
   const [danos, setDanos] = useState(true);
+  // Artículos que NO pertenecen a la habitación (Requerimiento 3)
+  const [noPertenece, setNoPertenece] = useState([]);
   
   // Custom price mapping for selected damage items: { [id]: priceNumber }
   const [selectedDanosPrices, setSelectedDanosPrices] = useState({});
@@ -2142,6 +2144,7 @@ export function CheckoutModal({
       setSabanas(true);
       setControl(true);
       setDanos(true);
+      setNoPertenece([]);
       setSelectedDanosPrices({});
       setPenalidadManual('');
       setDetallePenalidad('');
@@ -2306,7 +2309,8 @@ export function CheckoutModal({
       clienteId: room.clienteId,
       clienteCi: room.clienteCi,
       montoDeuda: montoDeudaPendiente,
-      motivoVeto: vetoReason
+      motivoVeto: vetoReason,
+      noPertenece
     });
   };
 
@@ -2670,6 +2674,67 @@ export function CheckoutModal({
                 />
                 Sin Daños Estructurales ni manchas
               </label>
+            </div>
+          </div>
+
+          {/* Artículos que NO pertenecen a la habitación (Requerimiento 3) */}
+          <div className="bg-indigo-50/60 border border-indigo-200 p-3.5 rounded-xl space-y-3">
+            <div className="flex justify-between items-center border-b border-indigo-200/60 pb-2">
+              <label className="text-xs font-black text-indigo-900 uppercase flex items-center gap-1.5">
+                <i className="fa-solid fa-circle-xmark text-indigo-600"></i> Este artículo NO pertenece a esta habitación
+              </label>
+              {noPertenece.length > 0 && (
+                <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">
+                  {noPertenece.length} marcado(s)
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-indigo-700 font-semibold">
+              Marque los equipos que no existen originalmente en esta habitación (ej: TV, Nevera, Frigobar, Microondas, Caja Fuerte).
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[
+                { key: 'tv', label: 'TV' },
+                { key: 'nevera', label: 'Nevera' },
+                { key: 'frigobar', label: 'Frigobar' },
+                { key: 'microondas', label: 'Microondas' },
+                { key: 'caja_fuerte', label: 'Caja Fuerte' },
+                { key: 'control_tv', label: 'Control TV' },
+                { key: 'control_aire', label: 'Control Aire' },
+                { key: 'control_musica', label: 'Control Música' },
+                { key: 'aire_acondicionado', label: 'Aire Acond.' },
+                { key: 'espejo', label: 'Espejo' },
+                { key: 'llave', label: 'Llave' },
+                { key: 'poceta', label: 'Poceta' },
+                { key: 'lavamanos', label: 'Lavamanos' },
+                { key: 'ducha', label: 'Ducha' }
+              ].map(item => {
+                const isChecked = noPertenece.includes(item.key);
+                return (
+                  <label
+                    key={item.key}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold cursor-pointer transition-all ${
+                      isChecked
+                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                        : 'bg-white text-slate-700 border-indigo-200/80 hover:bg-indigo-100/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        setNoPertenece(prev =>
+                          isChecked
+                            ? prev.filter(k => k !== item.key)
+                            : [...prev, item.key]
+                        );
+                      }}
+                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 bg-white"
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
 

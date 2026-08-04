@@ -173,6 +173,20 @@ export async function initDb() {
       poceta TEXT DEFAULT 'Operativo',
       lavamanos TEXT DEFAULT 'Operativo',
       ducha TEXT DEFAULT 'Operativo',
+      microondas TEXT DEFAULT 'Operativo',
+      caja_fuerte TEXT DEFAULT 'Operativo',
+      no_pertenece TEXT DEFAULT '',
+      observaciones TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS inventario_habitaciones_historial (
+      id TEXT PRIMARY KEY,
+      numHabitacion TEXT NOT NULL,
+      usuarioId TEXT,
+      usuarioNombre TEXT,
+      fecha TEXT NOT NULL,
+      accion TEXT NOT NULL,
+      detalle TEXT DEFAULT '',
       observaciones TEXT DEFAULT ''
     );
 
@@ -519,6 +533,17 @@ export async function initDb() {
   } catch (e) { /* Columna ya existe */ }
   try {
     await db.run("ALTER TABLE entrega_turnos ADD COLUMN estadoCorreccion TEXT DEFAULT ''");
+  } catch (e) { /* Columna ya existe */ }
+
+  // Migraciones autocurativas para la tabla inventario_habitaciones (Requerimiento 3)
+  try {
+    await db.run("ALTER TABLE inventario_habitaciones ADD COLUMN microondas TEXT DEFAULT 'Operativo'");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE inventario_habitaciones ADD COLUMN caja_fuerte TEXT DEFAULT 'Operativo'");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE inventario_habitaciones ADD COLUMN no_pertenece TEXT DEFAULT ''");
   } catch (e) { /* Columna ya existe */ }
 
   return db;

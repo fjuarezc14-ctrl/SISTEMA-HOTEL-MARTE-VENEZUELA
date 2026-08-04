@@ -1132,7 +1132,8 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     clienteId,
     clienteCi,
     montoDeuda,
-    motivoVeto
+    motivoVeto,
+    noPertenece
   } = req.body;
 
   if (!numHabitacion) {
@@ -1155,6 +1156,59 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
        WHERE num = ?`,
       [numHabitacion]
     );
+
+    // 1b. Guardar artículos que NO pertenecen a la habitación en el inventario (Requerimiento 3)
+    if (noPertenece && Array.isArray(noPertenece) && noPertenece.length > 0) {
+      const eq = await db.get('SELECT * FROM inventario_habitaciones WHERE numHabitacion = ?', [numHabitacion]);
+      const prevNoPertenece = eq?.no_pertenece || '';
+      const nuevosItems = noPertenece.map(k => {
+        const labels = {
+          tv: 'TV', nevera: 'Nevera', frigobar: 'Frigobar',
+          microondas: 'Microondas', caja_fuerte: 'Caja Fuerte', control_tv: 'Control TV',
+          control_aire: 'Control Aire', control_musica: 'Control Música',
+          aire_acondicionado: 'Aire Acondicionado', espejo: 'Espejo', llave: 'Llave',
+          poceta: 'Poceta', lavamanos: 'Lavamanos', ducha: 'Ducha'
+        };
+        return labels[k] || k;
+      }).join(', ');
+
+      const updatedNoPertenece = prevNoPertenece
+        ? `${prevNoPertenece}; ${nuevosItems}`
+        : nuevosItems;
+
+      await db.run(
+        `INSERT INTO inventario_habitaciones (numHabitacion, no_pertenece)
+         VALUES (?, ?)
+         ON CONFLICT(numHabitacion) DO UPDATE SET no_pertenece = excluded.no_pertenece`,
+        [numHabitacion, updatedNoPertenece]
+      );
+
+      // Registrar en historial de equipamiento
+      const histId = 'eqh_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      await db.run(
+        `INSERT INTO inventario_habitaciones_historial (id, numHabitacion, usuarioId, usuarioNombre, fecha, accion, detalle, observaciones)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          histId,
+          numHabitacion,
+          req.user.id,
+          req.user.nombre,
+          getFechaHoraActual(),
+          'Check-Out: Artículos No Pertenecientes',
+          `Artículos marcados como no pertenecientes a la habitación: ${nuevosItems}`,
+          (detallePenalidad || '').trim()
+        ]
+      );
+
+      await registrarAuditoria(
+        req.user.id,
+        req.user.nombre,
+        req.user.rol,
+        'Check-Out Equipamiento',
+        `Hab. ${numHabitacion}: Artículos NO pertenecientes marcados: ${nuevosItems}`,
+        req.ip
+      );
+    }
 
     // 2. Process Veto if requested
     if (vetarCliente) {
@@ -1632,6 +1686,12 @@ app.put('/api/inventario-lenceria/:id', requireAuth, async (req, res) => {
     const lav = en_lavanderia !== undefined ? parseInt(en_lavanderia) : item.en_lavanderia;
     const hab = en_habitaciones !== undefined ? parseInt(en_habitaciones) : item.en_habitaciones;
     const baj = de_baja !== undefined ? parseInt(de_baja) : item.de_baja;
+
+    // Validación de no-negativos (Requerimiento 2)
+    if (alm < 0 || lav < 0 || hab < 0 || baj < 0) {
+      return res.status(400).json({ error: 'Las cantidades de inventario no pueden ser negativas.' });
+    }
+
     const total = alm + lav + hab + baj;
 
     await db.run(
@@ -1671,13 +1731,15 @@ app.get('/api/inventario-habitaciones', requireAuth, async (req, res) => {
 // PUT /api/inventario-habitaciones/:numHabitacion - Actualizar estado de equipamiento fijo por habitación (v4 - Fase 3)
 app.put('/api/inventario-habitaciones/:numHabitacion', requireAuth, async (req, res) => {
   const { numHabitacion } = req.params;
-  const { tv, control_tv, control_aire, control_musica, aire_acondicionado, nevera, espejo, llave, poceta, lavamanos, ducha, observaciones } = req.body;
+  const { tv, control_tv, control_aire, control_musica, aire_acondicionado, nevera, espejo, llave, poceta, lavamanos, ducha, microondas, caja_fuerte, no_pertenece, observaciones } = req.body;
 
   try {
+    const existing = await db.get('SELECT * FROM inventario_habitaciones WHERE numHabitacion = ?', [numHabitacion]);
+
     await db.run(
       `INSERT INTO inventario_habitaciones (
-        numHabitacion, tv, control_tv, control_aire, control_musica, aire_acondicionado, nevera, espejo, llave, poceta, lavamanos, ducha, observaciones
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        numHabitacion, tv, control_tv, control_aire, control_musica, aire_acondicionado, nevera, espejo, llave, poceta, lavamanos, ducha, microondas, caja_fuerte, no_pertenece, observaciones
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(numHabitacion) DO UPDATE SET
         tv = excluded.tv,
         control_tv = excluded.control_tv,
@@ -1690,6 +1752,9 @@ app.put('/api/inventario-habitaciones/:numHabitacion', requireAuth, async (req, 
         poceta = excluded.poceta,
         lavamanos = excluded.lavamanos,
         ducha = excluded.ducha,
+        microondas = excluded.microondas,
+        caja_fuerte = excluded.caja_fuerte,
+        no_pertenece = excluded.no_pertenece,
         observaciones = excluded.observaciones`,
       [
         numHabitacion,
@@ -1704,6 +1769,27 @@ app.put('/api/inventario-habitaciones/:numHabitacion', requireAuth, async (req, 
         poceta || 'Operativo',
         lavamanos || 'Operativo',
         ducha || 'Operativo',
+        microondas !== undefined ? microondas : (existing?.microondas || 'Operativo'),
+        caja_fuerte !== undefined ? caja_fuerte : (existing?.caja_fuerte || 'Operativo'),
+        no_pertenece !== undefined ? no_pertenece : (existing?.no_pertenece || ''),
+        (observaciones !== undefined ? observaciones : (existing?.observaciones || '')).trim()
+      ]
+    );
+
+    // Registrar en historial de modificaciones de equipamiento (Requerimiento 3)
+    const histId = 'eqh_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const detalleEq = `TV: ${tv || existing?.tv || 'Operativo'}, CntrlTV: ${control_tv || existing?.control_tv || 'Operativo'}, AC: ${aire_acondicionado || existing?.aire_acondicionado || 'Operativo'}, Nevera: ${nevera || existing?.nevera || 'Operativo'}, Microondas: ${microondas !== undefined ? microondas : (existing?.microondas || 'Operativo')}, CajaFuerte: ${caja_fuerte !== undefined ? caja_fuerte : (existing?.caja_fuerte || 'Operativo')}${no_pertenece ? ` | No pertenece: ${no_pertenece}` : ''}`;
+    await db.run(
+      `INSERT INTO inventario_habitaciones_historial (id, numHabitacion, usuarioId, usuarioNombre, fecha, accion, detalle, observaciones)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        histId,
+        numHabitacion,
+        req.user.id,
+        req.user.nombre,
+        getFechaHoraActual(),
+        'Actualización de Equipamiento',
+        detalleEq,
         (observaciones || '').trim()
       ]
     );
