@@ -1475,6 +1475,69 @@ app.put('/api/caja/:id/metodo', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/caja/transaccion/:id - Eliminar transacción de caja y revertir inventario/consumos (v6 - Fase 3)
+app.delete('/api/caja/transaccion/:id', requireAuth, async (req, res) => {
+  if (req.user.rol !== 'Administrador' && req.user.rol !== 'Super Admin') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol Administrador.' });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const t = await db.get('SELECT * FROM caja WHERE id = ?', [id]);
+    if (!t) {
+      return res.status(404).json({ error: 'Transacción no encontrada en caja.' });
+    }
+
+    // 1. Revert inventory if it's a shop/minimarket sale
+    const isMarket = t.origen === 'Market' || t.concepto.toLowerCase().includes('venta tienda') || t.concepto.toLowerCase().includes('venta market');
+    
+    if (isMarket) {
+      const match = t.concepto.match(/(?:Venta Tienda #VTA-\d+|Venta Market Check-In Hab \d+|Venta Tienda Hab \d+ #VTA-\d+)\s*\(([^)]+)\)/i);
+      if (match && match[1]) {
+        const itemsStr = match[1];
+        const parts = itemsStr.split(',');
+        for (const part of parts) {
+          const itemMatch = part.trim().match(/^(\d+)x\s+(.+)$/);
+          if (itemMatch) {
+            const qty = parseInt(itemMatch[1], 10);
+            const prodName = itemMatch[2].trim();
+            // Restore inventory stock
+            await db.run('UPDATE productos SET stock = stock + ? WHERE LOWER(nombre) = LOWER(?)', [qty, prodName]);
+            
+            // Delete associated room consumptions
+            const roomMatch = t.concepto.match(/Hab\s+(\d+)/i);
+            if (roomMatch) {
+              const roomNum = roomMatch[1];
+              await db.run(
+                'DELETE FROM consumos WHERE numHabitacion = ? AND fecha = ? AND LOWER(concepto) = LOWER(?)',
+                [roomNum, t.hora, prodName]
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Delete transaction from caja
+    await db.run('DELETE FROM caja WHERE id = ?', [id]);
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Eliminación Transacción',
+      `Transacción #${id} eliminada de caja. Concepto: ${t.concepto}. Monto: $${t.monto} USD.`,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Transacción eliminada y stock revertido correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar transacción:', error);
+    res.status(500).json({ error: 'Error al eliminar la transacción.' });
+  }
+});
+
 // POST /api/caja/cierre-turno - Registrar el resumen del Cierre de Turno por Usuario (v2 - Fase 5)
 app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
   const { totalEfectivo, totalTarjeta, totalOtros, totalEgresos, saldoNeto } = req.body;

@@ -215,6 +215,27 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
     }
   };
 
+  const handleDeleteTransaction = async (id) => {
+    const isConfirmed = window.confirm('⚠️ ¿Está completamente seguro de eliminar esta transacción de caja? Esta acción eliminará el registro de caja y restaurará el stock de productos del minimarket si aplica.');
+    if (!isConfirmed) return;
+
+    try {
+      const res = await fetch(`/api/caja/transaccion/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar la transacción');
+      
+      alert('✅ Transacción eliminada y stock restaurado exitosamente.');
+      if (onStateChange) await onStateChange();
+    } catch (err) {
+      alert(`⚠️ ${err.message}`);
+    }
+  };
+
   const handleOpenEditMetodo = (txn) => {
     const { cleanMetodo, refCode } = parseMetodoAndRef(txn.metodo);
     setEditingTxn(txn);
@@ -441,7 +462,8 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                     <th className="p-4 text-center">Método de Pago</th>
                     <th className="p-4 text-center">Código de Referencia</th>
                     <th className="p-4 text-center">Estado Validación</th>
-                    <th className="p-4 text-right pr-6">Monto ($ USD / Bs)</th>
+                    <th className="p-4 text-right">Monto ($ USD / Bs)</th>
+                    <th className="p-4 text-center pr-6">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -531,11 +553,23 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                           )}
                         </td>
 
-                        <td className={`p-4 text-right pr-6 font-black ${
+                        <td className={`p-4 text-right font-black ${
                           t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
                         }`}>
                           {t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : ''} ${montoUsdVal.toFixed(2)} USD
                           <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {montoVesVal}</span>
+                        </td>
+
+                        <td className="p-4 text-center pr-6">
+                          {(currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin') && (
+                            <button
+                              onClick={() => handleDeleteTransaction(t.id)}
+                              title="Eliminar movimiento de caja (Exclusivo Administrador)"
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 p-2 rounded-xl border border-rose-200 transition-all shadow-2xs"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
