@@ -87,7 +87,12 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
   const totalVes = (totalUsd * tasaUsd).toFixed(2);
 
   // Mixed payment calculations
-  const totalPagadoMixto = pagosMixtos.reduce((sum, p) => sum + (parseFloat(p.monto_usd) || 0), 0);
+  const totalPagadoMixto = pagosMixtos.reduce((sum, p) => {
+    const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(p.metodo);
+    const amountVal = parseFloat(p.monto_usd) || 0;
+    const valUsd = isVes ? (amountVal / tasaUsd) : amountVal;
+    return sum + valUsd;
+  }, 0);
   const diferenciaMixta = totalUsd - totalPagadoMixto;
 
   const handleAddPagoRow = () => {
@@ -122,11 +127,17 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
           return;
         }
         finalPagos = pagosMixtos
-          .map(p => ({
-            metodo: p.metodo,
-            monto_usd: parseFloat(p.monto_usd) || 0,
-            monto_ves: ((parseFloat(p.monto_usd) || 0) * tasaUsd).toFixed(2)
-          }))
+          .map(p => {
+            const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(p.metodo);
+            const inputAmount = parseFloat(p.monto_usd) || 0;
+            const valUsd = isVes ? (inputAmount / tasaUsd) : inputAmount;
+            const valVes = isVes ? inputAmount.toFixed(2) : (inputAmount * tasaUsd).toFixed(2);
+            return {
+              metodo: p.metodo,
+              monto_usd: valUsd,
+              monto_ves: valVes
+            };
+          })
           .filter(p => p.monto_usd > 0);
       }
 
@@ -530,8 +541,9 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                       </p>
 
                       {pagosMixtos.map((pago, index) => {
-                        const montoUsdVal = parseFloat(pago.monto_usd) || 0;
-                        const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
+                        const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(pago.metodo);
+                        const amountVal = parseFloat(pago.monto_usd) || 0;
+                        const suggestedVal = isVes ? Math.max(0, diferenciaMixta * tasaUsd).toFixed(2) : Math.max(0, diferenciaMixta).toFixed(2);
 
                         return (
                           <div key={index} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-xs">
@@ -548,18 +560,23 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                             </select>
 
                             <div className="w-28 relative">
-                              <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">$</span>
+                              <span className="absolute left-2 top-1.5 text-[9px] text-slate-400 font-bold">
+                                {isVes ? 'Bs.' : '$'}
+                              </span>
                               <input 
                                 type="number" 
                                 value={pago.monto_usd}
                                 onChange={(e) => handlePagoRowChange(index, 'monto_usd', e.target.value)}
-                                placeholder="0.00"
+                                placeholder={suggestedVal}
                                 min="0"
-                                step="0.10"
-                                className="w-full pl-6 pr-2 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 text-right"
+                                step="any"
+                                className="w-full pl-7 pr-2 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 text-right"
                               />
                               <span className="block text-[8px] text-slate-400 font-bold text-right mt-0.5">
-                                ~ Bs. {montoVesVal}
+                                {isVes 
+                                  ? `~ $ ${(amountVal / tasaUsd).toFixed(2)} USD`
+                                  : `~ Bs. ${(amountVal * tasaUsd).toFixed(2)}`
+                                }
                               </span>
                             </div>
 

@@ -144,7 +144,8 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
     e.preventDefault();
     if (!concepto.trim() || !monto || parseFloat(monto) <= 0) return;
 
-    const totalMonto = parseFloat(monto);
+    const isMethodVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodo);
+    const totalMonto = isMethodVes ? (parseFloat(monto) / tasaUsd) : parseFloat(monto);
     const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
 
     if (isDigital && !codigoVerificacion.trim()) {
@@ -152,11 +153,19 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
       return;
     }
 
+    let finalMetodo = metodo;
     if (metodo === 'Pago Mixto') {
       const pA = parseFloat(montoParteA) || 0;
       const pB = parseFloat(montoParteB) || 0;
-      if (Math.abs((pA + pB) - totalMonto) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma ($${pA.toFixed(2)} + $${pB.toFixed(2)} = $${(pA+pB).toFixed(2)}) debe coincidir con el monto total ($${totalMonto.toFixed(2)} USD).`);
+      
+      const pA_isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoParteA);
+      const pB_isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoParteB);
+      
+      const pA_usd = pA_isVes ? (pA / tasaUsd) : pA;
+      const pB_usd = pB_isVes ? (pB / tasaUsd) : pB;
+
+      if (Math.abs((pA_usd + pB_usd) - totalMonto) > 0.05) {
+        alert(`⚠️ En Pago Mixto la suma ($${pA_usd.toFixed(2)} + $${pB_usd.toFixed(2)} = $${(pA_usd+pB_usd).toFixed(2)}) debe coincidir con el monto total ($${totalMonto.toFixed(2)} USD).`);
         return;
       }
       if (['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoParteA) && pA > 0 && !codigoRefParteA.trim()) {
@@ -167,15 +176,22 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
         alert('⚠️ Debe ingresar el Código de Verificación para la Parte 2 (Digital).');
         return;
       }
+
+      const refAStr = codigoRefParteA.trim() ? ` - Ref: ${codigoRefParteA.trim()}` : '';
+      const refBStr = codigoRefParteB.trim() ? ` - Ref: ${codigoRefParteB.trim()}` : '';
+      const refsCombined = [codigoRefParteA.trim(), codigoRefParteB.trim()].filter(Boolean).join(' / ');
+
+      const formatPart = (method, amount, amountUsd) => {
+        const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(method);
+        return isVes 
+          ? `${method}: Bs. ${amount} ($${amountUsd.toFixed(2)})` 
+          : `${method}: $${amount}`;
+      };
+
+      finalMetodo = `Pago Mixto (${formatPart(metodoParteA, montoParteA, pA_usd)}${refAStr} + ${formatPart(metodoParteB, montoParteB, pB_usd)}${refBStr}) - Ref: ${refsCombined || 'N/A'}`;
+    } else {
+      finalMetodo = isDigital && codigoVerificacion.trim() ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
     }
-
-    const refAStr = codigoRefParteA.trim() ? ` - Ref: ${codigoRefParteA.trim()}` : '';
-    const refBStr = codigoRefParteB.trim() ? ` - Ref: ${codigoRefParteB.trim()}` : '';
-    const refsCombined = [codigoRefParteA.trim(), codigoRefParteB.trim()].filter(Boolean).join(' / ');
-
-    const finalMetodo = metodo === 'Pago Mixto'
-      ? `Pago Mixto (${metodoParteA}: $${montoParteA}${refAStr} + ${metodoParteB}: $${montoParteB}${refBStr}) - Ref: ${refsCombined || 'N/A'}`
-      : (isDigital && codigoVerificacion.trim() ? `${metodo} - Ref: ${codigoVerificacion}` : metodo);
 
     onCajaMovimiento({
       tipo,
@@ -305,6 +321,20 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
       setIsSubmittingCierre(false);
     }
   };
+
+  const pA_isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoParteA);
+  const pB_isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoParteB);
+  
+  const suggestedPartA = pA_isVes 
+    ? (parseFloat(monto || 0) * tasaUsd).toFixed(2)
+    : parseFloat(monto || 0).toFixed(2);
+
+  const pA_usd = pA_isVes ? ((parseFloat(montoParteA) || 0) / tasaUsd) : (parseFloat(montoParteA) || 0);
+  const remainingUsd = Math.max(0, parseFloat(monto || 0) - pA_usd);
+  
+  const suggestedPartB = pB_isVes
+    ? (remainingUsd * tasaUsd).toFixed(2)
+    : remainingUsd.toFixed(2);
 
   return (
     <>
@@ -617,7 +647,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
 
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                Monto ($ USD)
+                {['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodo) ? 'Monto (Bs. VES)' : 'Monto ($ USD)'}
               </label>
               <input 
                 type="number" 
@@ -631,7 +661,10 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
               />
               {monto && !isNaN(parseFloat(monto)) && parseFloat(monto) > 0 && (
                 <p className="text-[10px] font-bold text-slate-500 mt-1">
-                  Equivalente: ~ Bs. {(parseFloat(monto) * tasaUsd).toFixed(2)} VES
+                  {['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodo)
+                    ? `Equivalente: ~ $ ${(parseFloat(monto) / tasaUsd).toFixed(2)} USD`
+                    : `Equivalente: ~ Bs. ${(parseFloat(monto) * tasaUsd).toFixed(2)} VES`
+                  }
                 </p>
               )}
             </div>
@@ -691,7 +724,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                         <select
                           value={metodoParteA}
                           onChange={(e) => setMetodoParteA(e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
                         >
                           <option value="Efectivo ($)">Efectivo ($ USD)</option>
                           <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
@@ -701,17 +734,23 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase">
+                          Monto ({pA_isVes ? 'Bs. VES' : '$ USD'})
+                        </label>
                         <input 
                           type="number"
-                          step="0.50"
+                          step="any"
                           value={montoParteA}
                           onChange={(e) => setMontoParteA(e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          placeholder={suggestedPartA}
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
                         />
                         {parseFloat(montoParteA) > 0 && (
                           <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
-                            ~ Bs. {(parseFloat(montoParteA) * tasaUsd).toFixed(2)}
+                            {pA_isVes 
+                              ? `~ $ ${(parseFloat(montoParteA) / tasaUsd).toFixed(2)} USD`
+                              : `~ Bs. ${(parseFloat(montoParteA) * tasaUsd).toFixed(2)}`
+                            }
                           </span>
                         )}
                       </div>
@@ -720,7 +759,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                       <div>
                         <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 1 *</label>
                         <input 
-                          type="text"
+                          type="text" 
                           value={codigoRefParteA}
                           onChange={(e) => setCodigoRefParteA(e.target.value)}
                           placeholder="Ej. Ref 123456"
@@ -739,7 +778,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                         <select
                           value={metodoParteB}
                           onChange={(e) => setMetodoParteB(e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
                         >
                           <option value="Pago Móvil">Pago Móvil</option>
                           <option value="Efectivo (Bs)">Efectivo (Bs / VES)</option>
@@ -749,17 +788,23 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold text-slate-500 uppercase">Monto ($ USD)</label>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase">
+                          Monto ({pB_isVes ? 'Bs. VES' : '$ USD'})
+                        </label>
                         <input 
                           type="number"
-                          step="0.50"
+                          step="any"
                           value={montoParteB}
                           onChange={(e) => setMontoParteB(e.target.value)}
-                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white"
+                          placeholder={suggestedPartB}
+                          className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
                         />
                         {parseFloat(montoParteB) > 0 && (
                           <span className="text-[9px] text-indigo-600 font-bold block pt-0.5">
-                            ~ Bs. {(parseFloat(montoParteB) * tasaUsd).toFixed(2)}
+                            {pB_isVes 
+                              ? `~ $ ${(parseFloat(montoParteB) / tasaUsd).toFixed(2)} USD`
+                              : `~ Bs. ${(parseFloat(montoParteB) * tasaUsd).toFixed(2)}`
+                            }
                           </span>
                         )}
                       </div>
@@ -768,7 +813,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                       <div>
                         <label className="block text-[9px] font-bold text-amber-800 uppercase">Código Ref. Parte 2 *</label>
                         <input 
-                          type="text"
+                          type="text" 
                           value={codigoRefParteB}
                           onChange={(e) => setCodigoRefParteB(e.target.value)}
                           placeholder="Ej. Ref 789012"
@@ -780,7 +825,7 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
                   </div>
 
                   <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 border-t border-indigo-200/60">
-                    Suma Mixta: <strong className="text-xs font-black">${((parseFloat(montoParteA)||0) + (parseFloat(montoParteB)||0)).toFixed(2)} USD</strong> / ${parseFloat(monto || '0').toFixed(2)} USD
+                    Suma Mixta: <strong className="text-xs font-black">${(pA_usd + (pB_isVes ? ((parseFloat(montoParteB)||0)/tasaUsd) : (parseFloat(montoParteB)||0))).toFixed(2)} USD</strong> / ${parseFloat(monto || '0').toFixed(2)} USD
                   </div>
                 </div>
               )}

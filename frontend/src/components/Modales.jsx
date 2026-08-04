@@ -383,9 +383,9 @@ export function AsignarDirectoModal({
     if (metodo === 'Pago Mixto') {
       const sumMixtoUSD = 
         (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
-        (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
-        (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
-        (parseFloat(pagosMixtosChannels.punto) || 0) +
+        ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+        ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+        ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
         (parseFloat(pagosMixtosChannels.zelle) || 0);
 
       if (Math.abs(sumMixtoUSD - totalMontoUsd) > 0.05) {
@@ -428,14 +428,17 @@ export function AsignarDirectoModal({
         parts.push(`Efectivo ($): $${parseFloat(pagosMixtosChannels.efectivoUsd).toFixed(2)}`);
       }
       if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
-        parts.push(`Efectivo (Bs): $${parseFloat(pagosMixtosChannels.efectivoVes).toFixed(2)}`);
+        const valUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
+        parts.push(`Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes} ($${valUsd.toFixed(2)})`);
       }
       if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
-        parts.push(`Pago Móvil: $${parseFloat(pagosMixtosChannels.pagoMovil).toFixed(2)} (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
+        const valUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
+        parts.push(`Pago Móvil: Bs. ${pagosMixtosChannels.pagoMovil} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
         refs.push(pagosMixtosChannels.pagoMovilRef.trim());
       }
       if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
-        parts.push(`Punto: $${parseFloat(pagosMixtosChannels.punto).toFixed(2)} (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
+        const valUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
+        parts.push(`Punto: Bs. ${pagosMixtosChannels.punto} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
         refs.push(pagosMixtosChannels.puntoRef.trim());
       }
       if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
@@ -885,9 +888,9 @@ export function AsignarDirectoModal({
                   {metodo === 'Pago Mixto' && (() => {
                     const sumMixtoUSD = 
                       (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
-                      (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
-                      (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
-                      (parseFloat(pagosMixtosChannels.punto) || 0) +
+                      ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+                      ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+                      ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
                       (parseFloat(pagosMixtosChannels.zelle) || 0);
 
                     const diffMixtoUSD = totalMontoUsd - sumMixtoUSD;
@@ -930,11 +933,11 @@ export function AsignarDirectoModal({
                             </label>
                             <input
                               type="number"
-                              step="0.50"
+                              step="any"
                               min="0"
                               value={pagosMixtosChannels.efectivoUsd}
                               onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoUsd: e.target.value })}
-                              placeholder="0.00"
+                              placeholder={Math.max(0, diffMixtoUSD).toFixed(2)}
                               className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                             />
                           </div>
@@ -946,16 +949,16 @@ export function AsignarDirectoModal({
                             </label>
                             <input
                               type="number"
-                              step="0.50"
+                              step="any"
                               min="0"
                               value={pagosMixtosChannels.efectivoVes}
                               onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoVes: e.target.value })}
-                              placeholder="0.00"
+                              placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
                               className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                             />
                             {parseFloat(pagosMixtosChannels.efectivoVes) > 0 && (
                               <span className="text-[10px] text-blue-700 font-bold block">
-                                ~ Bs. {(parseFloat(pagosMixtosChannels.efectivoVes) * tasaUsd).toFixed(2)} VES
+                                ~ $ {(parseFloat(pagosMixtosChannels.efectivoVes) / tasaUsd).toFixed(2)} USD
                               </span>
                             )}
                           </div>
@@ -965,20 +968,20 @@ export function AsignarDirectoModal({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <div>
                                 <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
-                                  <i className="fa-solid fa-mobile-screen-button text-indigo-600"></i> Pago Móvil ($ USD)
+                                  <i className="fa-solid fa-mobile-screen-button text-indigo-600"></i> Pago Móvil (Bs. VES)
                                 </label>
                                 <input
                                   type="number"
-                                  step="0.50"
+                                  step="any"
                                   min="0"
                                   value={pagosMixtosChannels.pagoMovil}
                                   onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovil: e.target.value })}
-                                  placeholder="0.00"
+                                  placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
                                   className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                                 />
                                 {parseFloat(pagosMixtosChannels.pagoMovil) > 0 && (
                                   <span className="text-[10px] text-indigo-700 font-bold block pt-0.5">
-                                    ~ Bs. {(parseFloat(pagosMixtosChannels.pagoMovil) * tasaUsd).toFixed(2)} VES
+                                    ~ $ {(parseFloat(pagosMixtosChannels.pagoMovil) / tasaUsd).toFixed(2)} USD
                                   </span>
                                 )}
                               </div>
@@ -1003,20 +1006,20 @@ export function AsignarDirectoModal({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                               <div>
                                 <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
-                                  <i className="fa-solid fa-credit-card text-purple-600"></i> Punto de Venta ($ USD)
+                                  <i className="fa-solid fa-credit-card text-purple-600"></i> Punto de Venta (Bs. VES)
                                 </label>
                                 <input
                                   type="number"
-                                  step="0.50"
+                                  step="any"
                                   min="0"
                                   value={pagosMixtosChannels.punto}
                                   onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, punto: e.target.value })}
-                                  placeholder="0.00"
+                                  placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
                                   className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                                 />
                                 {parseFloat(pagosMixtosChannels.punto) > 0 && (
                                   <span className="text-[10px] text-purple-700 font-bold block pt-0.5">
-                                    ~ Bs. {(parseFloat(pagosMixtosChannels.punto) * tasaUsd).toFixed(2)} VES
+                                    ~ $ {(parseFloat(pagosMixtosChannels.punto) / tasaUsd).toFixed(2)} USD
                                   </span>
                                 )}
                               </div>
@@ -1045,11 +1048,11 @@ export function AsignarDirectoModal({
                                 </label>
                                 <input
                                   type="number"
-                                  step="0.50"
+                                  step="any"
                                   min="0"
                                   value={pagosMixtosChannels.zelle}
                                   onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, zelle: e.target.value })}
-                                  placeholder="0.00"
+                                  placeholder={Math.max(0, diffMixtoUSD).toFixed(2)}
                                   className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                                 />
                               </div>
@@ -1252,8 +1255,9 @@ export function NuevaReservaModal({
   const totalStayPriceUSD = (baseStayPricePerNight * nochesPernocta) + companionSurcharges;
   const totalStayPriceVES = (totalStayPriceUSD * tasaUsd).toFixed(2);
 
-  const adelantoNum = parseFloat(monto) || 0;
-  const adelantoVES = (adelantoNum * tasaUsd).toFixed(2);
+  const isMethodVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodo);
+  const adelantoNum = isMethodVes ? ((parseFloat(monto) || 0) / tasaUsd) : (parseFloat(monto) || 0);
+  const adelantoVES = isMethodVes ? (parseFloat(monto) || 0).toFixed(2) : ((parseFloat(monto) || 0) * tasaUsd).toFixed(2);
 
   // Handlers for companion list
   const handleAddAcompanante = () => {
@@ -1860,18 +1864,24 @@ export function NuevaReservaModal({
                 </p>
                 <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monto Adelanto ($ USD)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                      Monto Adelanto ({isMethodVes ? 'Bs. VES' : '$ USD'})
+                    </label>
                     <input 
                       type="number" 
                       value={monto}
                       onChange={(e) => setMonto(e.target.value)}
-                      placeholder="0.00 (Opcional)" 
-                      step="0.50" 
+                      placeholder={isMethodVes ? (totalStayPriceUSD * tasaUsd).toFixed(2) : totalStayPriceUSD.toFixed(2)} 
+                      step="any" 
                       min="0" 
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                     />
                     <span className="block text-[10px] font-black text-emerald-700 mt-1">
-                      {adelantoNum > 0 ? `= Bs. ${adelantoVES}` : 'Reserva Sin Adelanto ($0 USD)'}
+                      {adelantoNum > 0 
+                        ? (isMethodVes 
+                            ? `= $ ${adelantoNum.toFixed(2)} USD` 
+                            : `= Bs. ${adelantoVES} VES`)
+                        : 'Reserva Sin Adelanto ($0 USD)'}
                     </span>
                   </div>
                   <div>
@@ -1879,8 +1889,7 @@ export function NuevaReservaModal({
                     <select 
                       value={metodo}
                       onChange={(e) => setMetodo(e.target.value)}
-                      disabled={adelantoNum === 0}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold disabled:opacity-50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-bold"
                     >
                       <option value="Efectivo (Bs)">Efectivo (Bs)</option>
                       <option value="Efectivo ($)">Efectivo ($)</option>
@@ -2229,9 +2238,9 @@ export function CheckoutModal({
     if (metodoPago === 'Pago Mixto') {
       const sumMixtoUSD = 
         (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
-        (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
-        (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
-        (parseFloat(pagosMixtosChannels.punto) || 0) +
+        ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+        ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+        ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
         (parseFloat(pagosMixtosChannels.zelle) || 0);
 
       if (Math.abs(sumMixtoUSD - totalCobrarEnCaja) > 0.05) {
@@ -2262,14 +2271,17 @@ export function CheckoutModal({
         parts.push(`Efectivo ($): $${parseFloat(pagosMixtosChannels.efectivoUsd).toFixed(2)}`);
       }
       if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
-        parts.push(`Efectivo (Bs): $${parseFloat(pagosMixtosChannels.efectivoVes).toFixed(2)}`);
+        const valUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
+        parts.push(`Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes} ($${valUsd.toFixed(2)})`);
       }
       if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
-        parts.push(`Pago Móvil: $${parseFloat(pagosMixtosChannels.pagoMovil).toFixed(2)} (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
+        const valUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
+        parts.push(`Pago Móvil: Bs. ${pagosMixtosChannels.pagoMovil} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
         refs.push(pagosMixtosChannels.pagoMovilRef.trim());
       }
       if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
-        parts.push(`Punto: $${parseFloat(pagosMixtosChannels.punto).toFixed(2)} (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
+        const valUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
+        parts.push(`Punto: Bs. ${pagosMixtosChannels.punto} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
         refs.push(pagosMixtosChannels.puntoRef.trim());
       }
       if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
@@ -2448,13 +2460,12 @@ export function CheckoutModal({
               </div>
             )}
 
-            {/* Flexible Multi-Channel Pago Mixto Section */}
             {metodoPago === 'Pago Mixto' && (() => {
               const sumMixtoUSD = 
                 (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
-                (parseFloat(pagosMixtosChannels.efectivoVes) || 0) +
-                (parseFloat(pagosMixtosChannels.pagoMovil) || 0) +
-                (parseFloat(pagosMixtosChannels.punto) || 0) +
+                ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+                ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+                ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
                 (parseFloat(pagosMixtosChannels.zelle) || 0);
 
               const diffMixtoUSD = totalCobrarEnCaja - sumMixtoUSD;
@@ -2475,7 +2486,7 @@ export function CheckoutModal({
                     <div className="text-right">
                       {isCuadreExacto ? (
                         <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded-full border border-emerald-300">
-                          ✅ Cuadre Exacto ($${sumMixtoUSD.toFixed(2)})
+                          ✅ Cuadre Exacto (${sumMixtoUSD.toFixed(2)})
                         </span>
                       ) : diffMixtoUSD > 0 ? (
                         <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2.5 py-1 rounded-full border border-amber-300">
@@ -2497,11 +2508,11 @@ export function CheckoutModal({
                       </label>
                       <input
                         type="number"
-                        step="0.50"
+                        step="any"
                         min="0"
                         value={pagosMixtosChannels.efectivoUsd}
                         onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoUsd: e.target.value })}
-                        placeholder="0.00"
+                        placeholder={Math.max(0, diffMixtoUSD).toFixed(2)}
                         className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                       />
                     </div>
@@ -2513,16 +2524,16 @@ export function CheckoutModal({
                       </label>
                       <input
                         type="number"
-                        step="0.50"
+                        step="any"
                         min="0"
                         value={pagosMixtosChannels.efectivoVes}
                         onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoVes: e.target.value })}
-                        placeholder="0.00"
+                        placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
                         className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                       />
                       {parseFloat(pagosMixtosChannels.efectivoVes) > 0 && (
                         <span className="text-[10px] text-blue-700 font-bold block">
-                          ~ Bs. {(parseFloat(pagosMixtosChannels.efectivoVes) * tasaUsd).toFixed(2)} VES
+                          ~ $ {(parseFloat(pagosMixtosChannels.efectivoVes) / tasaUsd).toFixed(2)} USD
                         </span>
                       )}
                     </div>
@@ -2532,20 +2543,20 @@ export function CheckoutModal({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
-                            <i className="fa-solid fa-[#c5920c] fa-mobile-screen-button text-indigo-600"></i> Pago Móvil ($ USD)
+                            <i className="fa-solid fa-mobile-screen-button text-indigo-600"></i> Pago Móvil (Bs. VES)
                           </label>
                           <input
                             type="number"
-                            step="0.50"
+                            step="any"
                             min="0"
                             value={pagosMixtosChannels.pagoMovil}
                             onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovil: e.target.value })}
-                            placeholder="0.00"
+                            placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
                             className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                           />
                           {parseFloat(pagosMixtosChannels.pagoMovil) > 0 && (
                             <span className="text-[10px] text-indigo-700 font-bold block pt-0.5">
-                              ~ Bs. {(parseFloat(pagosMixtosChannels.pagoMovil) * tasaUsd).toFixed(2)} VES
+                              ~ $ {(parseFloat(pagosMixtosChannels.pagoMovil) / tasaUsd).toFixed(2)} USD
                             </span>
                           )}
                         </div>
@@ -2570,20 +2581,20 @@ export function CheckoutModal({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <label className="block text-[10px] font-black text-indigo-900 uppercase flex items-center gap-1">
-                            <i className="fa-solid fa-credit-card text-purple-600"></i> Punto de Venta ($ USD)
+                            <i className="fa-solid fa-credit-card text-purple-600"></i> Punto de Venta (Bs. VES)
                           </label>
                           <input
                             type="number"
-                            step="0.50"
+                            step="any"
                             min="0"
                             value={pagosMixtosChannels.punto}
                             onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, punto: e.target.value })}
-                            placeholder="0.00"
+                            placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
                             className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                           />
                           {parseFloat(pagosMixtosChannels.punto) > 0 && (
                             <span className="text-[10px] text-purple-700 font-bold block pt-0.5">
-                              ~ Bs. {(parseFloat(pagosMixtosChannels.punto) * tasaUsd).toFixed(2)} VES
+                              ~ $ {(parseFloat(pagosMixtosChannels.punto) / tasaUsd).toFixed(2)} USD
                             </span>
                           )}
                         </div>
@@ -2612,11 +2623,11 @@ export function CheckoutModal({
                           </label>
                           <input
                             type="number"
-                            step="0.50"
+                            step="any"
                             min="0"
                             value={pagosMixtosChannels.zelle}
                             onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, zelle: e.target.value })}
-                            placeholder="0.00"
+                            placeholder={Math.max(0, diffMixtoUSD).toFixed(2)}
                             className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
                           />
                         </div>

@@ -96,7 +96,8 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
 
   const handleOpenPagarDeuda = (client) => {
     setSelectedClient(client);
-    setMontoPago(client.monto_deuda_usd || 0);
+    // Default method is Efectivo (Bs) which is VES, so default amount is converted to VES
+    setMontoPago(((client.monto_deuda_usd || 0) * tasaUsd).toFixed(2));
     setMetodoPago('Efectivo (Bs)');
     setIsPayDebtOpen(true);
   };
@@ -104,6 +105,9 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const handleConfirmPagarDeuda = async (e) => {
     e.preventDefault();
     if (!selectedClient) return;
+
+    const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago);
+    const finalMonto = isVes ? ((parseFloat(montoPago) || 0) / tasaUsd) : (parseFloat(montoPago) || 0);
 
     try {
       const res = await fetch(`/api/clientes/${selectedClient.id}/pagar-deuda`, {
@@ -113,7 +117,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          monto: parseFloat(montoPago) || 0,
+          monto: finalMonto,
           metodo: metodoPago
         })
       });
@@ -482,17 +486,23 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
 
             <form onSubmit={handleConfirmPagarDeuda} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto a Cobrar ($ USD)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                  Monto a Cobrar ({['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago) ? 'Bs. VES' : '$ USD'})
+                </label>
                 <input 
                   type="number"
-                  step="0.50"
+                  step="any"
                   value={montoPago}
                   onChange={(e) => setMontoPago(e.target.value)}
+                  placeholder={['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago) ? ((selectedClient.monto_deuda_usd || 0) * tasaUsd).toFixed(2) : (selectedClient.monto_deuda_usd || 0).toFixed(2)}
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm font-black text-slate-800 outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                   required
                 />
                 <span className="block text-[11px] font-bold text-emerald-700 mt-1">
-                  = Bs. {((parseFloat(montoPago) || 0) * tasaUsd).toFixed(2)}
+                  {['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago)
+                    ? `= $ ${((parseFloat(montoPago) || 0) / tasaUsd).toFixed(2)} USD`
+                    : `= Bs. ${((parseFloat(montoPago) || 0) * tasaUsd).toFixed(2)}`
+                  }
                 </span>
               </div>
 
@@ -500,7 +510,17 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Medio de Pago</label>
                 <select 
                   value={metodoPago}
-                  onChange={(e) => setMetodoPago(e.target.value)}
+                  onChange={(e) => {
+                    const newMethod = e.target.value;
+                    const wasVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago);
+                    const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(newMethod);
+                    if (wasVes && !isVes) {
+                      setMontoPago(prev => prev ? (parseFloat(prev) / tasaUsd).toFixed(2) : '');
+                    } else if (!wasVes && isVes) {
+                      setMontoPago(prev => prev ? (parseFloat(prev) * tasaUsd).toFixed(2) : '');
+                    }
+                    setMetodoPago(newMethod);
+                  }}
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-[#ff331f] bg-white"
                 >
                   <option value="Efectivo (Bs)">Efectivo (Bs)</option>
