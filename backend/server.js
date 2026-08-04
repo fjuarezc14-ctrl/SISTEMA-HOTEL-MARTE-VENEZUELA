@@ -1906,6 +1906,11 @@ app.post('/api/entrega-turnos/:id/solicitar-correccion', requireAuth, async (req
       return res.status(404).json({ error: 'Entrega de turno no encontrada.' });
     }
 
+    // Enforce permission: only saliente user or Admin/Super Admin can request corrections
+    if (entrega.usuarioSalienteId !== req.user.id && req.user.rol !== 'Administrador' && req.user.rol !== 'Super Admin') {
+      return res.status(403).json({ error: 'Acceso denegado. Solo puede solicitar correcciones de sus propias planillas de turno.' });
+    }
+
     await db.run(
       `UPDATE entrega_turnos 
        SET solicitudCorreccion = 1, motivoCorreccion = ?, 

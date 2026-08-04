@@ -827,8 +827,8 @@ export default function EntregaTurnos({
                           <i className="fa-solid fa-check-to-slot"></i> Confirmar
                         </button>
                       ) : (
-                        /* If confirmed and NO pending/resolved correction request exists, show button to request correction */
-                        !t.solicitudCorreccion && (
+                        /* If confirmed and NO pending/resolved correction request exists, show button to request correction (only for shift owner or admin) */
+                        !t.solicitudCorreccion && (currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin' || t.usuarioSalienteId === currentUser?.id) && (
                           <button
                             type="button"
                             onClick={() => {
