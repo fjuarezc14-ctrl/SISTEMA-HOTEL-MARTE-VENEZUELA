@@ -168,6 +168,8 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
 
       if (isPreConsumo) {
         alert(`✅ Pre-Consumo en Espera registrado para ${clienteNombre.trim()} (CI: ${clienteCi.trim()}). Se vinculará automáticamente al hacer Check-In.`);
+      } else if (targetRoomNum && cargarHabitacion) {
+        alert(`✅ Consumo cargado exitosamente a la Habitación ${targetRoomNum} (${clienteNombre.trim()}). Se cobrará al hacer Checkout.`);
       } else {
         setTicketModal(data.ticket);
       }
