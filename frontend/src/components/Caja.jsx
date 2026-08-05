@@ -28,11 +28,12 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   const [editRefVal, setEditRefVal] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
-  // Helper function to detect digital payments with reference code strings
+  // Helper function to detect digital payments with reference code strings (Pago Móvil, Punto, Zelle)
   const isDigitalPayment = (m) => {
     if (!m) return false;
     const str = m.toLowerCase();
-    return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('pago mixto') || str.includes('ref:');
+    // Only digital channels (Pago Móvil, Punto, Zelle, or explicit reference code) require bank validation
+    return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('ref:');
   };
 
   // Helper function to separate method name from reference code (handles all formats: dash, parens, colons)
