@@ -178,7 +178,7 @@ export default function EntregaTurnos({
     setSaldoPagoMovil(myPagoMovil.toFixed(2));
     setSaldoPunto(myPunto.toFixed(2));
     setSaldoZelle(myZelle.toFixed(2));
-  }, [caja, currentUser, tasaUsd, shiftStartTime]);
+  }, [caja, currentUser, tasaUsd, shiftCutoffTime]);
 
   // Fallback trigger if needed
   const handleAutoFillCaja = () => {
