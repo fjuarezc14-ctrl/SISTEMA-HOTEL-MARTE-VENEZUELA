@@ -18,12 +18,14 @@ import {
   CheckoutModal,
   DetalleHabitacionOcupadaModal,
   AccionesReservaModal,
-  AgregarAcompanantePosteriorModal
+  AgregarAcompanantePosteriorModal,
+  ExtenderHorasModal
 } from './components/Modales';
 
 export default function App() {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('marte_user') || 'null'));
   const [token, setToken] = useState(() => localStorage.getItem('marte_token') || '');
+  const [extenderRoom, setExtenderRoom] = useState(null);
   
   // Login form states
   const [loginUsername, setLoginUsername] = useState('');
@@ -866,6 +868,7 @@ export default function App() {
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onRoomClick={handleRoomClick}
                   onCheckinReserva={handleCheckinReserva}
+                  onOpenExtenderHoras={(h) => setExtenderRoom(h)}
                 />
               )}
               {activeTab === 'habitaciones' && canAccessTab('habitaciones') && (
@@ -1051,6 +1054,16 @@ export default function App() {
         tarifas={appState.tarifas || []}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
+      />
+
+      <ExtenderHorasModal
+        isOpen={Boolean(extenderRoom)}
+        room={extenderRoom}
+        tarifas={appState.tarifas || []}
+        configuracion={appState.configuracion || {}}
+        token={token}
+        onClose={() => setExtenderRoom(null)}
+        onStateChange={fetchState}
       />
     </div>
   );

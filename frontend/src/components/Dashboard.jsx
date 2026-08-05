@@ -8,7 +8,8 @@ export default function Dashboard({
   tarifas = [],
   tasaUsd = 50.00,
   onRoomClick, 
-  onCheckinReserva 
+  onCheckinReserva,
+  onOpenExtenderHoras
 }) {
   // Calculate KPIs
   const llegadasPendientes = reservas.length;
@@ -170,6 +171,19 @@ export default function Dashboard({
                     <span className="block text-[9px] font-black bg-amber-500 text-white py-0.5 px-1 rounded-md mt-2 uppercase tracking-tight">
                       ⚠️ VENCE EN {expStatus.minutesLeft} MIN
                     </span>
+                  )}
+
+                  {h.estado === 'Ocupada' && onOpenExtenderHoras && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenExtenderHoras(h);
+                      }}
+                      className="mt-2.5 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] py-1 px-2 rounded-lg shadow-xs transition-all flex items-center justify-center gap-1 uppercase cursor-pointer"
+                    >
+                      <i className="fa-solid fa-clock"></i> ➕ Agregar Horas
+                    </button>
                   )}
                 </div>
               );
