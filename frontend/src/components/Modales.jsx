@@ -3586,10 +3586,21 @@ export function ExtenderHorasModal({
   const totalVesCalculado = (totalUsdCalculado * tasaUsd).toFixed(2);
   const isVesMethod = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago);
 
-  // Parse current departure date and new projected departure date
-  let currentSalidaDate = room.salida ? new Date(room.salida) : new Date();
-  if (isNaN(currentSalidaDate.getTime())) currentSalidaDate = new Date();
+  const now = new Date();
+  let currentSalidaDate = room.salida ? new Date(room.salida) : now;
+  if (isNaN(currentSalidaDate.getTime())) currentSalidaDate = now;
+
+  const isOverdue = currentSalidaDate < now;
+  const overdueMinutesTotal = isOverdue ? Math.floor((now.getTime() - currentSalidaDate.getTime()) / (1000 * 60)) : 0;
+  
+  // Calculate projected new departure date (adds extra hours to currentSalidaDate)
   const projectedSalidaDate = new Date(currentSalidaDate.getTime() + horasAdicionales * 60 * 60 * 1000);
+  const isStillOverdueAfterExtension = projectedSalidaDate <= now;
+
+  // Effective minutes remaining from NOW
+  const effectiveMinutesFromNow = Math.max(0, Math.floor((projectedSalidaDate.getTime() - now.getTime()) / (1000 * 60)));
+  const effectiveHoursFromNow = Math.floor(effectiveMinutesFromNow / 60);
+  const effectiveMinsRemainder = effectiveMinutesFromNow % 60;
 
   const handleConfirmExtension = async (e) => {
     e.preventDefault();
@@ -3693,6 +3704,27 @@ export function ExtenderHorasModal({
             Tarifa Hora Extra: <strong>${hourlyRate.toFixed(2)} USD/hr</strong> (~ Bs. {(hourlyRate * tasaUsd).toFixed(2)})
           </p>
         </div>
+
+        {/* Overdue time deduction banner */}
+        {isOverdue && (
+          <div className="bg-amber-50 border border-amber-300 p-3 rounded-xl text-xs text-amber-900 space-y-1">
+            <div className="font-bold uppercase text-[10px] text-amber-800 flex items-center gap-1">
+              <i className="fa-solid fa-clock-rotate-left"></i> Tiempo Excedido Detectado (+{overdueMinutesTotal} min)
+            </div>
+            <p className="text-[11px] font-medium text-slate-700">
+              La habitación venció hace <strong>{overdueMinutesTotal} minuto(s)</strong>. Al adicionar {horasAdicionales} hora(s) ({horasAdicionales * 60}m), se descuentan los {overdueMinutesTotal}m pasados.
+            </p>
+            {isStillOverdueAfterExtension ? (
+              <p className="text-[11px] font-bold text-rose-600">
+                ⚠️ Con {horasAdicionales}h no se cubre el exceso completo ({overdueMinutesTotal}m). Se sugiere seleccionar al menos {Math.ceil(overdueMinutesTotal / 60)} hora(s).
+              </p>
+            ) : (
+              <p className="text-[11px] font-bold text-emerald-700">
+                ✅ Tiempo efectivo restante desde ahora: {effectiveHoursFromNow > 0 ? `${effectiveHoursFromNow}h ` : ''}{effectiveMinsRemainder}m (Salida: {projectedSalidaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).
+              </p>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleConfirmExtension} className="space-y-4">
           {/* Horas Adicionales Selector */}
