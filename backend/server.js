@@ -725,8 +725,8 @@ app.put('/api/habitaciones/:num', requireAuth, async (req, res) => {
   }
 });
 
-// Helper: Calcular hora de salida según modalidad (4 Horas o Pernocta 11:00 AM)
-function calcularHoraSalida(modalidad) {
+// Helper: Calcular hora de salida según modalidad (4 Horas + Horas Extra iniciales o Pernocta 11:00 AM)
+function calcularHoraSalida(modalidad, horasExtraUpfront = 0) {
   const now = new Date();
   let future;
   if (modalidad === 'pernocta') {
@@ -734,7 +734,8 @@ function calcularHoraSalida(modalidad) {
     future.setDate(future.getDate() + 1);
     future.setHours(11, 0, 0, 0);
   } else {
-    future = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    const extraHrs = parseInt(horasExtraUpfront) || 0;
+    future = new Date(now.getTime() + (4 + extraHrs) * 60 * 60 * 1000);
   }
   
   const options = { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
@@ -750,7 +751,7 @@ function getDigitsOnly(str) {
 
 // 2. POST /api/checkin-directo - Process immediate walk-in check-in (v3 - Fase 1)
 app.post('/api/checkin-directo', requireAuth, async (req, res) => {
-  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor, fechaNacimientoTitular } = req.body;
+  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor, fechaNacimientoTitular, horasExtraIniciales } = req.body;
   const numDoc = (ci || dni || '').trim();
 
   if (!numDoc || !nombre || !tel || !numHabitacion) {
@@ -801,8 +802,8 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       );
     }
 
-    // 2. Calculate Checkout Time (4 Hours vs Pernocta 11:00 AM)
-    const salidaCalculada = calcularHoraSalida(modalidad);
+    // 2. Calculate Checkout Time (4 Hours + extra hours vs Pernocta 11:00 AM)
+    const salidaCalculada = calcularHoraSalida(modalidad, horasExtraIniciales);
     const formattedName = formatGuestName(nombre);
     let acompText = nomAcomp ? nomAcomp.trim() : '';
     if (esMenor) {

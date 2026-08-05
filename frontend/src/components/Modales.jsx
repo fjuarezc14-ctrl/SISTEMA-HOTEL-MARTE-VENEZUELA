@@ -193,6 +193,7 @@ export function AsignarDirectoModal({
   // [{ id, nombre, ci, fechaNacimiento, age, esMayor, recargo }]
   const [acompanantes, setAcompanantes] = useState([]);  
   const [modalidad, setModalidad] = useState('4h');
+  const [horasExtraIniciales, setHorasExtraIniciales] = useState(0);
   const [metodo, setMetodo] = useState('Efectivo (Bs)');
   const [codigoVerificacion, setCodigoVerificacion] = useState('');
   
@@ -243,6 +244,7 @@ export function AsignarDirectoModal({
       setAcompanantes([]);
       setMarketItemsCart([]);
       setModalidad('4h');
+      setHorasExtraIniciales(0);
       setMetodo('Efectivo (Bs)');
       setCodigoVerificacion('');
       setPagosMixtosChannels({
@@ -263,6 +265,9 @@ export function AsignarDirectoModal({
   if (!isOpen || !room) return null;
 
   const basePrice = getBasePrice(room.tipo, modalidad);
+  const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
+  const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || (room?.tipo === 'Matrimonial' ? 2.50 : 3.00)) : (room?.tipo === 'Matrimonial' ? 2.50 : 3.00);
+  const extraHoursCostUsd = (modalidad === '4h') ? (horasExtraIniciales * hourlyRate) : 0;
 
   // Compute total companion surcharges (50% of base stay price for 3rd+ adult guest; $0 for minors)
   const recargoIndividual = basePrice * 0.50;
@@ -277,7 +282,7 @@ export function AsignarDirectoModal({
   }, 0);
 
   const marketTotalUSD = marketItemsCart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
-  const totalMontoUsd = basePrice + companionSurcharges + marketTotalUSD;
+  const totalMontoUsd = basePrice + extraHoursCostUsd + companionSurcharges + marketTotalUSD;
   const montoVes = (totalMontoUsd * tasaUsd).toFixed(2);
 
   // Handlers for companion dynamic list
@@ -478,8 +483,8 @@ export function AsignarDirectoModal({
       metodo: finalMetodoStr,
       codigoVerificacion: metodo === 'Pago Mixto' ? [pagosMixtosChannels.pagoMovilRef, pagosMixtosChannels.puntoRef, pagosMixtosChannels.zelleRef].filter(Boolean).join(' / ') : codigoVerificacion,
       fotoCi,
-      comprobante,
       modalidad,
+      horasExtraIniciales,
       marketItems: marketItemsCart
     });
     setIsSubmitting(false);
@@ -585,6 +590,43 @@ export function AsignarDirectoModal({
                   <i className="fa-solid fa-moon mr-1.5"></i> Pernocta (11:00 AM)
                 </button>
               </div>
+
+              {modalidad === '4h' && (
+                <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200 mt-2 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-indigo-900 block text-[11px]">➕ Horas Extra Adicionales</span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        Tarifa Extra: ${hourlyRate.toFixed(2)} USD/hr (~ Bs. {(hourlyRate * tasaUsd).toFixed(2)})
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHorasExtraIniciales(prev => Math.max(0, prev - 1))}
+                        className="w-7 h-7 rounded-lg bg-white hover:bg-slate-100 text-slate-800 font-black text-sm border border-slate-300 flex items-center justify-center shadow-2xs cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="font-black text-indigo-900 text-sm w-6 text-center">+{horasExtraIniciales}h</span>
+                      <button
+                        type="button"
+                        onClick={() => setHorasExtraIniciales(prev => prev + 1)}
+                        className="w-7 h-7 rounded-lg bg-white hover:bg-slate-100 text-slate-800 font-black text-sm border border-slate-300 flex items-center justify-center shadow-2xs cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {horasExtraIniciales > 0 && (
+                    <div className="pt-1.5 border-t border-indigo-200/60 flex justify-between items-center text-[10px] font-bold text-indigo-950">
+                      <span>Duración Total: <strong>{4 + horasExtraIniciales} Horas</strong></span>
+                      <span className="text-emerald-700 font-black">Subtotal Horas Extra: +${extraHoursCostUsd.toFixed(2)} USD</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Intelligent Search */}
