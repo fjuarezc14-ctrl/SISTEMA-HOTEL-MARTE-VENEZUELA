@@ -3583,6 +3583,7 @@ export function ExtenderHorasModal({
   const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || (room.tipo === 'Matrimonial' ? 2.50 : 3.00)) : (room.tipo === 'Matrimonial' ? 2.50 : 3.00);
 
   const totalUsdCalculado = horasAdicionales * hourlyRate;
+  const totalVesCalculado = (totalUsdCalculado * tasaUsd).toFixed(2);
   const isVesMethod = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago);
 
   // Parse current departure date and new projected departure date
