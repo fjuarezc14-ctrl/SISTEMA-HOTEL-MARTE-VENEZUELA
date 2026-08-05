@@ -101,15 +101,41 @@ export default function EntregaTurnos({
     return 0;
   };
 
+  // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM" and ISO strings)
+  const parseCajaFecha = (horaStr) => {
+    if (!horaStr) return new Date(0);
+    if (typeof horaStr !== 'string') return new Date(horaStr);
+    
+    if (horaStr.includes('/')) {
+      try {
+        const parts = horaStr.split(',');
+        const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
+        const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
+        return new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+      } catch (e) {
+        return new Date(0);
+      }
+    }
+    const d = new Date(horaStr);
+    return isNaN(d.getTime()) ? new Date(0) : d;
+  };
+
   // Calculate my shift's expected cash from caja array strictly for current active shift
   const lastEntregaUser = (entregaTurnos || []).find(e => e.usuarioSalienteId === currentUser?.id || e.usuarioSalienteNombre === currentUser?.nombre);
-  const lastEntregaGlobal = (entregaTurnos || [])[0];
-  const shiftStartTime = lastEntregaUser ? lastEntregaUser.fechaHoraEntrega : (lastEntregaGlobal ? lastEntregaGlobal.fechaHoraEntrega : null);
+  const lastEntregaDate = lastEntregaUser ? new Date(lastEntregaUser.fechaHoraEntrega) : null;
+  
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const shiftCutoffTime = (lastEntregaDate && lastEntregaDate >= startOfToday) 
+    ? lastEntregaDate 
+    : startOfToday;
 
   const myMovements = (caja || []).filter(t => {
     if (currentUser && t.usuarioId && t.usuarioId !== currentUser.id) return false;
-    if (shiftStartTime && t.hora) {
-      return new Date(t.hora) >= new Date(shiftStartTime);
+    if (t.hora) {
+      const tDate = parseCajaFecha(t.hora);
+      return tDate >= shiftCutoffTime;
     }
     return true;
   });

@@ -77,13 +77,38 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
 
   // Shift closure modal state
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
-  const [isSubmittingCierre, setIsSubmittingCierre] = useState(false);
-  const [validatingId, setValidatingId] = useState(null);
+  // Is Admin or Supervisor
+  const isAdminOrSupervisor = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Super Admin');
 
-  // Calculate active shift start time
+  // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM" and ISO strings)
+  const parseCajaFecha = (horaStr) => {
+    if (!horaStr) return new Date(0);
+    if (typeof horaStr !== 'string') return new Date(horaStr);
+    
+    if (horaStr.includes('/')) {
+      try {
+        const parts = horaStr.split(',');
+        const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
+        const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
+        return new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+      } catch (e) {
+        return new Date(0);
+      }
+    }
+    const d = new Date(horaStr);
+    return isNaN(d.getTime()) ? new Date(0) : d;
+  };
+
+  // Calculate active shift cutoff time
   const lastEntregaUser = (entregaTurnos || []).find(e => e.usuarioSalienteId === currentUser?.id || e.usuarioSalienteNombre === currentUser?.nombre);
-  const lastEntregaGlobal = (entregaTurnos || [])[0];
-  const shiftStartTime = lastEntregaUser ? lastEntregaUser.fechaHoraEntrega : (lastEntregaGlobal ? lastEntregaGlobal.fechaHoraEntrega : null);
+  const lastEntregaDate = lastEntregaUser ? new Date(lastEntregaUser.fechaHoraEntrega) : null;
+  
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const shiftCutoffTime = (lastEntregaDate && lastEntregaDate >= startOfToday) 
+    ? lastEntregaDate 
+    : startOfToday;
 
   // Filter movements
   let displayedCaja = caja;
@@ -91,8 +116,9 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   if (filterMode === 'mine' && currentUser) {
     displayedCaja = caja.filter(t => {
       if (t.usuarioId && t.usuarioId !== currentUser.id) return false;
-      if (shiftStartTime && t.hora) {
-        return new Date(t.hora) >= new Date(shiftStartTime);
+      if (t.hora) {
+        const tDate = parseCajaFecha(t.hora);
+        return tDate >= shiftCutoffTime;
       }
       return true;
     });
