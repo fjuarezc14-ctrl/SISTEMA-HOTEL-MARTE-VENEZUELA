@@ -2061,6 +2061,10 @@ app.put('/api/entrega-turnos/:id/confirmar', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Registro de entrega de turno no encontrado.' });
     }
 
+    if (entrega.usuarioSalienteId === req.user.id && req.user.rol !== 'Administrador' && req.user.rol !== 'Supervisor' && req.user.rol !== 'Super Admin') {
+      return res.status(403).json({ error: 'No puedes confirmar tu propia entrega de turno. Debe ser confirmada por la recepcionista entrante o la gerencia.' });
+    }
+
     const nuevoEstado = conDiscrepancia ? 'Con Discrepancia' : 'Recibido Conforme';
 
     await db.run(

@@ -888,16 +888,22 @@ export default function EntregaTurnos({
                       </button>
 
                       {isPending ? (
-                        <button
-                          onClick={() => {
-                            setSelectedEntrega(t);
-                            setObsConfirmacion('');
-                            setConDiscrepancia(false);
-                          }}
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <i className="fa-solid fa-check-to-slot"></i> Confirmar
-                        </button>
+                        (t.usuarioSalienteId !== currentUser?.id || currentUser?.rol === 'Administrador' || currentUser?.rol === 'Supervisor' || currentUser?.rol === 'Super Admin') ? (
+                          <button
+                            onClick={() => {
+                              setSelectedEntrega(t);
+                              setObsConfirmacion('');
+                              setConDiscrepancia(false);
+                            }}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <i className="fa-solid fa-check-to-slot"></i> Confirmar Recepción
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-3 py-2 rounded-xl border border-amber-200 text-center flex-1 flex items-center justify-center gap-1">
+                            <i className="fa-solid fa-hourglass-half text-amber-600"></i> Esperando Turno Entrante
+                          </span>
+                        )
                       ) : (
                         /* If confirmed and NO pending/resolved correction request exists, show button to request correction (only for shift owner or admin) */
                         !t.solicitudCorreccion && (currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin' || t.usuarioSalienteId === currentUser?.id) && (
