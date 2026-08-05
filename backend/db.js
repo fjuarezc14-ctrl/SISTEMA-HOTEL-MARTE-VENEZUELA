@@ -351,19 +351,13 @@ export async function initDb() {
   await db.run(`
     INSERT INTO tarifas (tipo, precio_diario, precio_4h_usd, precio_pernocta_usd, precio_hora_extra_usd) 
     VALUES ('Matrimonial', 10.00, 10.00, 20.00, 2.50)
-    ON CONFLICT(tipo) DO UPDATE SET 
-      precio_4h_usd = 10.00, 
-      precio_pernocta_usd = 20.00, 
-      precio_hora_extra_usd = 2.50
+    ON CONFLICT(tipo) DO NOTHING
   `);
 
   await db.run(`
     INSERT INTO tarifas (tipo, precio_diario, precio_4h_usd, precio_pernocta_usd, precio_hora_extra_usd) 
     VALUES ('Mini Suite', 14.00, 14.00, 24.00, 3.00)
-    ON CONFLICT(tipo) DO UPDATE SET 
-      precio_4h_usd = 14.00, 
-      precio_pernocta_usd = 24.00, 
-      precio_hora_extra_usd = 3.00
+    ON CONFLICT(tipo) DO NOTHING
   `);
 
   // Actualizar categorías de habitaciones existentes a los tipos oficiales
