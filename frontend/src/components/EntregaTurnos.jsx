@@ -120,15 +120,15 @@ export default function EntregaTurnos({
     return isNaN(d.getTime()) ? new Date(0) : d;
   };
 
-  // Calculate my shift's expected cash from caja array strictly for current active shift
-  const lastEntregaUser = (entregaTurnos || []).find(e => e.usuarioSalienteId === currentUser?.id || e.usuarioSalienteNombre === currentUser?.nombre);
-  const lastEntregaDate = lastEntregaUser ? new Date(lastEntregaUser.fechaHoraEntrega) : null;
+  // Calculate active shift cutoff time strictly from the most recent shift delivery in the hotel (or start of today)
+  const mostRecentDelivery = (entregaTurnos || [])[0];
+  const lastDeliveryDate = mostRecentDelivery ? new Date(mostRecentDelivery.fechaHoraEntrega) : null;
   
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  const shiftCutoffTime = (lastEntregaDate && lastEntregaDate >= startOfToday) 
-    ? lastEntregaDate 
+  const shiftCutoffTime = (lastDeliveryDate && lastDeliveryDate >= startOfToday) 
+    ? lastDeliveryDate 
     : startOfToday;
 
   const shiftStartTime = shiftCutoffTime;
@@ -166,9 +166,16 @@ export default function EntregaTurnos({
     .filter(t => t.tipo === 'Ingreso')
     .reduce((s, t) => s + getAmountForMethod(t, 'Zelle'), 0);
 
-  const myMarketSales = myMovements
-    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
-    .reduce((s, t) => s + parseFloat(t.monto), 0);
+  const marketMovements = myMovements.filter(t => 
+    t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))
+  );
+
+  const myMarketSales = marketMovements.reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const marketEfectivoUSD = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Efectivo ($)'), 0);
+  const marketEfectivoVES = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Efectivo (Bs)'), 0);
+  const marketPagoMovil = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Pago Móvil'), 0);
+  const marketPunto = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Punto de Venta'), 0);
+  const marketZelle = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Zelle'), 0);
 
   // Modal de confirmación de entrega de turno
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -541,15 +548,27 @@ export default function EntregaTurnos({
               </div>
  
               {/* Market / Snacks Sales Summary */}
-              <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 flex justify-between items-center">
-                <div>
-                  <span className="font-bold uppercase block text-[10px]">Ventas de Minimarket / Snacks (Mi Turno)</span>
-                  <span className="text-[10px] text-amber-700">Autocompletado con ventas del turno</span>
+              <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="font-bold uppercase block text-[10px]">Ventas de Minimarket / Snacks (Mi Turno)</span>
+                    <span className="text-[10px] text-amber-700">Autocompletado con ventas del turno</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-base font-black text-amber-900 block">Bs. {(myMarketSales * tasaUsd).toFixed(2)}</span>
+                    <span className="text-[10px] text-amber-700 font-bold block">~ ${myMarketSales.toFixed(2)} USD</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-base font-black text-amber-900 block">Bs. {(myMarketSales * tasaUsd).toFixed(2)}</span>
-                  <span className="text-[10px] text-amber-700 font-bold block">~ ${myMarketSales.toFixed(2)} USD</span>
-                </div>
+
+                {myMarketSales > 0 && (
+                  <div className="pt-2 border-t border-amber-200/60 grid grid-cols-2 gap-1 text-[10px] font-bold text-amber-800">
+                    {marketEfectivoUSD > 0 && <div>• Efec ($): ${marketEfectivoUSD.toFixed(2)}</div>}
+                    {marketEfectivoVES > 0 && <div>• Efec (Bs): Bs. {(marketEfectivoVES * tasaUsd).toFixed(2)}</div>}
+                    {marketPagoMovil > 0 && <div>• Pago Móvil: Bs. {(marketPagoMovil * tasaUsd).toFixed(2)}</div>}
+                    {marketPunto > 0 && <div>• Punto: Bs. {(marketPunto * tasaUsd).toFixed(2)}</div>}
+                    {marketZelle > 0 && <div>• Zelle: ${marketZelle.toFixed(2)}</div>}
+                  </div>
+                )}
               </div>
  
               {/* Lencería en Recepción */}
@@ -1220,6 +1239,15 @@ export default function EntregaTurnos({
                 <p className="font-bold text-slate-500 uppercase text-[10px]">Ventas Minimarket / Tienda</p>
                 <p className="text-sm font-black text-slate-800 mt-0.5">Bs. {(myMarketSales * tasaUsd).toFixed(2)}</p>
                 <p className="text-[10px] text-slate-400 font-bold">~ ${myMarketSales.toFixed(2)} USD</p>
+                {myMarketSales > 0 && (
+                  <div className="mt-2 pt-1.5 border-t border-slate-200 text-[9px] text-slate-600 font-bold space-y-0.5">
+                    {marketEfectivoUSD > 0 && <p>• Efec ($): ${marketEfectivoUSD.toFixed(2)} USD</p>}
+                    {marketEfectivoVES > 0 && <p>• Efec (Bs): Bs. {(marketEfectivoVES * tasaUsd).toFixed(2)}</p>}
+                    {marketPagoMovil > 0 && <p>• Pago Móvil: Bs. {(marketPagoMovil * tasaUsd).toFixed(2)}</p>}
+                    {marketPunto > 0 && <p>• Punto: Bs. {(marketPunto * tasaUsd).toFixed(2)}</p>}
+                    {marketZelle > 0 && <p>• Zelle: ${marketZelle.toFixed(2)} USD</p>}
+                  </div>
+                )}
               </div>
             </div>
 
