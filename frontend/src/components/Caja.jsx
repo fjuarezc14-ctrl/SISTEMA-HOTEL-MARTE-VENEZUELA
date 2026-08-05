@@ -77,6 +77,9 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
 
   // Shift closure modal state
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
+  const [isSubmittingCierre, setIsSubmittingCierre] = useState(false);
+  const [validatingId, setValidatingId] = useState(null);
+
   // Is Admin or Supervisor
   const isAdminOrSupervisor = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Super Admin');
 

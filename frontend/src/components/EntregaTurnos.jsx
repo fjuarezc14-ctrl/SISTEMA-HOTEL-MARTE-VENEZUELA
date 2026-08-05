@@ -177,8 +177,8 @@ export default function EntregaTurnos({
   React.useEffect(() => {
     setSaldoUsd(myEfectivoUSD.toFixed(2));
     setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2));
-    setSaldoPagoMovil(myPagoMovil.toFixed(2));
-    setSaldoPunto(myPunto.toFixed(2));
+    setSaldoPagoMovil((myPagoMovil * tasaUsd).toFixed(2));
+    setSaldoPunto((myPunto * tasaUsd).toFixed(2));
     setSaldoZelle(myZelle.toFixed(2));
   }, [caja, currentUser, tasaUsd, shiftCutoffTime]);
 
@@ -484,7 +484,7 @@ export default function EntregaTurnos({
                 {/* Digital Payment Channels Breakdown */}
                 <div className="pt-2 border-t border-slate-100 space-y-3">
                   <div>
-                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Pago Móvil Recibido ($ USD)</label>
+                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Pago Móvil Recibido (Bs. VES)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -495,9 +495,14 @@ export default function EntregaTurnos({
                       placeholder="0.00"
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
+                    {myPagoMovil > 0 && (
+                      <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
+                        ~ Equivalente: ${myPagoMovil.toFixed(2)} USD
+                      </span>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Punto de Venta Recibido ($ USD)</label>
+                    <label className="block text-xs font-bold text-indigo-900 mb-1">Total Punto de Venta Recibido (Bs. VES)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -508,6 +513,11 @@ export default function EntregaTurnos({
                       placeholder="0.00"
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
+                    {myPunto > 0 && (
+                      <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
+                        ~ Equivalente: ${myPunto.toFixed(2)} USD
+                      </span>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-indigo-900 mb-1">Total Zelle Recibido ($ USD)</label>
@@ -521,6 +531,11 @@ export default function EntregaTurnos({
                       placeholder="0.00"
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
+                    {myZelle > 0 && (
+                      <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
+                        ~ Equivalente: Bs. {(myZelle * tasaUsd).toFixed(2)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -529,9 +544,12 @@ export default function EntregaTurnos({
               <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 flex justify-between items-center">
                 <div>
                   <span className="font-bold uppercase block text-[10px]">Ventas de Minimarket / Snacks (Mi Turno)</span>
-                  <span className="text-[10px] text-amber-700">Autocompletado con ventas del día</span>
+                  <span className="text-[10px] text-amber-700">Autocompletado con ventas del turno</span>
                 </div>
-                <span className="text-base font-black text-amber-900">${myMarketSales.toFixed(2)} USD</span>
+                <div className="text-right">
+                  <span className="text-base font-black text-amber-900 block">Bs. {(myMarketSales * tasaUsd).toFixed(2)}</span>
+                  <span className="text-[10px] text-amber-700 font-bold block">~ ${myMarketSales.toFixed(2)} USD</span>
+                </div>
               </div>
  
               {/* Lencería en Recepción */}
@@ -1171,6 +1189,7 @@ export default function EntregaTurnos({
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <p className="font-bold text-slate-500 uppercase text-[10px]">Efectivo Divisas ($ USD)</p>
                 <p className="text-sm font-black text-emerald-700 mt-0.5">${parseFloat(saldoUsd || '0').toFixed(2)} USD</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(parseFloat(saldoUsd || '0') * tasaUsd).toFixed(2)}</p>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -1180,25 +1199,27 @@ export default function EntregaTurnos({
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Pago Móvil ($ USD)</p>
-                <p className="text-sm font-black text-indigo-700 mt-0.5">${parseFloat(saldoPagoMovil || '0').toFixed(2)} USD</p>
-                <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(parseFloat(saldoPagoMovil || '0') * tasaUsd).toFixed(2)}</p>
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Pago Móvil (Bs. VES)</p>
+                <p className="text-sm font-black text-indigo-700 mt-0.5">Bs. {parseFloat(saldoPagoMovil || '0').toFixed(2)}</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ ${(parseFloat(saldoPagoMovil || '0') / tasaUsd).toFixed(2)} USD</p>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Punto de Venta ($ USD)</p>
-                <p className="text-sm font-black text-purple-700 mt-0.5">${parseFloat(saldoPunto || '0').toFixed(2)} USD</p>
-                <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(parseFloat(saldoPunto || '0') * tasaUsd).toFixed(2)}</p>
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Punto de Venta (Bs. VES)</p>
+                <p className="text-sm font-black text-purple-700 mt-0.5">Bs. {parseFloat(saldoPunto || '0').toFixed(2)}</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ ${(parseFloat(saldoPunto || '0') / tasaUsd).toFixed(2)} USD</p>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <p className="font-bold text-slate-500 uppercase text-[10px]">Total Zelle ($ USD)</p>
                 <p className="text-sm font-black text-amber-700 mt-0.5">${parseFloat(saldoZelle || '0').toFixed(2)} USD</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(parseFloat(saldoZelle || '0') * tasaUsd).toFixed(2)}</p>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <p className="font-bold text-slate-500 uppercase text-[10px]">Ventas Minimarket / Tienda</p>
-                <p className="text-sm font-black text-slate-800 mt-0.5">${myMarketSales.toFixed(2)} USD</p>
+                <p className="text-sm font-black text-slate-800 mt-0.5">Bs. {(myMarketSales * tasaUsd).toFixed(2)}</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ ${myMarketSales.toFixed(2)} USD</p>
               </div>
             </div>
 
