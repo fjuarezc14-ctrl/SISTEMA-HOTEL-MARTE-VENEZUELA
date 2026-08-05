@@ -131,6 +131,8 @@ export default function EntregaTurnos({
     ? lastEntregaDate 
     : startOfToday;
 
+  const shiftStartTime = shiftCutoffTime;
+
   const myMovements = (caja || []).filter(t => {
     if (currentUser && t.usuarioId && t.usuarioId !== currentUser.id) return false;
     if (t.hora) {
