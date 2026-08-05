@@ -984,6 +984,115 @@ app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => 
   }
 });
 
+// POST /api/habitaciones/:num/extender-horas - Extender servicio / Agregar horas extra a habitación ocupada (v7)
+app.post('/api/habitaciones/:num/extender-horas', requireAuth, async (req, res) => {
+  const { num } = req.params;
+  const { horasAdicionales, monto, metodo, codigoRef } = req.body;
+
+  const numHrs = parseInt(horasAdicionales) || 0;
+  const montoUSD = parseFloat(monto) || 0;
+
+  if (numHrs <= 0) {
+    return res.status(400).json({ error: 'La cantidad de horas adicionales debe ser mayor a 0.' });
+  }
+
+  try {
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [num]);
+    if (!room) {
+      return res.status(404).json({ error: 'Habitación no encontrada.' });
+    }
+    if (room.estado !== 'Ocupada') {
+      return res.status(400).json({ error: 'Solo se pueden extender horas a habitaciones con ocupación activa (Ocupadas).' });
+    }
+
+    // Calculate new departure date/time
+    let currentSalidaDate = room.salida ? new Date(room.salida) : new Date();
+    if (isNaN(currentSalidaDate.getTime())) {
+      currentSalidaDate = new Date();
+    }
+    // Add extra hours
+    const newSalidaDate = new Date(currentSalidaDate.getTime() + numHrs * 60 * 60 * 1000);
+    const newSalidaIso = newSalidaDate.toISOString();
+
+    // Update room departure time
+    await db.run('UPDATE habitaciones SET salida = ? WHERE num = ?', [newSalidaIso, num]);
+
+    // Register income transaction in caja if amount > 0
+    if (montoUSD > 0) {
+      const transId = 't_ext_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+      const cleanMetodoStr = codigoRef ? `${metodo} (Ref: ${codigoRef})` : metodo;
+      
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          transId,
+          'Ingreso',
+          `Extensión Estadía Hab ${num} (+${numHrs} hr${numHrs > 1 ? 's' : ''}) [Huésped: ${room.huesped || 'General'}]`,
+          montoUSD,
+          cleanMetodoStr || 'Efectivo ($)',
+          getFechaHoraActual(),
+          req.user.id,
+          req.user.nombre,
+          'Hospedaje'
+        ]
+      );
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Habitaciones',
+      `Extensión de servicio en Hab #${num}: +${numHrs} hora(s) (Monto: $${montoUSD} USD, Método: ${metodo})`,
+      req.ip
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Extensión de ${numHrs} hora(s) registrada con éxito para la Habitación ${num}.`,
+      nuevaSalida: newSalidaIso 
+    });
+  } catch (error) {
+    console.error('Error extending room hours:', error);
+    res.status(500).json({ error: 'Error al procesar la extensión de horas.' });
+  }
+});
+
+// GET /api/turnos/resumen-activo - Obtener fecha de apertura de turno activo y transacciones del turno
+app.get('/api/turnos/resumen-activo', requireAuth, async (req, res) => {
+  try {
+    // Get last shift delivery timestamp for this user (or global last shift delivery)
+    const lastEntregaUser = await db.get(
+      'SELECT fechaHoraEntrega FROM entrega_turnos WHERE usuarioSalienteId = ? ORDER BY fechaHoraEntrega DESC LIMIT 1',
+      [req.user.id]
+    );
+
+    const lastEntregaGlobal = await db.get(
+      'SELECT fechaHoraEntrega FROM entrega_turnos ORDER BY fechaHoraEntrega DESC LIMIT 1'
+    );
+
+    const inicioTurno = lastEntregaUser ? lastEntregaUser.fechaHoraEntrega : (lastEntregaGlobal ? lastEntregaGlobal.fechaHoraEntrega : null);
+
+    let query = 'SELECT * FROM caja';
+    let params = [];
+
+    if (inicioTurno) {
+      query += ' WHERE hora >= ?';
+      params.push(inicioTurno);
+    }
+
+    const movimientos = await db.all(query, params);
+
+    res.json({
+      inicioTurno,
+      movimientos
+    });
+  } catch (error) {
+    console.error('Error fetching active shift summary:', error);
+    res.status(500).json({ error: 'Error al obtener resumen del turno activo.' });
+  }
+});
+
 // 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
 app.post('/api/reservar', requireAuth, async (req, res) => {
   const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante, fechaNacimientoTitular, fechaIngreso, fechaSalida } = req.body;

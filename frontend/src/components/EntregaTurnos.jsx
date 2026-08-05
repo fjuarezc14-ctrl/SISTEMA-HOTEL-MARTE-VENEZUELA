@@ -101,8 +101,18 @@ export default function EntregaTurnos({
     return 0;
   };
 
-  // Calculate my shift's expected cash from caja array
-  const myMovements = currentUser ? caja.filter(t => t.usuarioId === currentUser.id) : caja;
+  // Calculate my shift's expected cash from caja array strictly for current active shift
+  const lastEntregaUser = (entregaTurnos || []).find(e => e.usuarioSalienteId === currentUser?.id || e.usuarioSalienteNombre === currentUser?.nombre);
+  const lastEntregaGlobal = (entregaTurnos || [])[0];
+  const shiftStartTime = lastEntregaUser ? lastEntregaUser.fechaHoraEntrega : (lastEntregaGlobal ? lastEntregaGlobal.fechaHoraEntrega : null);
+
+  const myMovements = (caja || []).filter(t => {
+    if (currentUser && t.usuarioId && t.usuarioId !== currentUser.id) return false;
+    if (shiftStartTime && t.hora) {
+      return new Date(t.hora) >= new Date(shiftStartTime);
+    }
+    return true;
+  });
   
   const myEfectivoUSD = myMovements.reduce((sum, t) => {
     if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo ($)');
@@ -132,6 +142,9 @@ export default function EntregaTurnos({
     .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
     .reduce((s, t) => s + parseFloat(t.monto), 0);
 
+  // Modal de confirmación de entrega de turno
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
   // Automatically load shift values on mount/update
   React.useEffect(() => {
     setSaldoUsd(myEfectivoUSD.toFixed(2));
@@ -139,7 +152,7 @@ export default function EntregaTurnos({
     setSaldoPagoMovil(myPagoMovil.toFixed(2));
     setSaldoPunto(myPunto.toFixed(2));
     setSaldoZelle(myZelle.toFixed(2));
-  }, [caja, currentUser, tasaUsd]);
+  }, [caja, currentUser, tasaUsd, shiftStartTime]);
 
   // Fallback trigger if needed
   const handleAutoFillCaja = () => {
@@ -653,17 +666,11 @@ export default function EntregaTurnos({
                   </button>
 
                   <button
-                    type="submit"
-                    disabled={isSubmitting}
+                    type="button"
+                    onClick={() => setIsConfirmModalOpen(true)}
                     className="w-full bg-[#ff331f] hover:bg-[#e02816] text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2"
                   >
-                    {isSubmitting ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <>
-                        <i className="fa-solid fa-paper-plane"></i> Finalizar & Entregar Turno
-                      </>
-                    )}
+                    <i className="fa-solid fa-paper-plane"></i> Finalizar & Entregar Turno
                   </button>
                 </div>
               </div>
@@ -1105,6 +1112,100 @@ export default function EntregaTurnos({
                 <p className="mt-1 font-black">Firma Recepcionista Entrante / Gerencia</p>
                 <p className="text-[10px] text-slate-600">{printableReport.entrante || 'Conforme'}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ENTREGA DE TURNO */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in print:hidden">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-800 uppercase flex items-center gap-2">
+                <i className="fa-solid fa-clipboard-check text-emerald-600"></i> Confirmación de Entrega de Turno
+              </h3>
+              <button 
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="text-slate-400 hover:text-rose-500 font-bold"
+              >
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 font-medium">
+              <i className="fa-solid fa-circle-info mr-1 text-blue-600"></i>
+              El sistema ha calculado automáticamente el dinero recaudado desde el inicio de tu turno. Revisa que los montos coincidan con el efectivo físico en caja.
+            </div>
+
+            {/* Resumen por Métodos */}
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Efectivo Divisas ($ USD)</p>
+                <p className="text-sm font-black text-emerald-700 mt-0.5">${parseFloat(saldoUsd || '0').toFixed(2)} USD</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Efectivo Bolívares (Bs. VES)</p>
+                <p className="text-sm font-black text-blue-700 mt-0.5">Bs. {parseFloat(saldoVes || '0').toFixed(2)}</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ ${(parseFloat(saldoVes || '0') / tasaUsd).toFixed(2)} USD</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Pago Móvil ($ USD)</p>
+                <p className="text-sm font-black text-indigo-700 mt-0.5">${parseFloat(saldoPagoMovil || '0').toFixed(2)} USD</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(parseFloat(saldoPagoMovil || '0') * tasaUsd).toFixed(2)}</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Punto de Venta ($ USD)</p>
+                <p className="text-sm font-black text-purple-700 mt-0.5">${parseFloat(saldoPunto || '0').toFixed(2)} USD</p>
+                <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(parseFloat(saldoPunto || '0') * tasaUsd).toFixed(2)}</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Total Zelle ($ USD)</p>
+                <p className="text-sm font-black text-amber-700 mt-0.5">${parseFloat(saldoZelle || '0').toFixed(2)} USD</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-500 uppercase text-[10px]">Ventas Minimarket / Tienda</p>
+                <p className="text-sm font-black text-slate-800 mt-0.5">${myMarketSales.toFixed(2)} USD</p>
+              </div>
+            </div>
+
+            {novedades.trim() && (
+              <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-xs">
+                <p className="font-bold text-amber-900 uppercase text-[10px]">Novedades Declaradas:</p>
+                <p className="text-slate-700 font-medium italic mt-0.5">"{novedades.trim()}"</p>
+              </div>
+            )}
+
+            <div className="pt-3 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+              >
+                ❌ Cancelar / Reviso de Nuevo
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  setIsConfirmModalOpen(false);
+                  handleSubmitEntrega(e);
+                }}
+                disabled={isSubmitting}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs shadow-md uppercase tracking-wider flex items-center justify-center gap-1.5"
+              >
+                {isSubmitting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-check"></i> Confirmar y Entregar Turno
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

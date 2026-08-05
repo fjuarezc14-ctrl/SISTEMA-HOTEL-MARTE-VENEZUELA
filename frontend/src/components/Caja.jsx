@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, onCajaMovimiento, onStateChange }) {
+export default function Caja({ caja = [], entregaTurnos = [], token, currentUser, tasaUsd = 50.00, onCajaMovimiento, onStateChange }) {
   const [tipo, setTipo] = useState('Ingreso');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
@@ -15,8 +15,8 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const [codigoRefParteB, setCodigoRefParteB] = useState('');
   const [codigoVerificacion, setCodigoVerificacion] = useState('');
 
-  // Filter state ('all' vs 'mine')
-  const [filterMode, setFilterMode] = useState('all');
+  // Filter state ('mine' = Mi Turno Activo por defecto, vs 'all' = Todos los movimientos)
+  const [filterMode, setFilterMode] = useState('mine');
   // Origen filter ('Todos', 'Hospedaje', 'Market', 'Egresos')
   const [tabMode, setTabMode] = useState('Todos');
   // Validation filter ('all', 'pending', 'validated')
@@ -80,13 +80,23 @@ export default function Caja({ caja = [], token, currentUser, tasaUsd = 50.00, o
   const [isSubmittingCierre, setIsSubmittingCierre] = useState(false);
   const [validatingId, setValidatingId] = useState(null);
 
-  // Is Admin or Supervisor
-  const isAdminOrSupervisor = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor');
+  // Calculate active shift start time
+  const lastEntregaUser = (entregaTurnos || []).find(e => e.usuarioSalienteId === currentUser?.id || e.usuarioSalienteNombre === currentUser?.nombre);
+  const lastEntregaGlobal = (entregaTurnos || [])[0];
+  const shiftStartTime = lastEntregaUser ? lastEntregaUser.fechaHoraEntrega : (lastEntregaGlobal ? lastEntregaGlobal.fechaHoraEntrega : null);
 
   // Filter movements
-  let displayedCaja = filterMode === 'mine' && currentUser
-    ? caja.filter(t => t.usuarioId === currentUser.id)
-    : caja;
+  let displayedCaja = caja;
+
+  if (filterMode === 'mine' && currentUser) {
+    displayedCaja = caja.filter(t => {
+      if (t.usuarioId && t.usuarioId !== currentUser.id) return false;
+      if (shiftStartTime && t.hora) {
+        return new Date(t.hora) >= new Date(shiftStartTime);
+      }
+      return true;
+    });
+  }
 
   if (tabMode !== 'Todos') {
     if (tabMode === 'Egresos') {

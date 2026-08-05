@@ -919,6 +919,7 @@ export default function App() {
               {activeTab === 'caja' && canAccessTab('caja') && (
                 <Caja 
                   caja={appState.caja} 
+                  entregaTurnos={appState.entregaTurnos || []}
                   token={token}
                   currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}

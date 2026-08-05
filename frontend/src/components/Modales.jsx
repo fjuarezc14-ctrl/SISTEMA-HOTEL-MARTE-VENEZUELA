@@ -2889,7 +2889,8 @@ export function DetalleHabitacionOcupadaModal({
   onAddConsumo,
   onDeleteConsumo,
   onCheckout,
-  onOpenAgregarAcompanante
+  onOpenAgregarAcompanante,
+  onOpenExtenderHoras
 }) {
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
@@ -2985,6 +2986,19 @@ export function DetalleHabitacionOcupadaModal({
                 className="w-full mt-3 py-2 px-3 bg-[#c5920c] hover:bg-[#b08107] text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
               >
                 <i className="fa-solid fa-user-plus"></i> Registrar Acompañante Posterior (+50% recargo si es 3er huésped)
+              </button>
+            )}
+
+            {onOpenExtenderHoras && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenExtenderHoras(room);
+                }}
+                className="w-full mt-2 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+              >
+                <i className="fa-solid fa-clock"></i> ➕ Agregar Horas Extra / Extender Estadía
               </button>
             )}
           </div>
@@ -3530,6 +3544,343 @@ export function AgregarAcompanantePosteriorModal({
         onClose={() => setIsWebcamOpen(false)}
         onCapture={(imgData) => setFotoCi(imgData)}
       />
+    </div>
+  );
+}
+
+// MODAL PARA EXTENDER HORAS DE ESTADÍA / ADICIONAR HORAS A HABITACIÓN OCUPADA (v7)
+export function ExtenderHorasModal({
+  isOpen,
+  room,
+  tarifas = [],
+  configuracion = {},
+  token,
+  onClose,
+  onStateChange
+}) {
+  const [horasAdicionales, setHorasAdicionales] = useState(1);
+  const [metodoPago, setMetodoPago] = useState('Efectivo (Bs)');
+  const [montoVesInput, setMontoVesInput] = useState('');
+  const [montoUsdInput, setMontoUsdInput] = useState('');
+  const [codigoRef, setCodigoRef] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [pagosMixtosChannels, setPagosMixtosChannels] = useState({
+    efectivoUsd: '',
+    efectivoVes: '',
+    pagoMovil: '',
+    pagoMovilRef: '',
+    punto: '',
+    puntoRef: '',
+    zelle: '',
+    zelleRef: ''
+  });
+
+  if (!isOpen || !room) return null;
+
+  const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
+  const roomTarifa = (tarifas || []).find(t => t.tipo === room.tipo);
+  const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || (room.tipo === 'Matrimonial' ? 2.50 : 3.00)) : (room.tipo === 'Matrimonial' ? 2.50 : 3.00);
+
+  const totalUsdCalculado = horasAdicionales * hourlyRate;
+  const isVesMethod = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago);
+
+  // Parse current departure date and new projected departure date
+  let currentSalidaDate = room.salida ? new Date(room.salida) : new Date();
+  if (isNaN(currentSalidaDate.getTime())) currentSalidaDate = new Date();
+  const projectedSalidaDate = new Date(currentSalidaDate.getTime() + horasAdicionales * 60 * 60 * 1000);
+
+  const handleConfirmExtension = async (e) => {
+    e.preventDefault();
+    if (horasAdicionales <= 0) {
+      alert('⚠️ Por favor seleccione al menos 1 hora adicional.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      let finalMetodoStr = metodoPago;
+      let finalMontoUsd = totalUsdCalculado;
+
+      if (metodoPago === 'Pago Mixto') {
+        const sumUSD = 
+          (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+          ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+          ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+          ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
+          (parseFloat(pagosMixtosChannels.zelle) || 0);
+
+        if (Math.abs(sumUSD - totalUsdCalculado) > 0.05) {
+          throw new Error(`⚠️ El desglose del pago mixto ($${sumUSD.toFixed(2)}) no coincide con el costo de la extensión ($${totalUsdCalculado.toFixed(2)} USD). Diferencia: $${(totalUsdCalculado - sumUSD).toFixed(2)} USD.`);
+        }
+
+        const parts = [];
+        if ((parseFloat(pagosMixtosChannels.efectivoUsd) || 0) > 0) parts.push(`Efectivo ($): $${pagosMixtosChannels.efectivoUsd}`);
+        if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
+          const vUsd = (parseFloat(pagosMixtosChannels.efectivoVes) / tasaUsd).toFixed(2);
+          parts.push(`Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes} ($${vUsd})`);
+        }
+        if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
+          const vUsd = (parseFloat(pagosMixtosChannels.pagoMovil) / tasaUsd).toFixed(2);
+          parts.push(`Pago Móvil: Bs. ${pagosMixtosChannels.pagoMovil} ($${vUsd}) [Ref: ${pagosMixtosChannels.pagoMovilRef}]`);
+        }
+        if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
+          const vUsd = (parseFloat(pagosMixtosChannels.punto) / tasaUsd).toFixed(2);
+          parts.push(`Punto: Bs. ${pagosMixtosChannels.punto} ($${vUsd}) [Ref: ${pagosMixtosChannels.puntoRef}]`);
+        }
+        if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) parts.push(`Zelle: $${pagosMixtosChannels.zelle} [Ref: ${pagosMixtosChannels.zelleRef}]`);
+
+        finalMetodoStr = `Pago Mixto (${parts.join(' | ')})`;
+        finalMontoUsd = sumUSD;
+      } else if (isVesMethod) {
+        if (montoVesInput !== '') {
+          finalMontoUsd = (parseFloat(montoVesInput) || 0) / tasaUsd;
+        }
+      } else {
+        if (montoUsdInput !== '') {
+          finalMontoUsd = parseFloat(montoUsdInput) || 0;
+        }
+      }
+
+      const res = await fetch(`/api/habitaciones/${room.num}/extender-horas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          horasAdicionales,
+          monto: finalMontoUsd,
+          metodo: finalMetodoStr,
+          codigoRef
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al extender horas');
+
+      alert(`✅ Extensión de ${horasAdicionales} hora(s) registrada con éxito para la Habitación #${room.num}. Nueva hora de salida estimada: ${projectedSalidaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`);
+      
+      onClose();
+      if (onStateChange) await onStateChange();
+    } catch (err) {
+      alert(`⚠️ ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 className="text-base font-black text-slate-800 uppercase flex items-center gap-2">
+            <i className="fa-solid fa-clock text-indigo-600"></i> Extender Estadía / Agregar Horas (Hab #{room.num})
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-rose-500 font-bold">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <div className="bg-indigo-50 border border-indigo-200 p-3.5 rounded-xl space-y-1 text-xs">
+          <div className="flex justify-between items-center">
+            <span className="font-bold text-slate-700">Huésped: <strong>{room.huesped || 'General'}</strong></span>
+            <span className="bg-indigo-100 text-indigo-900 font-black px-2 py-0.5 rounded text-[10px]">{room.tipo}</span>
+          </div>
+          <p className="text-slate-500 font-medium">
+            Tarifa Hora Extra: <strong>${hourlyRate.toFixed(2)} USD/hr</strong> (~ Bs. {(hourlyRate * tasaUsd).toFixed(2)})
+          </p>
+        </div>
+
+        <form onSubmit={handleConfirmExtension} className="space-y-4">
+          {/* Horas Adicionales Selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Cantidad de Horas Adicionales
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setHorasAdicionales(prev => Math.max(1, prev - 1))}
+                className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-lg flex items-center justify-center border border-slate-200"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min="1"
+                max="24"
+                value={horasAdicionales}
+                onChange={(e) => setHorasAdicionales(Math.max(1, parseInt(e.target.value) || 1))}
+                className="flex-1 px-4 py-2 rounded-xl border border-slate-300 text-center text-lg font-black text-slate-800 outline-none focus:ring-1 focus:ring-indigo-600 bg-white"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setHorasAdicionales(prev => prev + 1)}
+                className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-lg flex items-center justify-center border border-slate-200"
+              >
+                +
+              </button>
+            </div>
+            <p className="text-[10px] text-indigo-700 font-bold mt-1 text-center">
+              Nueva hora de salida estimada: <strong>{projectedSalidaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong> ({projectedSalidaDate.toLocaleDateString()})
+            </p>
+          </div>
+
+          {/* Total Cost Highlight */}
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex justify-between items-center">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Costo Total Extensión</p>
+              <p className="text-xl font-black text-emerald-600">${totalUsdCalculado.toFixed(2)} USD</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Equivalente VES</p>
+              <p className="text-base font-black text-blue-700">Bs. {totalVesCalculado}</p>
+            </div>
+          </div>
+
+          {/* Medio de Pago Selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Medio de Pago</label>
+            <select
+              value={metodoPago}
+              onChange={(e) => setMetodoPago(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-slate-800 outline-none focus:ring-1 focus:ring-indigo-600"
+            >
+              <option value="Efectivo (Bs)">Efectivo (Bs. VES)</option>
+              <option value="Pago Móvil">Pago Móvil</option>
+              <option value="Punto de Venta">Punto de Venta</option>
+              <option value="Efectivo ($)">Efectivo ($ USD)</option>
+              <option value="Zelle">Zelle</option>
+              <option value="Pago Mixto">Pago Mixto (Multicanal)</option>
+            </select>
+          </div>
+
+          {/* Reference for digital payments */}
+          {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago) && (
+            <div>
+              <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">
+                Código / N° Referencia Bancaria *
+              </label>
+              <input
+                type="text"
+                value={codigoRef}
+                onChange={(e) => setCodigoRef(e.target.value)}
+                placeholder="Ej. Ref 987654"
+                className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white outline-none focus:ring-1 focus:ring-indigo-600"
+                required
+              />
+            </div>
+          )}
+
+          {/* Pago Mixto breakdown for extension */}
+          {metodoPago === 'Pago Mixto' && (() => {
+            const sumMixtoUSD = 
+              (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+              ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+              ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+              ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
+              (parseFloat(pagosMixtosChannels.zelle) || 0);
+
+            const diffMixtoUSD = totalUsdCalculado - sumMixtoUSD;
+            const isCuadreExacto = Math.abs(diffMixtoUSD) < 0.05;
+
+            return (
+              <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200 space-y-3 text-xs">
+                <div className="flex justify-between items-center border-b border-indigo-200 pb-1.5">
+                  <span className="font-bold text-indigo-900 uppercase text-[10px]">Desglose Multicanal</span>
+                  {isCuadreExacto ? (
+                    <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">✅ Cuadre Exacto</span>
+                  ) : (
+                    <span className="bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded text-[10px]">
+                      {diffMixtoUSD > 0 ? `Faltan $${diffMixtoUSD.toFixed(2)}` : `Exceso $${Math.abs(diffMixtoUSD).toFixed(2)}`}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Efectivo ($ USD)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={pagosMixtosChannels.efectivoUsd}
+                      onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoUsd: e.target.value })}
+                      placeholder={Math.max(0, diffMixtoUSD).toFixed(2)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Efectivo (Bs. VES)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={pagosMixtosChannels.efectivoVes}
+                      onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, efectivoVes: e.target.value })}
+                      placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Pago Móvil (Bs. VES)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={pagosMixtosChannels.pagoMovil}
+                      onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, pagoMovil: e.target.value })}
+                      placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500">Punto de Venta (Bs. VES)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={pagosMixtosChannels.punto}
+                      onChange={(e) => setPagosMixtosChannels({ ...pagosMixtosChannels, punto: e.target.value })}
+                      placeholder={Math.max(0, diffMixtoUSD * tasaUsd).toFixed(2)}
+                      className="w-full px-2 py-1 rounded border border-slate-300 font-bold bg-white text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="pt-2 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs border border-slate-200"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl text-xs shadow-md uppercase tracking-wider flex items-center justify-center gap-1.5"
+            >
+              {isSubmitting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <i className="fa-solid fa-[#ff331f] fa-hand-holding-dollar"></i> Cobrar y Extender {horasAdicionales}h
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

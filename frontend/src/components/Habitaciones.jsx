@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getStayExpirationStatus } from '../utils/timeHelper';
+import { ExtenderHorasModal } from './Modales';
 
 export default function Habitaciones({ habitaciones = [], tickets = [], tarifas = [], tasaUsd = 50.00, token, onStateChange, onRoomClick }) {
   const [filtro, setFiltro] = useState('Todas');
@@ -8,6 +9,7 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
   const [roomNum, setRoomNum] = useState('');
   const [roomTipo, setRoomTipo] = useState('Matrimonial');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [extenderRoom, setExtenderRoom] = useState(null);
 
   const filteredHabitaciones = habitaciones.filter(h => {
     if (filtro === 'Todas') return true;
@@ -264,6 +266,19 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                     ⚠️ VENCE EN {expStatus.minutesLeft} MIN
                   </span>
                 )}
+
+                {h.estado === 'Ocupada' && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExtenderRoom(h);
+                    }}
+                    className="mt-2.5 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] py-1 px-2 rounded-lg shadow-xs transition-all flex items-center justify-center gap-1 uppercase"
+                  >
+                    <i className="fa-solid fa-clock"></i> ➕ Agregar Horas
+                  </button>
+                )}
               </div>
             );
           })}
@@ -343,6 +358,17 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
           </div>
         </div>
       )}
+
+      {/* EXTENDER HORAS MODAL */}
+      <ExtenderHorasModal
+        isOpen={!!extenderRoom}
+        room={extenderRoom}
+        tarifas={tarifas}
+        configuracion={{ tasa_usd: tasaUsd.toString() }}
+        token={token}
+        onClose={() => setExtenderRoom(null)}
+        onStateChange={onStateChange}
+      />
     </div>
   );
 }
