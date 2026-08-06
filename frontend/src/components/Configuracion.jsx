@@ -33,6 +33,40 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
   const [danoTipoTarifa, setDanoTipoTarifa] = useState('fija');
   const [isSubmittingDano, setIsSubmittingDano] = useState(false);
 
+  // Business Identity States (RUC 10710311191 & Jr. Amalia Puga 821)
+  const configuracion = appState.configuracion || {};
+  const [businessName, setBusinessName] = useState(configuracion.nombre_hotel || 'Hotel Marte');
+  const [businessRuc, setBusinessRuc] = useState(configuracion.ruc_rif || '10710311191');
+  const [businessAddress, setBusinessAddress] = useState(configuracion.direccion || 'Jr. Amalia Puga 821');
+  const [isSavingBusinessInfo, setIsSavingBusinessInfo] = useState(false);
+
+  const handleSaveBusinessInfo = async (e) => {
+    e.preventDefault();
+    setIsSavingBusinessInfo(true);
+    try {
+      const res = await fetch('/api/configuracion', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          nombre_hotel: businessName,
+          ruc_rif: businessRuc,
+          direccion: businessAddress
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar datos del local');
+      alert('✅ Datos del local actualizados exitosamente.');
+      onStateChange();
+    } catch (err) {
+      alert(`⚠️ Error: ${err.message}`);
+    } finally {
+      setIsSavingBusinessInfo(false);
+    }
+  };
+
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
     setProdNombre('');
@@ -286,6 +320,66 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
 
   return (
     <div className="space-y-8 fade-in">
+      {/* 0. SECCIÓN DATOS IDENTIFICATIVOS DEL LOCAL / FACTURACIÓN */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div className="border-b border-slate-100 pb-3 mb-5">
+          <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+            <i className="fa-solid fa-building text-amber-600"></i> Datos Identificativos del Local / Establecimiento
+          </h2>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Información fiscal y de ubicación reflejada en tickets, boletas, comprobantes e informes imprimibles.
+          </p>
+        </div>
+
+        <form onSubmit={handleSaveBusinessInfo} className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+          <div>
+            <label className="block text-[10px] text-slate-500 uppercase mb-1">Nombre Comercial del Establecimiento</label>
+            <input
+              type="text"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 font-bold outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-slate-500 uppercase mb-1">Identificación Fiscal (RUC / RIF)</label>
+            <input
+              type="text"
+              value={businessRuc}
+              onChange={(e) => setBusinessRuc(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 font-black outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+              placeholder="10710311191"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-slate-500 uppercase mb-1">Dirección del Local</label>
+            <input
+              type="text"
+              value={businessAddress}
+              onChange={(e) => setBusinessAddress(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-slate-800 font-bold outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+              placeholder="Jr. Amalia Puga 821"
+              required
+            />
+          </div>
+
+          <div className="md:col-span-3 flex justify-end mt-2">
+            <button
+              type="submit"
+              disabled={isSavingBusinessInfo}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-5 py-2.5 rounded-xl shadow-xs transition-all text-xs flex items-center gap-2 cursor-pointer"
+            >
+              <i className="fa-solid fa-floppy-disk"></i>
+              {isSavingBusinessInfo ? 'Guardando...' : 'Guardar Datos del Local'}
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* 1. SECCIÓN GESTIÓN DE HABITACIONES (AGREGAR / ELIMINAR HABITACIONES) */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">

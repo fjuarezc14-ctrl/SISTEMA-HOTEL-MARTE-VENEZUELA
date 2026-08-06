@@ -337,6 +337,11 @@ export async function initDb() {
     await db.run("INSERT INTO configuracion (clave, valor) VALUES ('tasa_usd', '50.00')");
   }
 
+  // Seed / Upsert Business Info in configuracion (RUC & Address update)
+  await db.run("INSERT INTO configuracion (clave, valor) VALUES ('ruc_rif', '10710311191') ON CONFLICT(clave) DO UPDATE SET valor = '10710311191'");
+  await db.run("INSERT INTO configuracion (clave, valor) VALUES ('direccion', 'Jr. Amalia Puga 821') ON CONFLICT(clave) DO UPDATE SET valor = 'Jr. Amalia Puga 821'");
+  await db.run("INSERT INTO configuracion (clave, valor) VALUES ('nombre_hotel', 'Hotel Marte') ON CONFLICT(clave) DO UPDATE SET valor = 'Hotel Marte'");
+
   // Migraciones y Upsert para Tarifas Oficiales (v3 - Fase 1)
   try {
     await db.run("ALTER TABLE tarifas ADD COLUMN precio_4h_usd REAL DEFAULT 0");
