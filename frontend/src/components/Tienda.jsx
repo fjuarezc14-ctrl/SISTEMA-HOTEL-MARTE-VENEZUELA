@@ -655,11 +655,9 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
             {/* Ticket Thermal Paper Simulation */}
             <div className="bg-amber-50/40 border border-dashed border-amber-200 p-4 rounded-xl space-y-3 font-mono text-xs text-slate-800 mb-4">
               <div className="text-center border-b border-slate-200 pb-2">
-                <h3 className="font-black text-sm uppercase text-slate-900">{configuracion?.nombre_hotel || 'HOTEL MARTE'}</h3>
-                <p className="text-[10px] font-bold text-slate-700">RUC: {configuracion?.ruc_rif || '10710311191'}</p>
-                <p className="text-[10px] text-slate-600 font-medium">{configuracion?.direccion || 'Jr. Amalia Puga 821'}</p>
-                <p className="text-[10px] text-slate-500 mt-1">Venta Directa - Market / Tienda</p>
-                <p className="text-[9px] text-slate-400 mt-0.5">{ticketModal.fecha} | Atendido por: {ticketModal.vendedor}</p>
+                <h3 className="font-black text-sm uppercase text-slate-900">HOTEL MARTE PMS</h3>
+                <p className="text-[10px] text-slate-500">Venta Directa - Market / Tienda</p>
+                <p className="text-[9px] text-slate-400 mt-1">{ticketModal.fecha} | Atendido por: {ticketModal.vendedor}</p>
               </div>
 
               {ticketModal.clienteNombre && (

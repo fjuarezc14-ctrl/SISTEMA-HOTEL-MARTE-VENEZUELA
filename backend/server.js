@@ -590,7 +590,7 @@ app.put('/api/configuracion', requireAuth, async (req, res) => {
   if (!req.user.permisos.includes('configuracion')) {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere permiso de configuración.' });
   }
-  const { tasa_usd, ruc_rif, direccion, nombre_hotel } = req.body;
+  const { tasa_usd } = req.body;
   try {
     if (tasa_usd !== undefined) {
       const val = parseFloat(tasa_usd);
@@ -602,24 +602,6 @@ app.put('/api/configuracion', requireAuth, async (req, res) => {
         [val.toFixed(2), val.toFixed(2)]
       );
       await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Tasa del Día', `Actualizada Tasa del Día a 1 USD = Bs. ${val.toFixed(2)}`, req.ip);
-    }
-    if (ruc_rif !== undefined) {
-      await db.run(
-        "INSERT INTO configuracion (clave, valor) VALUES ('ruc_rif', ?) ON CONFLICT(clave) DO UPDATE SET valor = ?",
-        [(ruc_rif || '').trim(), (ruc_rif || '').trim()]
-      );
-    }
-    if (direccion !== undefined) {
-      await db.run(
-        "INSERT INTO configuracion (clave, valor) VALUES ('direccion', ?) ON CONFLICT(clave) DO UPDATE SET valor = ?",
-        [(direccion || '').trim(), (direccion || '').trim()]
-      );
-    }
-    if (nombre_hotel !== undefined) {
-      await db.run(
-        "INSERT INTO configuracion (clave, valor) VALUES ('nombre_hotel', ?) ON CONFLICT(clave) DO UPDATE SET valor = ?",
-        [(nombre_hotel || '').trim(), (nombre_hotel || '').trim()]
-      );
     }
     res.json({ success: true, message: 'Configuración actualizada de forma exitosa.' });
   } catch (error) {

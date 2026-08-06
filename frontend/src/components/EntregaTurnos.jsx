@@ -1083,10 +1083,9 @@ export default function EntregaTurnos({
         <div className="hidden print:block fixed inset-0 bg-white p-8 text-black z-50 font-sans text-xs">
           <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-start">
             <div>
-              <h1 className="text-xl font-black uppercase tracking-widest text-slate-900">HOTEL MARTE</h1>
-              <p className="text-xs font-bold text-slate-800">RUC: 10710311191 | Dirección: Jr. Amalia Puga 821</p>
-              <h2 className="text-sm font-bold uppercase text-slate-700 mt-1">{printableReport.titulo}</h2>
-              <p className="text-[10px] text-slate-500 mt-0.5">Generado el: {printableReport.fecha} | Tasa USD: Bs. {tasaUsd.toFixed(2)}</p>
+              <h1 className="text-xl font-black uppercase tracking-widest text-slate-900">HOTEL MARTE VENEZUELA</h1>
+              <h2 className="text-sm font-bold uppercase text-slate-700">{printableReport.titulo}</h2>
+              <p className="text-[10px] text-slate-500 mt-1">Generado el: {printableReport.fecha} | Tasa USD: Bs. {tasaUsd.toFixed(2)}</p>
             </div>
             <div className="text-right">
               <span className="font-bold text-slate-800 block text-xs">Recepcionista: {printableReport.recepcionista}</span>

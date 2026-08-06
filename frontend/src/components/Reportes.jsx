@@ -562,11 +562,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           <div className="bg-slate-950 p-6 rounded-2xl shadow-xl border border-slate-800 overflow-x-auto text-white print:p-0 print:bg-white print:text-black">
             {/* Header Box */}
             <div className="border border-slate-700 rounded-xl overflow-hidden mb-6 bg-slate-900 print:bg-white print:border-black">
-              <div className="bg-black py-2.5 border-b border-slate-700 print:border-black flex justify-between items-center px-4">
-                <div className="text-left">
-                  <span className="text-sm font-black tracking-widest text-amber-400 uppercase print:text-black block">CONTROL DE INGRESO CLIENTES DIARIO</span>
-                  <span className="text-[10px] text-slate-400 print:text-black font-semibold">RUC: 10710311191 | Jr. Amalia Puga 821</span>
-                </div>
+              <div className="bg-black text-center py-2.5 border-b border-slate-700 print:border-black flex justify-between items-center px-4">
+                <span className="text-sm font-black tracking-widest text-amber-400 uppercase print:text-black">CONTROL DE INGRESO CLIENTES DIARIO</span>
                 <span className="text-xs font-bold text-white uppercase print:text-black">HOTEL MARTE</span>
               </div>
 
