@@ -108,6 +108,8 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
     setPagosMixtos(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
   };
 
+  const [codigoRefUnico, setCodigoRefUnico] = useState('');
+
   // Submit direct sale
   const handleProcessSale = async (e) => {
     e.preventDefault();
@@ -119,7 +121,12 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
     let finalPagos = [];
     if (!(targetRoomNum && cargarHabitacion)) {
       if (tipoPago === 'Unico') {
-        finalPagos = [{ metodo: metodoUnico, monto_usd: totalUsd, monto_ves: (totalUsd * tasaUsd).toFixed(2) }];
+        const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoUnico);
+        if (isDigital && !codigoRefUnico.trim()) {
+          setErrorMsg('⚠️ Debe ingresar el Código de Referencia / Comprobante para pagos digitales.');
+          return;
+        }
+        finalPagos = [{ metodo: metodoUnico, monto_usd: totalUsd, monto_ves: (totalUsd * tasaUsd).toFixed(2), codigoRef: codigoRefUnico.trim() }];
       } else {
         // Validate mixed payments match total
         if (Math.abs(diferenciaMixta) > 0.01) {
@@ -135,7 +142,8 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
             return {
               metodo: p.metodo,
               monto_usd: valUsd,
-              monto_ves: valVes
+              monto_ves: valVes,
+              codigoRef: (p.codigoRef || '').trim()
             };
           })
           .filter(p => p.monto_usd > 0);
@@ -530,6 +538,22 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                         <option value="Efectivo ($)">Efectivo ($)</option>
                         <option value="Zelle">Zelle</option>
                       </select>
+
+                      {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoUnico) && (
+                        <div className="mt-2">
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">
+                            Código de Verificación / Referencia *
+                          </label>
+                          <input
+                            type="text"
+                            value={codigoRefUnico}
+                            onChange={(e) => setCodigoRefUnico(e.target.value)}
+                            placeholder="Ej: Ref 987654"
+                            className="w-full px-3 py-1.5 rounded-lg border border-amber-300 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                            required
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 

@@ -855,6 +855,7 @@ export default function InventarioLenceria({
                       <option value="Operativo">Operativo ✅</option>
                       <option value="En Revisión">En Revisión 🛠️</option>
                       <option value="Dañado / Faltante">Dañado / Faltante ❌</option>
+                      <option value="No Aplica">No Aplica ➖</option>
                     </select>
                   </div>
                 ))}

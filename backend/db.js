@@ -61,7 +61,9 @@ export async function initDb() {
       hora TEXT NOT NULL,
       usuarioId TEXT,
       usuarioNombre TEXT,
-      origen TEXT DEFAULT 'Hospedaje'
+      origen TEXT DEFAULT 'Hospedaje',
+      tasa_usd REAL DEFAULT 50.00,
+      monto_ves REAL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS consumos (
@@ -346,6 +348,14 @@ export async function initDb() {
   } catch (e) {}
   try {
     await db.run("ALTER TABLE tarifas ADD COLUMN precio_hora_extra_usd REAL DEFAULT 0");
+  } catch (e) {}
+
+  // Migraciones para caja (tasa_usd e historial de monto_ves)
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN tasa_usd REAL DEFAULT 50.00");
+  } catch (e) {}
+  try {
+    await db.run("ALTER TABLE caja ADD COLUMN monto_ves REAL DEFAULT 0");
   } catch (e) {}
 
   await db.run(`
