@@ -878,6 +878,7 @@ export default function App() {
                   tarifas={appState.tarifas || []}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   token={token}
+                  currentUser={currentUser}
                   onStateChange={fetchState}
                   onRoomClick={handleRoomClick}
                 />

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { getStayExpirationStatus } from '../utils/timeHelper';
 import { ExtenderHorasModal } from './Modales';
 
-export default function Habitaciones({ habitaciones = [], tickets = [], tarifas = [], tasaUsd = 50.00, token, onStateChange, onRoomClick }) {
+export default function Habitaciones({ habitaciones = [], tickets = [], tarifas = [], tasaUsd = 50.00, token, currentUser, onStateChange, onRoomClick }) {
   const [filtro, setFiltro] = useState('Todas');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
@@ -10,6 +10,13 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
   const [roomTipo, setRoomTipo] = useState('Matrimonial');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [extenderRoom, setExtenderRoom] = useState(null);
+
+  const canManageRooms = currentUser && (
+    currentUser.rol === 'Administrador' ||
+    currentUser.rol === 'Super Admin' ||
+    currentUser.rol === 'Superadmin' ||
+    (currentUser.permisos && currentUser.permisos.includes('configuracion'))
+  );
 
   const filteredHabitaciones = habitaciones.filter(h => {
     if (filtro === 'Todas') return true;
@@ -29,6 +36,10 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
   ];
 
   const handleOpenCreate = () => {
+    if (!canManageRooms) {
+      alert('⚠️ Acceso denegado. Se requiere rol de Administrador para agregar habitaciones.');
+      return;
+    }
     setEditingRoom(null);
     setRoomNum('');
     setRoomTipo('Matrimonial');
@@ -37,6 +48,10 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
 
   const handleOpenEdit = (h, e) => {
     e.stopPropagation();
+    if (!canManageRooms) {
+      alert('⚠️ Acceso denegado. Se requiere rol de Administrador para editar habitaciones.');
+      return;
+    }
     setEditingRoom(h);
     setRoomNum(h.num);
     setRoomTipo(h.tipo);
@@ -45,6 +60,10 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
 
   const handleDeleteRoom = async (num, estado, e) => {
     e.stopPropagation();
+    if (!canManageRooms) {
+      alert('⚠️ Acceso denegado. Se requiere rol de Administrador para eliminar habitaciones.');
+      return;
+    }
     if (estado !== 'Libre') {
       alert(`⚠️ No se puede eliminar la Habitación #${num} porque está en estado "${estado}". Debe estar Libre.`);
       return;
@@ -126,12 +145,14 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
               ))}
             </div>
 
-            <button
-              onClick={handleOpenCreate}
-              className="bg-[#ff331f] hover:bg-[#e02816] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
-            >
-              <i className="fa-solid fa-gear"></i> Administrar Habitaciones
-            </button>
+            {canManageRooms && (
+              <button
+                onClick={handleOpenCreate}
+                className="bg-[#ff331f] hover:bg-[#e02816] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <i className="fa-solid fa-gear"></i> Administrar Habitaciones
+              </button>
+            )}
           </div>
         </div>
         
@@ -177,24 +198,26 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                 className={`hab-selectable border-2 rounded-2xl p-4 text-center shadow-sm relative overflow-hidden transition-all group ${bgClass}`}
               >
                 {/* Admin Quick Action Buttons (v5 - Fase 1) */}
-                <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button
-                    onClick={(e) => handleOpenEdit(h, e)}
-                    className="bg-white/90 hover:bg-white text-slate-700 hover:text-blue-600 p-1 rounded shadow-sm border text-[10px]"
-                    title="Editar Habitación"
-                  >
-                    <i className="fa-solid fa-pen"></i>
-                  </button>
-                  {h.estado === 'Libre' && (
+                {canManageRooms && (
+                  <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                     <button
-                      onClick={(e) => handleDeleteRoom(h.num, h.estado, e)}
-                      className="bg-white/90 hover:bg-white text-slate-700 hover:text-rose-600 p-1 rounded shadow-sm border text-[10px]"
-                      title="Eliminar Habitación"
+                      onClick={(e) => handleOpenEdit(h, e)}
+                      className="bg-white/90 hover:bg-white text-slate-700 hover:text-blue-600 p-1 rounded shadow-sm border text-[10px]"
+                      title="Editar Habitación"
                     >
-                      <i className="fa-solid fa-trash"></i>
+                      <i className="fa-solid fa-pen"></i>
                     </button>
-                  )}
-                </div>
+                    {h.estado === 'Libre' && (
+                      <button
+                        onClick={(e) => handleDeleteRoom(h.num, h.estado, e)}
+                        className="bg-white/90 hover:bg-white text-slate-700 hover:text-rose-600 p-1 rounded shadow-sm border text-[10px]"
+                        title="Eliminar Habitación"
+                      >
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Ticket Badge */}
                 {roomTickets.length > 0 && (
