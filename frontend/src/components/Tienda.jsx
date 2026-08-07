@@ -75,6 +75,7 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
     setClienteCi('');
     setTargetRoomNum('');
     setCargarHabitacion(false);
+    setCodigoRefUnico('');
     setPagosMixtos([
       { metodo: 'Efectivo (Bs)', monto_usd: '' },
       { metodo: 'Pago Móvil', monto_usd: '' }
