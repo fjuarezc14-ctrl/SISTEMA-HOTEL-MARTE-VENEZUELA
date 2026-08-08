@@ -223,9 +223,11 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     const conc = (t.concepto || '').toLowerCase();
     if (t.tipo === 'Egreso') return 'Egreso';
     if (t.origen === 'Market' || conc.includes('tienda') || conc.includes('market')) return 'Market';
+    if (conc.includes('extensión') || conc.includes('extension') || conc.includes('hora extra') || conc.includes('horas extra')) return 'Horas Extra';
     if (conc.includes('checkout') || conc.includes('salida') || conc.includes('check out')) return 'Check Out';
-    if (conc.includes('checkin') || conc.includes('ingreso') || conc.includes('check in') || conc.includes('hospedaje')) return 'Check In';
-    return 'Check In';
+    if (conc.includes('checkin') || conc.includes('ingreso') || conc.includes('check in')) return 'Check In';
+    if (t.origen === 'Hospedaje') return 'Check In';
+    return 'Otro';
   };
 
   // Extraer número de habitación del concepto
@@ -835,6 +837,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                                 t.tipoTransaccion === 'Check In' ? 'bg-emerald-100 text-emerald-700' :
                                 t.tipoTransaccion === 'Check Out' ? 'bg-indigo-100 text-indigo-700' :
                                 t.tipoTransaccion === 'Market' ? 'bg-amber-100 text-amber-700' :
+                                t.tipoTransaccion === 'Horas Extra' ? 'bg-sky-100 text-sky-700' :
                                 'bg-rose-100 text-rose-700'
                               }`}>{t.tipoTransaccion}</span>
                             </td>
