@@ -375,32 +375,22 @@ export default function App() {
   const canAccessTab = (tabName) => {
     if (!user) return false;
     if (user.rol === 'Administrador' || user.rol === 'Super Admin' || user.rol === 'Superadmin') return true;
-    const perms = user.permisos || [];
-    if (tabName === 'dashboard' || tabName === 'habitaciones' || tabName === 'reservas') {
-      return perms.includes(tabName) || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero' || user.rol === 'Limpieza';
+    
+    // Si el usuario tiene permisos configurados explícitamente, respetarlos de forma estricta
+    if (user.permisos && Array.isArray(user.permisos) && user.permisos.length > 0) {
+      return user.permisos.includes(tabName);
     }
-    if (tabName === 'caja' || tabName === 'clientes') {
-      return perms.includes(tabName) || user.rol === 'Supervisor' || user.rol === 'Recepcionista';
-    }
-    if (tabName === 'tickets') {
-      return perms.includes('tickets') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Limpieza' || user.rol === 'Camarero';
-    }
-    if (tabName === 'entregaTurnos') {
-      return perms.includes('entregaTurnos') || user.rol === 'Supervisor' || user.rol === 'Recepcionista';
-    }
-    if (tabName === 'inventarioLenceria') {
-      return perms.includes('inventarioLenceria') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Limpieza';
-    }
-    if (tabName === 'tienda') {
-      return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
-    }
-    if (tabName === 'usuarios') {
-      return user.rol === 'Supervisor' || perms.includes('audit_logs') || perms.includes('usuarios');
-    }
-    if (tabName === 'reportes') {
-      return user.rol === 'Supervisor' || perms.includes('reportes');
-    }
-    return perms.includes(tabName);
+
+    // Permisos por defecto por rol si no se ha configurado una lista personalizada
+    const roleDefaults = {
+      Recepcionista: ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'inventarioLenceria', 'caja', 'tienda', 'clientes'],
+      Supervisor: ['dashboard', 'habitaciones', 'reservas', 'tickets', 'entregaTurnos', 'inventarioLenceria', 'caja', 'tienda', 'clientes', 'usuarios', 'configuracion', 'reportes'],
+      Limpieza: ['dashboard', 'habitaciones', 'tickets', 'inventarioLenceria'],
+      Camarero: ['dashboard', 'habitaciones', 'tienda', 'tickets']
+    };
+
+    const allowedList = roleDefaults[user.rol] || ['dashboard', 'habitaciones'];
+    return allowedList.includes(tabName);
   };
 
   // Self-healing permission redirect (v2 - Fase 1)
@@ -568,10 +558,10 @@ export default function App() {
           if (e.target.closest('button')) setIsMobileMenuOpen(false);
         }}>
           {/* CATEGORÍA 1: OPERACIONES PRINCIPALES */}
-          {user.permisos && user.permisos.some(p => ['dashboard', 'habitaciones', 'reservas', 'entregaTurnos'].includes(p)) && (
+          {['dashboard', 'habitaciones', 'reservas', 'entregaTurnos'].some(t => canAccessTab(t)) && (
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-2 px-2">Operaciones Principales</p>
           )}
-          
+
           {canAccessTab('dashboard') && (
             <button 
               onClick={() => setActiveTab('dashboard')} 
@@ -632,7 +622,7 @@ export default function App() {
           )}
 
           {/* CATEGORÍA 2: FINANZAS Y VENTAS */}
-          {user.permisos && user.permisos.some(p => ['caja', 'tienda', 'reportes'].includes(p)) && (
+          {['caja', 'tienda', 'reportes'].some(t => canAccessTab(t)) && (
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-2">Finanzas & Ventas</p>
           )}
 
@@ -676,7 +666,7 @@ export default function App() {
           )}
 
           {/* CATEGORÍA 3: MANTENIMIENTO Y CONTROL */}
-          {user.permisos && user.permisos.some(p => ['tickets', 'inventarioLenceria'].includes(p)) && (
+          {['tickets', 'inventarioLenceria'].some(t => canAccessTab(t)) && (
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-2">Mantenimiento & Insumos</p>
           )}
 
@@ -714,7 +704,7 @@ export default function App() {
           )}
 
           {/* CATEGORÍA 4: GESTIÓN Y ADMINISTRACIÓN */}
-          {user.permisos && user.permisos.some(p => ['clientes', 'usuarios', 'configuracion'].includes(p)) && (
+          {['clientes', 'usuarios', 'configuracion'].some(t => canAccessTab(t)) && (
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-5 px-2">Gestión & Administración</p>
           )}
 
