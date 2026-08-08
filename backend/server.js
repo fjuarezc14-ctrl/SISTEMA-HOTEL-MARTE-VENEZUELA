@@ -2245,20 +2245,40 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
     const totalUsd = items.reduce((sum, item) => sum + (parseFloat(item.precio_venta) * parseInt(item.cantidad)), 0);
     const saleCode = 'VTA-' + Math.floor(Math.random() * 90000 + 10000);
  
-    // 1. Verify stock for all items
+    // 1. Verify stock for all items (incluyendo promociones/combos)
     for (const item of items) {
       const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
       if (!prod) {
         return res.status(404).json({ error: `El producto "${item.nombre}" ya no existe en el catálogo.` });
       }
-      if (prod.stock < item.cantidad) {
-        return res.status(400).json({ error: `Stock insuficiente para "${item.nombre}". Stock disponible: ${prod.stock}` });
+
+      if (prod.es_combo === 1 && prod.producto_padre_id) {
+        const parentProd = await db.get('SELECT * FROM productos WHERE id = ?', [prod.producto_padre_id]);
+        if (!parentProd) {
+          return res.status(404).json({ error: `El producto base vinculado al combo "${item.nombre}" ya no existe.` });
+        }
+        const requiredParentStock = item.cantidad * (prod.unidades_por_combo || 1);
+        if (parentProd.stock < requiredParentStock) {
+          return res.status(400).json({ 
+            error: `Stock insuficiente de "${parentProd.nombre}" para vender la promoción "${item.nombre}". Stock disponible: ${parentProd.stock} unidades (se requieren ${requiredParentStock}).` 
+          });
+        }
+      } else {
+        if (prod.stock < item.cantidad) {
+          return res.status(400).json({ error: `Stock insuficiente para "${item.nombre}". Stock disponible: ${prod.stock}` });
+        }
       }
     }
- 
-    // Deduct stock
+
+    // Deduct stock (si es combo, se descuenta del producto padre)
     for (const item of items) {
-      await db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [item.cantidad, item.id]);
+      const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
+      if (prod.es_combo === 1 && prod.producto_padre_id) {
+        const totalUnitsToDeduct = item.cantidad * (prod.unidades_por_combo || 1);
+        await db.run('UPDATE productos SET stock = MAX(0, stock - ?) WHERE id = ?', [totalUnitsToDeduct, prod.producto_padre_id]);
+      } else {
+        await db.run('UPDATE productos SET stock = MAX(0, stock - ?) WHERE id = ?', [item.cantidad, item.id]);
+      }
     }
  
     // 2. Prepare payment breakdown & metadata
@@ -2504,7 +2524,7 @@ app.post('/api/productos', requireAuth, async (req, res) => {
   if (!req.user.permisos.includes('configuracion')) {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
-  const { nombre, precio_venta, stock } = req.body;
+  const { nombre, precio_venta, stock, es_combo, producto_padre_id, unidades_por_combo } = req.body;
   if (!nombre || precio_venta === undefined) {
     return res.status(400).json({ error: 'Nombre y precio de venta son obligatorios.' });
   }
@@ -2518,10 +2538,13 @@ app.post('/api/productos', requireAuth, async (req, res) => {
     const id = 'p_' + Date.now();
     const precio = parseFloat(precio_venta) || 0;
     const stk = parseInt(stock) || 0;
+    const isComboVal = es_combo ? 1 : 0;
+    const parentIdVal = isComboVal ? (producto_padre_id || null) : null;
+    const unitsPerComboVal = isComboVal ? (parseInt(unidades_por_combo) || 1) : 1;
 
     await db.run(
-      'INSERT INTO productos (id, nombre, precio_venta, stock) VALUES (?, ?, ?, ?)',
-      [id, nombre.trim(), precio, stk]
+      'INSERT INTO productos (id, nombre, precio_venta, stock, es_combo, producto_padre_id, unidades_por_combo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, nombre.trim(), precio, stk, isComboVal, parentIdVal, unitsPerComboVal]
     );
 
     res.json({ success: true, message: 'Producto agregado al catálogo.' });
@@ -2537,7 +2560,7 @@ app.put('/api/productos/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Catálogo y Tarifas.' });
   }
   const { id } = req.params;
-  const { nombre, precio_venta, stock } = req.body;
+  const { nombre, precio_venta, stock, es_combo, producto_padre_id, unidades_por_combo } = req.body;
 
   try {
     const item = await db.get('SELECT id FROM productos WHERE id = ?', [id]);
@@ -2547,10 +2570,13 @@ app.put('/api/productos/:id', requireAuth, async (req, res) => {
 
     const precio = parseFloat(precio_venta);
     const stk = parseInt(stock);
+    const isComboVal = es_combo ? 1 : 0;
+    const parentIdVal = isComboVal ? (producto_padre_id || null) : null;
+    const unitsPerComboVal = isComboVal ? (parseInt(unidades_por_combo) || 1) : 1;
 
     await db.run(
-      'UPDATE productos SET nombre = ?, precio_venta = ?, stock = ? WHERE id = ?',
-      [nombre.trim(), precio, stk, id]
+      'UPDATE productos SET nombre = ?, precio_venta = ?, stock = ?, es_combo = ?, producto_padre_id = ?, unidades_por_combo = ? WHERE id = ?',
+      [nombre.trim(), precio, stk, isComboVal, parentIdVal, unitsPerComboVal, id]
     );
 
     res.json({ success: true, message: 'Producto actualizado.' });

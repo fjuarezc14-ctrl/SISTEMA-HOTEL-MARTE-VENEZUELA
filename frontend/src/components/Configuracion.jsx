@@ -13,6 +13,11 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
   const [prodStock, setProdStock] = useState('0');
   const [nuevoLote, setNuevoLote] = useState('0');
 
+  // Combo / Pack states
+  const [esCombo, setEsCombo] = useState(false);
+  const [productoPadreId, setProductoPadreId] = useState('');
+  const [unidadesPorCombo, setUnidadesPorCombo] = useState('1');
+
   // Rates edit state
   const [editingRateType, setEditingRateType] = useState(null);
   const [ratePrice, setRatePrice] = useState('');
@@ -39,6 +44,9 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
     setProdPrecio('');
     setProdStock('0');
     setNuevoLote('0');
+    setEsCombo(false);
+    setProductoPadreId('');
+    setUnidadesPorCombo('1');
     setIsProductModalOpen(true);
   };
 
@@ -48,6 +56,9 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
     setProdPrecio(prod.precio_venta.toString());
     setProdStock(prod.stock.toString());
     setNuevoLote('0');
+    setEsCombo(prod.es_combo === 1);
+    setProductoPadreId(prod.producto_padre_id || '');
+    setUnidadesPorCombo((prod.unidades_por_combo || 1).toString());
     setIsProductModalOpen(true);
   };
 
@@ -78,6 +89,10 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
       alert('Por favor ingrese datos válidos.');
       return;
     }
+    if (esCombo && !productoPadreId) {
+      alert('⚠️ Para crear una promoción/combo debe seleccionar el producto base a descontar.');
+      return;
+    }
 
     const baseStock = parseInt(prodStock) || 0;
     const addLote = parseInt(nuevoLote) || 0;
@@ -85,7 +100,10 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
     const payload = {
       nombre: prodNombre.trim(),
       precio_venta: parseFloat(prodPrecio),
-      stock: baseStock + addLote
+      stock: baseStock + addLote,
+      es_combo: esCombo ? 1 : 0,
+      producto_padre_id: esCombo ? productoPadreId : null,
+      unidades_por_combo: esCombo ? (parseInt(unidadesPorCombo) || 1) : 1
     };
 
     try {
@@ -852,6 +870,62 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
                     required
                   />
                 </div>
+              </div>
+
+              {/* Configuración de Combo / Pack Promocional */}
+              <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={esCombo}
+                    onChange={(e) => setEsCombo(e.target.checked)}
+                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+                  />
+                  <span className="text-xs font-black text-amber-950 uppercase">
+                    ⚡ ¿Es una Promoción / Combo? (ej. 4x3)
+                  </span>
+                </label>
+
+                {esCombo && (
+                  <div className="space-y-2 pt-1 border-t border-amber-200/60">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                        Producto Base a Descontar del Stock *
+                      </label>
+                      <select
+                        value={productoPadreId}
+                        onChange={(e) => setProductoPadreId(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white text-slate-800 outline-none focus:ring-1 focus:ring-amber-500"
+                        required={esCombo}
+                      >
+                        <option value="">-- Seleccionar Producto Base --</option>
+                        {productos.filter(p => !p.es_combo && p.id !== editingProduct?.id).map(p => (
+                          <option key={p.id} value={p.id}>
+                            🍺 {p.nombre} (Stock actual: {p.stock} uds.)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                        Unidades a Descontar por cada Combo *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={unidadesPorCombo}
+                        onChange={(e) => setUnidadesPorCombo(e.target.value)}
+                        placeholder="Ej: 4"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-800 bg-white outline-none focus:ring-1 focus:ring-amber-500"
+                        required={esCombo}
+                      />
+                      <p className="text-[9px] text-slate-500 font-semibold mt-1">
+                        Ejemplo: Para "4 Cervezas por el precio de 3", ingrese 4.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {editingProduct && (

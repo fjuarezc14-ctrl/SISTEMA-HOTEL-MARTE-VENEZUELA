@@ -258,7 +258,17 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
               </div>
             ) : (
               filteredProducts.map(prod => {
-                const isOutOfStock = prod.stock <= 0;
+                let realStock = prod.stock;
+                let isComboItem = prod.es_combo === 1 && prod.producto_padre_id;
+                if (isComboItem) {
+                  const parentProd = (productos || []).find(p => p.id === prod.producto_padre_id);
+                  if (parentProd) {
+                    realStock = Math.floor(parentProd.stock / (prod.unidades_por_combo || 1));
+                  } else {
+                    realStock = 0;
+                  }
+                }
+                const isOutOfStock = realStock <= 0;
                 const inCart = cart.find(c => c.id === prod.id);
                 const priceVes = (prod.precio_venta * tasaUsd).toFixed(2);
 
@@ -281,12 +291,16 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                     )}
 
                     <div>
-                      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-base mb-3 group-hover:scale-110 transition-transform">
-                        <i className="fa-solid fa-bottle-water"></i>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base mb-3 group-hover:scale-110 transition-transform ${
+                        isComboItem ? 'bg-amber-500 text-white shadow-xs' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        <i className={isComboItem ? "fa-solid fa-[#c5920c]" : "fa-solid fa-bottle-water"}></i>
                       </div>
-                      <h4 className="font-bold text-slate-800 text-xs line-clamp-2 mb-1">{prod.nombre}</h4>
+                      <h4 className="font-bold text-slate-800 text-xs line-clamp-2 mb-1">
+                        {prod.nombre} {isComboItem && <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded ml-1">PROMO ⚡</span>}
+                      </h4>
                       <p className="text-[10px] text-slate-400 font-medium mb-3">
-                        Stock: <strong className={isOutOfStock ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}>{prod.stock} unids.</strong>
+                        Stock: <strong className={isOutOfStock ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}>{realStock} {isComboItem ? 'combos' : 'unids.'}</strong>
                       </p>
                     </div>
 

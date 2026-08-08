@@ -119,7 +119,10 @@ export async function initDb() {
       id TEXT PRIMARY KEY,
       nombre TEXT UNIQUE NOT NULL,
       precio_venta REAL NOT NULL,
-      stock INTEGER DEFAULT 0
+      stock INTEGER DEFAULT 0,
+      es_combo INTEGER DEFAULT 0,
+      producto_padre_id TEXT DEFAULT NULL,
+      unidades_por_combo INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS tarifas (
@@ -356,6 +359,17 @@ export async function initDb() {
   } catch (e) {}
   try {
     await db.run("ALTER TABLE caja ADD COLUMN monto_ves REAL DEFAULT 0");
+  } catch (e) {}
+
+  // Migraciones para productos (Combo / Packs / Promociones)
+  try {
+    await db.run("ALTER TABLE productos ADD COLUMN es_combo INTEGER DEFAULT 0");
+  } catch (e) {}
+  try {
+    await db.run("ALTER TABLE productos ADD COLUMN producto_padre_id TEXT DEFAULT NULL");
+  } catch (e) {}
+  try {
+    await db.run("ALTER TABLE productos ADD COLUMN unidades_por_combo INTEGER DEFAULT 1");
   } catch (e) {}
 
   await db.run(`
