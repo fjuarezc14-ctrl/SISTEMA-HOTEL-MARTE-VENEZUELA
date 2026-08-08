@@ -623,12 +623,33 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
                           )}
                         </td>
 
-                        <td className={`p-4 text-right font-black ${
-                          t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
-                        }`}>
-                          {t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : ''} ${montoUsdVal.toFixed(2)} USD
-                          <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {montoVesVal}</span>
-                        </td>
+                        {(() => {
+                          const isVesPayment = ['Efectivo (Bs)', 'Efectivo', 'Pago Móvil', 'Punto de Venta'].some(m => cleanMetodo.toLowerCase().includes(m.toLowerCase()));
+                          const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0)
+                            ? parseFloat(t.monto_ves).toFixed(2)
+                            : (montoUsdVal * tasaUsd).toFixed(2);
+                          const sign = t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : '';
+
+                          if (isVesPayment) {
+                            return (
+                              <td className={`p-4 text-right font-black ${
+                                t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
+                              }`}>
+                                {sign} Bs. {displayVes}
+                                <span className="text-[10px] text-slate-400 font-medium block">~ ${montoUsdVal.toFixed(2)} USD</span>
+                              </td>
+                            );
+                          } else {
+                            return (
+                              <td className={`p-4 text-right font-black ${
+                                t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
+                              }`}>
+                                {sign} ${montoUsdVal.toFixed(2)} USD
+                                <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {displayVes}</span>
+                              </td>
+                            );
+                          }
+                        })()}
 
                         <td className="p-4 text-center pr-6">
                           {(currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin') && (
@@ -920,8 +941,8 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
                   <i className="fa-solid fa-money-bill-wave text-emerald-600"></i> Efectivo (Bs):
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myEfectivoVES.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myEfectivoVES * tasaUsd).toFixed(2)}</span>
+                  <span className="font-black text-slate-800 block">Bs. {(myEfectivoVES * tasaUsd).toFixed(2)}</span>
+                  <span className="text-[9px] text-slate-400 block">~ ${myEfectivoVES.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -944,8 +965,8 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
                   <i className="fa-solid fa-mobile-screen-button text-purple-600"></i> Pago Móvil:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myPagoMovil.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myPagoMovil * tasaUsd).toFixed(2)}</span>
+                  <span className="font-black text-slate-800 block">Bs. {(myPagoMovil * tasaUsd).toFixed(2)}</span>
+                  <span className="text-[9px] text-slate-400 block">~ ${myPagoMovil.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -954,8 +975,8 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
                   <i className="fa-solid fa-credit-card text-blue-600"></i> Punto de Venta:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myPuntoVenta.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myPuntoVenta * tasaUsd).toFixed(2)}</span>
+                  <span className="font-black text-slate-800 block">Bs. {(myPuntoVenta * tasaUsd).toFixed(2)}</span>
+                  <span className="text-[9px] text-slate-400 block">~ ${myPuntoVenta.toFixed(2)} USD</span>
                 </div>
               </div>
 
