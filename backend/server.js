@@ -193,10 +193,11 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// GET /api/usuarios - Listar usuarios (Solo Admin)
+// GET /api/usuarios - Listar usuarios (Admin, Super Admin o permiso de usuarios)
 app.get('/api/usuarios', requireAuth, async (req, res) => {
-  if (req.user.rol !== 'Administrador') {
-    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Administrador.' });
+  const isAuthorized = req.user.rol === 'Administrador' || req.user.rol === 'Super Admin' || req.user.rol === 'Superadmin' || (req.user.permisos && req.user.permisos.includes('usuarios'));
+  if (!isAuthorized) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere permiso del módulo Personal y Usuarios.' });
   }
   try {
     const users = await db.all('SELECT id, username, nombre, rol, permisos, activo, hora_inicio, hora_fin FROM usuarios');
