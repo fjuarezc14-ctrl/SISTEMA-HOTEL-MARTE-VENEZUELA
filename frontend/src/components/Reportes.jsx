@@ -821,26 +821,35 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {grupo.txns.map(t => (
-                        <tr key={t.id} className="hover:bg-slate-50">
-                          <td className="p-2.5 font-mono text-[10px]">{t.hora}</td>
-                          <td className="p-2.5 font-semibold">{t.concepto}</td>
-                          <td className="p-2.5">{t.metodo || 'N/A'}</td>
-                          <td className="p-2.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                              t.tipoTransaccion === 'Check In' ? 'bg-emerald-100 text-emerald-700' :
-                              t.tipoTransaccion === 'Check Out' ? 'bg-indigo-100 text-indigo-700' :
-                              t.tipoTransaccion === 'Market' ? 'bg-amber-100 text-amber-700' :
-                              'bg-rose-100 text-rose-700'
-                            }`}>{t.tipoTransaccion}</span>
-                          </td>
-                          <td className="p-2.5 text-right font-bold text-emerald-700">${t.montoNum.toFixed(2)}</td>
-                          <td className="p-2.5 text-right font-bold text-slate-600">Bs. {(t.montoNum * tasaUsd).toFixed(2)}</td>
-                          <td className="p-2.5">{t.usuarioNombre || 'N/A'}</td>
-                          <td className="p-2.5 font-bold">{t.numHab}</td>
-                          <td className="p-2.5">{t.clienteNombre}</td>
-                        </tr>
-                      ))}
+                      {grupo.txns.map(t => {
+                        const isVes = ['Efectivo (Bs)', 'Efectivo', 'Pago Móvil', 'Punto de Venta'].some(m => (t.metodo || '').toLowerCase().includes(m.toLowerCase()));
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-50">
+                            <td className="p-2.5 font-mono text-[10px]">{t.hora}</td>
+                            <td className="p-2.5 font-semibold">{t.concepto}</td>
+                            <td className="p-2.5">
+                              <span className="font-bold text-slate-700">{t.metodo || 'N/A'}</span>
+                            </td>
+                            <td className="p-2.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                t.tipoTransaccion === 'Check In' ? 'bg-emerald-100 text-emerald-700' :
+                                t.tipoTransaccion === 'Check Out' ? 'bg-indigo-100 text-indigo-700' :
+                                t.tipoTransaccion === 'Market' ? 'bg-amber-100 text-amber-700' :
+                                'bg-rose-100 text-rose-700'
+                              }`}>{t.tipoTransaccion}</span>
+                            </td>
+                            <td className={`p-2.5 text-right font-bold ${!isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
+                              ${t.montoNum.toFixed(2)}
+                            </td>
+                            <td className={`p-2.5 text-right font-bold ${isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
+                              Bs. {(t.montoNum * tasaUsd).toFixed(2)}
+                            </td>
+                            <td className="p-2.5">{t.usuarioNombre || 'N/A'}</td>
+                            <td className="p-2.5 font-bold">{t.numHab}</td>
+                            <td className="p-2.5">{t.clienteNombre}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

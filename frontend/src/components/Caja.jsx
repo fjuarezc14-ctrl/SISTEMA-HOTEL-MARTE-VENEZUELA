@@ -154,7 +154,14 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   const saldoNeto = totalIngresos - totalEgresos;
 
   // Shift calculation for current logged in user (by official 5 payment methods)
-  const myMovements = currentUser ? caja.filter(t => t.usuarioId === currentUser.id) : caja;
+  const myMovements = currentUser ? caja.filter(t => {
+    if (t.usuarioId !== currentUser.id) return false;
+    if (t.hora) {
+      const tDate = parseCajaFecha(t.hora);
+      return tDate >= shiftCutoffTime;
+    }
+    return true;
+  }) : caja;
   
   const getMethodTotal = (methodName) => {
     return myMovements
