@@ -374,8 +374,14 @@ export default function App() {
 
   const canAccessTab = (tabName) => {
     if (!user) return false;
-    if (user.rol === 'Administrador') return true;
+    if (user.rol === 'Administrador' || user.rol === 'Super Admin' || user.rol === 'Superadmin') return true;
     const perms = user.permisos || [];
+    if (tabName === 'dashboard' || tabName === 'habitaciones' || tabName === 'reservas') {
+      return perms.includes(tabName) || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero' || user.rol === 'Limpieza';
+    }
+    if (tabName === 'caja' || tabName === 'clientes') {
+      return perms.includes(tabName) || user.rol === 'Supervisor' || user.rol === 'Recepcionista';
+    }
     if (tabName === 'tickets') {
       return perms.includes('tickets') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Limpieza' || user.rol === 'Camarero';
     }
@@ -389,10 +395,10 @@ export default function App() {
       return perms.includes('tienda') || user.rol === 'Supervisor' || user.rol === 'Recepcionista' || user.rol === 'Camarero';
     }
     if (tabName === 'usuarios') {
-      return user.rol === 'Administrador' || user.rol === 'Supervisor' || perms.includes('audit_logs');
+      return user.rol === 'Supervisor' || perms.includes('audit_logs') || perms.includes('usuarios');
     }
     if (tabName === 'reportes') {
-      return user.rol === 'Administrador' || user.rol === 'Supervisor' || perms.includes('reportes');
+      return user.rol === 'Supervisor' || perms.includes('reportes');
     }
     return perms.includes(tabName);
   };
