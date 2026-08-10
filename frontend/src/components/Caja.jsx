@@ -163,9 +163,51 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
     return true;
   }) : caja;
   
+  // BUG 2 FIX: Desglose por método de pago (Efectivo, Tarjeta, Digital) y tipo de moneda (Local/Divisa)
+  // Usa includes() para capturar métodos con referencias (ej: "Pago Móvil - Ref: 123") y desglosa pagos mixtos
   const getMethodTotal = (methodName) => {
     return myMovements
-      .filter(t => t.tipo === 'Ingreso' && (t.metodo === methodName || (methodName === 'Efectivo (Bs)' && t.metodo === 'Efectivo')))
+      .filter(t => {
+        if (t.tipo !== 'Ingreso') return false;
+        const m = (t.metodo || '').toLowerCase();
+        const target = methodName.toLowerCase();
+        // Pago Mixto: desglosar por canal dentro del string
+        if (m.includes('pago mixto')) {
+          if (target.includes('efectivo (bs)') || target === 'efectivo') {
+            return m.includes('efectivo (bs)');
+          }
+          if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) {
+            return m.includes('efectivo ($)');
+          }
+          if (target.includes('pago móvil') || target.includes('pago movil')) {
+            return m.includes('pago móvil') || m.includes('pago movil');
+          }
+          if (target.includes('punto')) {
+            return m.includes('punto');
+          }
+          if (target.includes('zelle')) {
+            return m.includes('zelle');
+          }
+          return false;
+        }
+        // Métodos normales con posible referencia
+        if (target.includes('efectivo (bs)') || target === 'efectivo') {
+          return m.includes('efectivo (bs)') || m === 'efectivo';
+        }
+        if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) {
+          return m.includes('efectivo ($)');
+        }
+        if (target.includes('pago móvil') || target.includes('pago movil')) {
+          return m.includes('pago móvil') || m.includes('pago movil');
+        }
+        if (target.includes('punto')) {
+          return m.includes('punto');
+        }
+        if (target.includes('zelle')) {
+          return m.includes('zelle');
+        }
+        return m.includes(target);
+      })
       .reduce((sum, t) => sum + parseFloat(t.monto), 0);
   };
 
@@ -175,8 +217,8 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   const myDivisasUSD = getMethodTotal('Efectivo ($)');
   const myZelle = getMethodTotal('Zelle');
 
-  // Validation breakdown for shift closure
-  const digitalMovements = myMovements.filter(t => t.tipo === 'Ingreso' && ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(t.metodo));
+  // Validation breakdown for shift closure (BUG 2 FIX: usa isDigitalPayment para capturar métodos con referencias y mixtos)
+  const digitalMovements = myMovements.filter(t => t.tipo === 'Ingreso' && isDigitalPayment(t.metodo));
   const digitalValidadosUsd = digitalMovements.filter(t => t.validado === 1).reduce((s, t) => s + parseFloat(t.monto), 0);
   const digitalPendientesUsd = digitalMovements.filter(t => !t.validado || t.validado === 0).reduce((s, t) => s + parseFloat(t.monto), 0);
 

@@ -266,8 +266,9 @@ export function AsignarDirectoModal({
 
   const basePrice = getBasePrice(room.tipo, modalidad);
   const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
-  const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || (room?.tipo === 'Matrimonial' ? 2.50 : 3.00)) : (room?.tipo === 'Matrimonial' ? 2.50 : 3.00);
-  const extraHoursCostUsd = (modalidad === '4h') ? (horasExtraIniciales * hourlyRate) : 0;
+  // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas (mantiene registro único de la habitación)
+  const hourlyRate = basePrice * 0.5;
+  const extraHoursCostUsd = (modalidad === '4h') ? (basePrice * 0.5 * horasExtraIniciales) : 0;
 
   // Compute total companion surcharges (50% of base stay price for 3rd+ adult guest; $0 for minors)
   const recargoIndividual = basePrice * 0.50;
@@ -2187,7 +2188,11 @@ export function CheckoutModal({
   
   // Find hourly rate for room type
   const roomTarifa = room ? tarifas.find(t => t.tipo === room.tipo) : null;
-  const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || 3.00) : 3.00;
+  // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas (mantiene registro único de la habitación)
+  const basePriceCheckout = roomTarifa
+    ? (parseFloat(roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) || 20)
+    : (room?.tipo === 'Mini Suite' ? 24 : 20);
+  const hourlyRate = basePriceCheckout * 0.5;
   const montoHorasExtras = isExpired ? hoursOverdue * hourlyRate : 0;
 
   useEffect(() => {
@@ -3622,7 +3627,11 @@ export function ExtenderHorasModal({
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
   const roomTarifa = (tarifas || []).find(t => t.tipo === room.tipo);
-  const hourlyRate = roomTarifa ? (parseFloat(roomTarifa.precio_hora_extra_usd) || (room.tipo === 'Matrimonial' ? 2.50 : 3.00)) : (room.tipo === 'Matrimonial' ? 2.50 : 3.00);
+  // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas (mantiene registro único de la habitación)
+  const basePriceExtender = roomTarifa
+    ? (parseFloat(roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) || 20)
+    : (room.tipo === 'Mini Suite' ? 24 : 20);
+  const hourlyRate = basePriceExtender * 0.5;
 
   const totalUsdCalculado = horasAdicionales * hourlyRate;
   const totalVesCalculado = (totalUsdCalculado * tasaUsd).toFixed(2);

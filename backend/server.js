@@ -992,7 +992,6 @@ app.post('/api/habitaciones/:num/extender-horas', requireAuth, async (req, res) 
   const { horasAdicionales, monto, metodo, codigoRef } = req.body;
 
   const numHrs = parseInt(horasAdicionales) || 0;
-  const montoUSD = parseFloat(monto) || 0;
 
   if (numHrs <= 0) {
     return res.status(400).json({ error: 'La cantidad de horas adicionales debe ser mayor a 0.' });
@@ -1006,6 +1005,15 @@ app.post('/api/habitaciones/:num/extender-horas', requireAuth, async (req, res) 
     if (room.estado !== 'Ocupada') {
       return res.status(400).json({ error: 'Solo se pueden extender horas a habitaciones con ocupación activa (Ocupadas).' });
     }
+
+    // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas
+    // Se valida/calcula el monto en backend para mantener registro único de la habitación
+    const tarifaRoom = await db.get('SELECT * FROM tarifas WHERE tipo = ?', [room.tipo]);
+    const basePrecio = tarifaRoom
+      ? (parseFloat(tarifaRoom.precio_pernocta_usd || tarifaRoom.precio_diario) || 20)
+      : (room.tipo === 'Mini Suite' ? 24 : 20);
+    const montoEsperado = basePrecio * 0.5 * numHrs;
+    const montoUSD = (parseFloat(monto) || 0) > 0 ? (parseFloat(monto) || 0) : montoEsperado;
 
     // Calculate new departure date/time
     let currentSalidaDate = room.salida ? new Date(room.salida) : new Date();
