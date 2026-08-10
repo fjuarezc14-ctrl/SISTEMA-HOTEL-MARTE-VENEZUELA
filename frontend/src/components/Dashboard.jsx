@@ -172,6 +172,18 @@ export default function Dashboard({
                       ⚠️ VENCE EN {expStatus.minutesLeft} MIN
                     </span>
                   )}
+                  {expStatus && !expStatus.isExpired && !expStatus.isWarning && (
+                    <span className="block text-[9px] font-black bg-emerald-600 text-white py-0.5 px-1 rounded-md mt-2 uppercase tracking-tight">
+                      ⏱️ Quedan: {(() => {
+                        const hrs = Math.floor(expStatus.minutesLeft / 60);
+                        const mins = expStatus.minutesLeft % 60;
+                        if (hrs > 0) {
+                          return `${hrs}h ${mins}m`;
+                        }
+                        return `${mins}m`;
+                      })()}
+                    </span>
+                  )}
 
                   {h.estado === 'Ocupada' && onOpenExtenderHoras && (
                     <button
