@@ -553,6 +553,25 @@ export async function initDb() {
     await db.run("ALTER TABLE entrega_turnos ADD COLUMN estadoCorreccion TEXT DEFAULT ''");
   } catch (e) { /* Columna ya existe */ }
 
+  // Migraciones autocurativas para la tabla entrega_turnos (Fase 1 - Desgloses y totales)
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN saldoPagoMovil REAL DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN saldoPunto REAL DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN saldoZelle REAL DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+  try {
+    await db.run("ALTER TABLE entrega_turnos ADD COLUMN ventasMarket REAL DEFAULT 0");
+  } catch (e) { /* Columna ya existe */ }
+
+  // Migraciones autocurativas para la tabla habitaciones (Fase 1 - Cambio de modalidad)
+  try {
+    await db.run("ALTER TABLE habitaciones ADD COLUMN modalidad TEXT DEFAULT '4h'");
+  } catch (e) { /* Columna ya existe */ }
+
   // Migraciones autocurativas para la tabla inventario_habitaciones (Requerimiento 3)
   try {
     await db.run("ALTER TABLE inventario_habitaciones ADD COLUMN microondas TEXT DEFAULT 'Operativo'");

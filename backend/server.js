@@ -822,9 +822,9 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
 
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ? 
+       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ?, modalidad = ? 
        WHERE num = ?`,
-      [formattedName, acompText, getFechaHoraActual(), salidaCalculada, clientId, numDoc, numHabitacion]
+      [formattedName, acompText, getFechaHoraActual(), salidaCalculada, clientId, numDoc, modalidad || '4h', numHabitacion]
     );
 
     // 3. Register transaction in Cash register if amount > 0
@@ -1232,7 +1232,7 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     // Update room status to Ocupada with Pernocta checkout time (11:00 AM)
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ? 
+       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ?, modalidad = 'pernocta' 
        WHERE num = ?`,
       [reserva.nombreAcomp || '', getFechaHoraActual(), calcularHoraSalida('pernocta'), reserva.clienteId, clientCi, numHabitacion]
     );
