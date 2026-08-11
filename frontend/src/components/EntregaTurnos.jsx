@@ -1144,18 +1144,18 @@ export default function EntregaTurnos({
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Ventas por Pago Móvil</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoPagoMovil.toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoPagoMovil * tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${(printableReport.saldoPagoMovil / tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">Bs. {printableReport.saldoPagoMovil.toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Ventas por Punto de Venta</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoPunto.toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoPunto * tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">${(printableReport.saldoPunto / tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 text-right font-semibold">Bs. {printableReport.saldoPunto.toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Ventas por Zelle</td>
                     <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoZelle.toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">N/A</td>
+                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoZelle * tasaUsd).toFixed(2)}</td>
                   </tr>
                   <tr className="bg-slate-50 font-black">
                     <td className="p-2 border-r border-black uppercase">Ventas Minimarket / Snacks (Mi Turno)</td>
