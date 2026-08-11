@@ -752,7 +752,7 @@ function getDigitsOnly(str) {
 
 // 2. POST /api/checkin-directo - Process immediate walk-in check-in (v3 - Fase 1)
 app.post('/api/checkin-directo', requireAuth, async (req, res) => {
-  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, comprobante, modalidad, esMenor, fechaNacimientoTitular, horasExtraIniciales } = req.body;
+  const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, codigoVerificacion, comprobante, modalidad, esMenor, fechaNacimientoTitular, horasExtraIniciales } = req.body;
   const numDoc = (ci || dni || '').trim();
 
   if (!numDoc || !nombre || !tel || !numHabitacion) {
@@ -831,6 +831,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     const finalMonto = parseFloat(monto) || 0;
     if (finalMonto > 0) {
       const transactionId = 't_' + Date.now();
+      const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
       await db.run(
         'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
@@ -838,7 +839,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
           'Ingreso', 
           `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidad === 'pernocta' ? 'Pernocta' : '4 Horas'}] - ${comprobante || 'Sin Comprobante'}`, 
           finalMonto, 
-          metodo || 'Efectivo Bolívares', 
+          metodoTexto || 'Efectivo Bolívares', 
           getFechaHoraActual(),
           req.user.id,
           req.user.nombre,

@@ -316,6 +316,10 @@ export function AsignarDirectoModal({
     setSelectedMarketQty(1);
   };
 
+  const handleRemoveMarketItem = (index) => {
+    setMarketItemsCart(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSearchChange = (val) => {
     setSearchQuery(val);
     if (val.trim().length > 1) {
@@ -868,9 +872,19 @@ export function AsignarDirectoModal({
                 {marketItemsCart.length > 0 && (
                   <div className="bg-amber-50 p-2 rounded-xl text-[10px] border border-amber-200">
                     {marketItemsCart.map((item, i) => (
-                      <div key={i} className="flex justify-between py-1 border-b last:border-none border-amber-200 font-bold">
+                      <div key={i} className="flex justify-between items-center py-1 border-b last:border-none border-amber-200 font-bold">
                         <span>{item.cantidad}x {item.nombre}</span>
-                        <span>${(item.precio_venta * item.cantidad).toFixed(2)}</span>
+                        <div className="flex items-center gap-2">
+                          <span>${(item.precio_venta * item.cantidad).toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMarketItem(i)}
+                            className="text-rose-500 hover:text-rose-700 font-black cursor-pointer p-0.5"
+                            title="Eliminar del consumo"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
