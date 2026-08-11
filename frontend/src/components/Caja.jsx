@@ -103,16 +103,14 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
     return isNaN(d.getTime()) ? new Date(0) : d;
   };
 
-  // Calculate active shift cutoff time
-  const lastEntregaUser = (entregaTurnos || []).find(e => e.usuarioSalienteId === currentUser?.id || e.usuarioSalienteNombre === currentUser?.nombre);
-  const lastEntregaDate = lastEntregaUser ? new Date(lastEntregaUser.fechaHoraEntrega) : null;
+  // Calculate active shift cutoff time (Fase 2)
+  const mostRecentDelivery = (entregaTurnos || [])[0];
+  const lastDeliveryDate = mostRecentDelivery ? new Date(mostRecentDelivery.fechaHoraEntrega) : null;
   
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  const shiftCutoffTime = (lastEntregaDate && lastEntregaDate >= startOfToday) 
-    ? lastEntregaDate 
-    : startOfToday;
+  const shiftCutoffTime = lastDeliveryDate ? lastDeliveryDate : startOfToday;
 
   // Filter movements
   let displayedCaja = caja;

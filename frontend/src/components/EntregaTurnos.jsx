@@ -127,9 +127,7 @@ export default function EntregaTurnos({
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  const shiftCutoffTime = (lastDeliveryDate && lastDeliveryDate >= startOfToday) 
-    ? lastDeliveryDate 
-    : startOfToday;
+  const shiftCutoffTime = lastDeliveryDate ? lastDeliveryDate : startOfToday;
 
   const shiftStartTime = shiftCutoffTime;
 
@@ -274,6 +272,10 @@ export default function EntregaTurnos({
         body: JSON.stringify({
           saldoEfectivoUsd: parseFloat(saldoUsd || '0'),
           saldoEfectivoVes: parseFloat(saldoVes || '0'),
+          saldoPagoMovil: parseFloat(saldoPagoMovil || '0'),
+          saldoPunto: parseFloat(saldoPunto || '0'),
+          saldoZelle: parseFloat(saldoZelle || '0'),
+          ventasMarket: parseFloat(myMarketSales || '0'),
           stockSnackbarConteo: stockCounts,
           lenceriaRecepcionConteo: lenceria,
           llavesHerramientasConteo: equipamiento,

@@ -2022,6 +2022,10 @@ app.post('/api/entrega-turnos', requireAuth, async (req, res) => {
   const { 
     saldoEfectivoUsd, 
     saldoEfectivoVes, 
+    saldoPagoMovil,
+    saldoPunto,
+    saldoZelle,
+    ventasMarket,
     stockSnackbarConteo, 
     lenceriaRecepcionConteo, 
     llavesHerramientasConteo, 
@@ -2035,9 +2039,9 @@ app.post('/api/entrega-turnos', requireAuth, async (req, res) => {
     await db.run(
       `INSERT INTO entrega_turnos (
         id, usuarioSalienteId, usuarioSalienteNombre, fechaHoraEntrega, 
-        saldoEfectivoUsd, saldoEfectivoVes, stockSnackbarConteo, 
-        lenceriaRecepcionConteo, llavesHerramientasConteo, novedades, estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        saldoEfectivoUsd, saldoEfectivoVes, saldoPagoMovil, saldoPunto, saldoZelle, ventasMarket,
+        stockSnackbarConteo, lenceriaRecepcionConteo, llavesHerramientasConteo, novedades, estado
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         req.user.id,
@@ -2045,6 +2049,10 @@ app.post('/api/entrega-turnos', requireAuth, async (req, res) => {
         fechaHora,
         parseFloat(saldoEfectivoUsd || 0),
         parseFloat(saldoEfectivoVes || 0),
+        parseFloat(saldoPagoMovil || 0),
+        parseFloat(saldoPunto || 0),
+        parseFloat(saldoZelle || 0),
+        parseFloat(ventasMarket || 0),
         typeof stockSnackbarConteo === 'string' ? stockSnackbarConteo : JSON.stringify(stockSnackbarConteo || {}),
         typeof lenceriaRecepcionConteo === 'string' ? lenceriaRecepcionConteo : JSON.stringify(lenceriaRecepcionConteo || {}),
         typeof llavesHerramientasConteo === 'string' ? llavesHerramientasConteo : JSON.stringify(llavesHerramientasConteo || {}),
