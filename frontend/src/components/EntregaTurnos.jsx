@@ -173,6 +173,43 @@ export default function EntregaTurnos({
   );
 
   const myMarketSales = marketMovements.reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+
+  // Carry-over cash vs active shift cash revenues
+  const shiftCashUSD = myMovements.reduce((sum, t) => {
+    if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo ($)');
+    if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo ($)');
+    return sum;
+  }, 0);
+
+  const shiftCashVES = myMovements.reduce((sum, t) => {
+    if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo (Bs)');
+    if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo (Bs)');
+    return sum;
+  }, 0);
+
+  // Pago Móvil split
+  const pmHospedaje = myMovements
+    .filter(t => t.tipo === 'Ingreso' && t.origen !== 'Market' && !(t.concepto || '').toLowerCase().includes('market') && !(t.concepto || '').toLowerCase().includes('tienda'))
+    .reduce((s, t) => s + getAmountForMethod(t, 'Pago Móvil'), 0);
+  const pmMarket = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
+    .reduce((s, t) => s + getAmountForMethod(t, 'Pago Móvil'), 0);
+
+  // Punto split
+  const ptHospedaje = myMovements
+    .filter(t => t.tipo === 'Ingreso' && t.origen !== 'Market' && !(t.concepto || '').toLowerCase().includes('market') && !(t.concepto || '').toLowerCase().includes('tienda'))
+    .reduce((s, t) => s + getAmountForMethod(t, 'Punto de Venta'), 0);
+  const ptMarket = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
+    .reduce((s, t) => s + getAmountForMethod(t, 'Punto de Venta'), 0);
+
+  // Zelle split
+  const zlHospedaje = myMovements
+    .filter(t => t.tipo === 'Ingreso' && t.origen !== 'Market' && !(t.concepto || '').toLowerCase().includes('market') && !(t.concepto || '').toLowerCase().includes('tienda'))
+    .reduce((s, t) => s + getAmountForMethod(t, 'Zelle'), 0);
+  const zlMarket = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
+    .reduce((s, t) => s + getAmountForMethod(t, 'Zelle'), 0);
   const marketEfectivoUSD = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Efectivo ($)'), 0);
   const marketEfectivoVES = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Efectivo (Bs)'), 0);
   const marketPagoMovil = marketMovements.reduce((s, t) => s + getAmountForMethod(t, 'Pago Móvil'), 0);
@@ -472,6 +509,9 @@ export default function EntregaTurnos({
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-black outline-none bg-slate-100 text-slate-700 cursor-not-allowed"
                     required
                   />
+                  <span className="text-[10px] text-slate-400 font-bold mt-1 block">
+                    💵 Fondo Inicial: ${startCashUsd.toFixed(2)} USD | Ventas Turno: ${shiftCashUSD.toFixed(2)} USD
+                  </span>
                 </div>
  
                 <div>
@@ -487,11 +527,9 @@ export default function EntregaTurnos({
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-black outline-none bg-slate-100 text-slate-700 cursor-not-allowed"
                     required
                   />
-                  {saldoVes && !isNaN(parseFloat(saldoVes)) && (
-                    <span className="text-[10px] text-slate-400 font-bold mt-1 block">
-                      ~ Equivalente: ${(parseFloat(saldoVes) / tasaUsd).toFixed(2)} USD
-                    </span>
-                  )}
+                  <span className="text-[10px] text-slate-400 font-bold mt-1 block">
+                    🇻🇪 Fondo Inicial: Bs. {startCashVes.toFixed(2)} | Ventas Turno: Bs. {(shiftCashVES * tasaUsd).toFixed(2)}
+                  </span>
                 </div>
  
                 {/* Digital Payment Channels Breakdown */}
@@ -508,11 +546,9 @@ export default function EntregaTurnos({
                       placeholder="0.00"
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
-                    {myPagoMovil > 0 && (
-                      <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
-                        ~ Equivalente: ${myPagoMovil.toFixed(2)} USD
-                      </span>
-                    )}
+                    <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
+                      🏨 Hospedaje: Bs. {(pmHospedaje * tasaUsd).toFixed(2)} | 🛒 Market: Bs. {(pmMarket * tasaUsd).toFixed(2)}
+                    </span>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-indigo-900 mb-1">Total Punto de Venta Recibido (Bs. VES)</label>
@@ -526,11 +562,9 @@ export default function EntregaTurnos({
                       placeholder="0.00"
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
-                    {myPunto > 0 && (
-                      <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
-                        ~ Equivalente: ${myPunto.toFixed(2)} USD
-                      </span>
-                    )}
+                    <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
+                      🏨 Hospedaje: Bs. {(ptHospedaje * tasaUsd).toFixed(2)} | 🛒 Market: Bs. {(ptMarket * tasaUsd).toFixed(2)}
+                    </span>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-indigo-900 mb-1">Total Zelle Recibido ($ USD)</label>
@@ -544,11 +578,9 @@ export default function EntregaTurnos({
                       placeholder="0.00"
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
-                    {myZelle > 0 && (
-                      <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
-                        ~ Equivalente: Bs. {(myZelle * tasaUsd).toFixed(2)}
-                      </span>
-                    )}
+                    <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
+                      🏨 Hospedaje: ${zlHospedaje.toFixed(2)} USD | 🛒 Market: ${zlMarket.toFixed(2)} USD
+                    </span>
                   </div>
                 </div>
               </div>
