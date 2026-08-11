@@ -222,11 +222,17 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const getTipoTransaccion = (t) => {
     const conc = (t.concepto || '').toLowerCase();
     if (t.tipo === 'Egreso') return 'Egreso';
-    if (t.origen === 'Market' || conc.includes('tienda') || conc.includes('market')) return 'Market';
+    if (t.origen === 'Market' || conc.includes('tienda') || conc.includes('market') || conc.includes('venta market')) return 'Market';
     if (conc.includes('extensión') || conc.includes('extension') || conc.includes('hora extra') || conc.includes('horas extra')) return 'Horas Extra';
-    if (conc.includes('checkout') || conc.includes('salida') || conc.includes('check out')) return 'Check Out';
-    if (conc.includes('checkin') || conc.includes('ingreso') || conc.includes('check in')) return 'Check In';
-    if (t.origen === 'Hospedaje') return 'Check In';
+    if (conc.includes('checkout') || conc.includes('check-out') || conc.includes('salida') || conc.includes('check out') || conc.includes('cobro saldo pendiente') || conc.includes('consumos extras') || conc.includes('penalidad')) {
+      return 'Check Out';
+    }
+    if (conc.includes('checkin') || conc.includes('check-in') || conc.includes('check in') || conc.includes('ingreso') || conc.includes('adelanto reserva') || conc.includes('hospedaje')) {
+      return 'Check In';
+    }
+    if (t.origen === 'Hospedaje') {
+      return 'Check In';
+    }
     return 'Otro';
   };
 
@@ -332,12 +338,35 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return { turno, txns, ingresos, egresos, checkIns, checkOuts, market, total: ingresos - egresos };
   }).filter(g => g.txns.length > 0);
 
-  // Totales generales
   const totalIngresosRecep = recepTransactions.filter(t => t.tipo === 'Ingreso').reduce((s, t) => s + t.montoNum, 0);
   const totalEgresosRecep = recepTransactions.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + t.montoNum, 0);
   const totalCheckIns = recepTransactions.filter(t => t.tipoTransaccion === 'Check In').length;
   const totalCheckOuts = recepTransactions.filter(t => t.tipoTransaccion === 'Check Out').length;
   const totalMarketRecep = recepTransactions.filter(t => t.tipoTransaccion === 'Market').reduce((s, t) => s + t.montoNum, 0);
+
+  const getMethodTotalRecep = (methodName) => {
+    return recepTransactions
+      .filter(t => {
+        if (t.tipo !== 'Ingreso') return false;
+        const m = (t.metodo || '').toLowerCase();
+        const target = methodName.toLowerCase();
+        if (m.includes('pago mixto')) {
+          if (target.includes('efectivo (bs)') || target === 'efectivo') return m.includes('efectivo (bs)');
+          if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) return m.includes('efectivo ($)');
+          if (target.includes('pago móvil') || target.includes('pago movil')) return m.includes('pago móvil') || m.includes('pago movil');
+          if (target.includes('punto')) return m.includes('punto');
+          if (target.includes('zelle')) return m.includes('zelle');
+          return false;
+        }
+        if (target.includes('efectivo (bs)') || target === 'efectivo') return m.includes('efectivo (bs)') || m === 'efectivo';
+        if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) return m.includes('efectivo ($)');
+        if (target.includes('pago móvil') || target.includes('pago movil')) return m.includes('pago móvil') || m.includes('pago movil');
+        if (target.includes('punto')) return m.includes('punto');
+        if (target.includes('zelle')) return m.includes('zelle');
+        return m.includes(target);
+      })
+      .reduce((sum, t) => sum + t.montoNum, 0);
+  };
 
   // Lista de métodos de pago únicos para el filtro
   const metodosList = Array.from(new Set(safeCaja.map(t => t?.metodo).filter(Boolean)));
@@ -747,6 +776,45 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
               <p className="text-[10px] font-bold text-amber-600 uppercase">Total Market</p>
               <p className="text-xl font-black text-slate-800">${totalMarketRecep.toFixed(2)}</p>
               <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(totalMarketRecep * tasaUsd).toFixed(2)}</p>
+            </div>
+          </div>
+
+          {/* Desglose por Método de Pago en el Reporte */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 my-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-money-bill-wave text-emerald-600 mr-1"></i> Efectivo (Bs)</span>
+              <div>
+                <span className="font-black text-slate-800 text-sm block">Bs. {(getMethodTotalRecep('Efectivo (Bs)') * tasaUsd).toFixed(2)}</span>
+                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Efectivo (Bs)').toFixed(2)} USD</span>
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-dollar-sign text-amber-600 mr-1"></i> Efectivo ($)</span>
+              <div>
+                <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Efectivo ($)').toFixed(2)} USD</span>
+                <span className="text-[9px] text-slate-400 block">~ Bs. {(getMethodTotalRecep('Efectivo ($)') * tasaUsd).toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-mobile-screen-button text-purple-600 mr-1"></i> Pago Móvil</span>
+              <div>
+                <span className="font-black text-slate-800 text-sm block">Bs. {(getMethodTotalRecep('Pago Móvil') * tasaUsd).toFixed(2)}</span>
+                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Pago Móvil').toFixed(2)} USD</span>
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-credit-card text-blue-600 mr-1"></i> Punto de Venta</span>
+              <div>
+                <span className="font-black text-slate-800 text-sm block">Bs. {(getMethodTotalRecep('Punto de Venta') * tasaUsd).toFixed(2)}</span>
+                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Punto de Venta').toFixed(2)} USD</span>
+              </div>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-coins text-amber-500 mr-1"></i> Zelle</span>
+              <div>
+                <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Zelle').toFixed(2)} USD</span>
+                <span className="text-[9px] text-slate-400 block">~ Bs. {(getMethodTotalRecep('Zelle') * tasaUsd).toFixed(2)}</span>
+              </div>
             </div>
           </div>
 

@@ -760,6 +760,15 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   }
 
   try {
+    // 0. Verify room exists and is available
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [numHabitacion]);
+    if (!room) {
+      return res.status(404).json({ error: `La habitación ${numHabitacion} no existe.` });
+    }
+    if (room.estado !== 'Libre' && room.estado !== 'Reservada') {
+      return res.status(400).json({ error: `La habitación ${numHabitacion} ya no está disponible (Estado actual: ${room.estado}).` });
+    }
+
     // 1. Check if client exists (robust digit-based CI matching)
     const digitsDoc = getDigitsOnly(numDoc);
     const allClients = await db.all('SELECT * FROM clientes');
