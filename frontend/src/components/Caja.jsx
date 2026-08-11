@@ -209,10 +209,13 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
       .reduce((sum, t) => sum + parseFloat(t.monto), 0);
   };
 
-  const myEfectivoVES = getMethodTotal('Efectivo (Bs)');
+  const startCashUsd = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoUsd || 0) : 0;
+  const startCashVes = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoVes || 0) : 0;
+
+  const myEfectivoVES = (startCashVes / tasaUsd) + getMethodTotal('Efectivo (Bs)');
   const myPagoMovil = getMethodTotal('Pago Móvil');
   const myPuntoVenta = getMethodTotal('Punto de Venta');
-  const myDivisasUSD = getMethodTotal('Efectivo ($)');
+  const myDivisasUSD = startCashUsd + getMethodTotal('Efectivo ($)');
   const myZelle = getMethodTotal('Zelle');
 
   // Validation breakdown for shift closure (BUG 2 FIX: usa isDigitalPayment para capturar métodos con referencias y mixtos)

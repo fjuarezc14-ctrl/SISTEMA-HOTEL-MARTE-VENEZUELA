@@ -140,13 +140,17 @@ export default function EntregaTurnos({
     return true;
   });
   
-  const myEfectivoUSD = myMovements.reduce((sum, t) => {
+  // Carry over cash from the most recent delivery (if any)
+  const startCashUsd = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoUsd || 0) : 0;
+  const startCashVes = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoVes || 0) : 0;
+
+  const myEfectivoUSD = startCashUsd + myMovements.reduce((sum, t) => {
     if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo ($)');
     if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo ($)');
     return sum;
   }, 0);
 
-  const myEfectivoVES = myMovements.reduce((sum, t) => {
+  const myEfectivoVES = (startCashVes / tasaUsd) + myMovements.reduce((sum, t) => {
     if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo (Bs)');
     if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo (Bs)');
     return sum;
@@ -242,11 +246,11 @@ export default function EntregaTurnos({
       estado: t.estado,
       saldoUsd: parseFloat(t.saldoEfectivoUsd) || 0,
       saldoVes: parseFloat(t.saldoEfectivoVes) || 0,
-      saldoPagoMovil: 0,
-      saldoPunto: 0,
-      saldoZelle: 0,
+      saldoPagoMovil: parseFloat(t.saldoPagoMovil) || 0,
+      saldoPunto: parseFloat(t.saldoPunto) || 0,
+      saldoZelle: parseFloat(t.saldoZelle) || 0,
       esperadoUsd: parseFloat(t.saldoEfectivoUsd) || 0,
-      ventasMarket: 0,
+      ventasMarket: parseFloat(t.ventasMarket) || 0,
       lenceria: lenceriaObj,
       equipamiento: equipObj,
       novedades: t.novedades || 'Sin novedades',
@@ -806,7 +810,7 @@ export default function EntregaTurnos({
                       </div>
 
                       {/* Cash Breakdown */}
-                      <div className="grid grid-cols-2 gap-3 my-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 my-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
                         <div>
                           <span className="text-[10px] text-slate-400 font-bold uppercase block">Efectivo ($ USD)</span>
                           <span className="font-black text-slate-800 text-sm">${t.saldoEfectivoUsd.toFixed(2)}</span>
@@ -814,6 +818,22 @@ export default function EntregaTurnos({
                         <div>
                           <span className="text-[10px] text-slate-400 font-bold uppercase block">Efectivo (Bs. VES)</span>
                           <span className="font-black text-slate-800 text-sm">Bs. {t.saldoEfectivoVes.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Pago Móvil (Bs. VES)</span>
+                          <span className="font-black text-slate-800 text-sm">Bs. {(t.saldoPagoMovil || 0).toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Punto de Venta (Bs. VES)</span>
+                          <span className="font-black text-slate-800 text-sm">Bs. {(t.saldoPunto || 0).toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Zelle ($ USD)</span>
+                          <span className="font-black text-slate-800 text-sm">${(t.saldoZelle || 0).toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-amber-700 font-black uppercase block">Ventas Market (Bs. VES)</span>
+                          <span className="font-black text-amber-900 text-sm">Bs. {((t.ventasMarket || 0) * tasaUsd).toFixed(2)}</span>
                         </div>
                       </div>
 
@@ -945,12 +965,16 @@ export default function EntregaTurnos({
               </button>
             </div>
 
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Recepcionista Saliente</p>
-              <p className="font-black text-slate-800 text-sm">{selectedEntrega.usuarioSalienteNombre}</p>
-              <p className="text-[10px] text-slate-500 font-semibold">
-                Declaró: ${selectedEntrega.saldoEfectivoUsd.toFixed(2)} USD / Bs. {selectedEntrega.saldoEfectivoVes.toFixed(2)}
-              </p>
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Declaración del Recepcionista Saliente ({selectedEntrega.usuarioSalienteNombre})</p>
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-700">
+                <div>• Efectivo ($): <strong>${selectedEntrega.saldoEfectivoUsd.toFixed(2)} USD</strong></div>
+                <div>• Efectivo (Bs): <strong>Bs. {selectedEntrega.saldoEfectivoVes.toFixed(2)}</strong></div>
+                <div>• Pago Móvil: <strong>Bs. {(selectedEntrega.saldoPagoMovil || 0).toFixed(2)}</strong></div>
+                <div>• Punto (POS): <strong>Bs. {(selectedEntrega.saldoPunto || 0).toFixed(2)}</strong></div>
+                <div>• Zelle ($): <strong>${(selectedEntrega.saldoZelle || 0).toFixed(2)} USD</strong></div>
+                <div>• Ventas Market: <strong>Bs. {((selectedEntrega.ventasMarket || 0) * tasaUsd).toFixed(2)}</strong></div>
+              </div>
             </div>
 
             <div>
