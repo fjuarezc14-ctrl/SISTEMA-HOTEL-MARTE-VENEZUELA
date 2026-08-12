@@ -2791,6 +2791,40 @@ app.post('/api/clientes', requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/clientes/:id - Editar detalles del cliente (Nombre, CI, Tel, Fecha Nacimiento, Foto CI)
+app.put('/api/clientes/:id', requireAuth, async (req, res) => {
+  if (!req.user.permisos.includes('clientes')) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Clientes.' });
+  }
+
+  const { id } = req.params;
+  const { nombre, ci, dni, tel, foto_ci, fechaNacimiento } = req.body;
+  const numDoc = (ci || dni || '').trim();
+
+  if (!nombre || !numDoc) {
+    return res.status(400).json({ error: 'El nombre y la Cédula (CI) son obligatorios.' });
+  }
+
+  try {
+    const duplicate = await db.get('SELECT id FROM clientes WHERE (ci = ? OR dni = ?) AND id != ?', [numDoc, numDoc, id]);
+    if (duplicate) {
+      return res.status(400).json({ error: 'Ya existe otro cliente registrado con esta Cédula (CI).' });
+    }
+
+    await db.run(
+      'UPDATE clientes SET nombre = ?, dni = ?, ci = ?, tel = ?, foto_ci = ?, fechaNacimiento = ? WHERE id = ?',
+      [nombre.trim(), numDoc, numDoc, tel ? tel.trim() : '', foto_ci || '', fechaNacimiento || '', id]
+    );
+
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Cliente Editado CRM', `Cliente ${nombre.trim()} (CI: ${numDoc}) editado`, req.ip);
+
+    res.json({ success: true, message: 'Cliente actualizado correctamente.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al actualizar cliente.' });
+  }
+});
+
 // Global Error Handler for Payload & Syntax errors
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large' || err.status === 413) {

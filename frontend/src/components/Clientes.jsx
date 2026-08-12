@@ -12,6 +12,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const [tel, setTel] = useState('');
   const [fotoCi, setFotoCi] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
+  const [selectedEditClient, setSelectedEditClient] = useState(null);
   
   // Webcam state
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
@@ -32,6 +33,23 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [photoInput, setPhotoInput] = useState('');
 
+  const calcularEdad = (fechaStr) => {
+    if (!fechaStr) return null;
+    try {
+      const birth = new Date(fechaStr);
+      if (isNaN(birth.getTime())) return null;
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      return age;
+    } catch (e) {
+      return null;
+    }
+  };
+
   const filteredClientes = clientes.filter(c => {
     const matchesSearch = 
       c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -47,11 +65,22 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   });
 
   const handleOpenModal = () => {
+    setSelectedEditClient(null);
     setNombre('');
     setCi('');
     setTel('');
     setFotoCi('');
     setFechaNacimiento('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (client) => {
+    setSelectedEditClient(client);
+    setNombre(client.nombre || '');
+    setCi(client.ci || client.dni || '');
+    setTel(client.tel || '');
+    setFotoCi(client.foto_ci || '');
+    setFechaNacimiento(client.fechaNacimiento || '');
     setIsModalOpen(true);
   };
 
@@ -70,8 +99,12 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
     }
 
     try {
-      const res = await fetch('/api/clientes', {
-        method: 'POST',
+      const isEditing = !!selectedEditClient;
+      const url = isEditing ? `/api/clientes/${selectedEditClient.id}` : '/api/clientes';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -87,10 +120,11 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al registrar cliente');
+      if (!res.ok) throw new Error(data.error || 'Error al guardar cliente');
 
-      alert('✅ Cliente registrado exitosamente en el CRM.');
+      alert(isEditing ? '✅ Cliente actualizado exitosamente.' : '✅ Cliente registrado exitosamente en el CRM.');
       setIsModalOpen(false);
+      setSelectedEditClient(null);
       onStateChange();
     } catch (err) {
       alert(`⚠️ Error: ${err.message}`);
@@ -293,9 +327,15 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
                         <h4 className="text-base font-bold text-slate-800 leading-tight flex items-center gap-1.5">
                           {c.nombre}
                         </h4>
-                        <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                          CI: <span className="text-slate-700 font-bold">{c.ci || c.dni}</span>
-                        </p>
+                        <div className="flex flex-col text-xs text-slate-400 font-semibold mt-0.5 space-y-0.5">
+                          <div>CI: <span className="text-slate-700 font-bold">{c.ci || c.dni}</span></div>
+                          {c.fechaNacimiento && (
+                            <div>
+                              Edad: <span className="text-slate-700 font-black">{calcularEdad(c.fechaNacimiento)} años</span>
+                              <span className="text-[10px] text-slate-400 font-normal ml-1">({c.fechaNacimiento})</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
@@ -338,6 +378,14 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
 
                   <div className="flex gap-2">
                     <button
+                      onClick={() => handleOpenEditModal(c)}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition-colors"
+                      title="Editar datos del cliente"
+                    >
+                      <i className="fa-solid fa-pen-to-square"></i> Editar
+                    </button>
+
+                    <button
                       onClick={() => handleOpenPhotoModal(c)}
                       className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors"
                       title="Adjuntar o ver foto de CI"
@@ -375,7 +423,8 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 fade-in">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
               <h3 className="text-md font-bold text-slate-800">
-                <i className="fa-solid fa-user-plus text-[#ff331f] mr-2"></i> Registrar Cliente CRM
+                <i className="fa-solid fa-user-pen text-[#ff331f] mr-2"></i>
+                {selectedEditClient ? 'Editar Cliente CRM' : 'Registrar Cliente CRM'}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-rose-500">
                 <i className="fa-solid fa-xmark text-lg"></i>
@@ -470,7 +519,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
                   type="submit"
                   className="flex-1 bg-[#ff331f] hover:bg-[#e02816] text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md"
                 >
-                  Registrar
+                  {selectedEditClient ? 'Guardar' : 'Registrar'}
                 </button>
               </div>
             </form>
