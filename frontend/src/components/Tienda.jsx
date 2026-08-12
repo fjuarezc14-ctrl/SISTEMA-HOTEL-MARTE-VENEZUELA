@@ -734,7 +734,7 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
               <div className="space-y-1 text-[11px]">
                 {ticketModal.items.map(item => (
                   <div key={item.id} className="flex justify-between items-center">
-                    <span>{item.cantidad}x {item.nombre}</span>
+                    <span>{item.cantidad} Unid. - {item.nombre}</span>
                     <span className="font-bold">${(item.precio_venta * item.cantidad).toFixed(2)}</span>
                   </div>
                 ))}

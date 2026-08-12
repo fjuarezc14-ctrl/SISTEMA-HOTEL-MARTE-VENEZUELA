@@ -929,7 +929,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
         const cant = parseInt(mItem.cantidad) || 1;
         const price = parseFloat(mItem.precio_venta) || 0;
         totalMarketSale += price * cant;
-        conceptList.push(`${cant}x ${mItem.nombre}`);
+        conceptList.push(`${cant} Unid. - ${mItem.nombre}`);
         if (mItem.id) {
           await db.run('UPDATE productos SET stock = MAX(0, stock - ?) WHERE id = ?', [cant, mItem.id]);
         }
@@ -2389,7 +2389,7 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
     for (const item of items) {
       const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
       const qtyToDisplay = prod && prod.es_combo === 1 ? (parseInt(item.cantidad) * (prod.unidades_por_combo || 1)) : parseInt(item.cantidad);
-      conceptoItemsList.push(`${qtyToDisplay}x ${item.nombre}`);
+      conceptoItemsList.push(`${qtyToDisplay} Unid. - ${item.nombre}`);
     }
     let conceptoItems = conceptoItemsList.join(', ');
 

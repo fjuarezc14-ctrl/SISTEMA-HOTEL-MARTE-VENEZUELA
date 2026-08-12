@@ -874,7 +874,7 @@ export function AsignarDirectoModal({
                   <div className="bg-amber-50 p-2 rounded-xl text-[10px] border border-amber-200">
                     {marketItemsCart.map((item, i) => (
                       <div key={i} className="flex justify-between items-center py-1 border-b last:border-none border-amber-200 font-bold">
-                        <span>{item.cantidad}x {item.nombre}</span>
+                        <span>{item.cantidad} Unid. - {item.nombre}</span>
                         <div className="flex items-center gap-2">
                           <span>${(item.precio_venta * item.cantidad).toFixed(2)}</span>
                           <button
@@ -3246,7 +3246,7 @@ export function DetalleHabitacionOcupadaModal({
                 {roomConsumos.map(c => (
                   <div key={c.id} className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">{c.cantidad}x</span>
+                      <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">{c.cantidad} Unid.</span>
                       <span>{c.concepto}</span>
                       <span className="text-slate-400 font-medium">({c.fecha})</span>
                       {c.estado === 'pagado_inmediato' && (
