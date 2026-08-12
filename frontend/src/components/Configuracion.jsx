@@ -824,17 +824,14 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                  Nombre del Producto {editingProduct && !isAdmin && <span className="text-[9px] text-amber-600 font-normal">(Seleccionado del catálogo)</span>}
+                  Nombre del Producto *
                 </label>
                 <input 
                   type="text" 
                   value={prodNombre}
                   onChange={(e) => setProdNombre(e.target.value)}
-                  readOnly={editingProduct && !isAdmin}
                   placeholder="Ej: Cerveza Pilsen 350ml"
-                  className={`w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold ${
-                    editingProduct && !isAdmin ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
-                  }`}
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-semibold bg-white text-slate-800"
                   required
                 />
               </div>
@@ -927,7 +924,7 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
                 )}
               </div>
 
-              {editingProduct && (
+              {editingProduct && !esCombo && (
                 <div className="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-200 space-y-1">
                   <label className="block text-xs font-bold text-emerald-800 uppercase">
                     <i className="fa-solid fa-[#c5920c] fa-box-archive mr-1"></i> Agregar Nuevo Lote (+ Cantidad)
