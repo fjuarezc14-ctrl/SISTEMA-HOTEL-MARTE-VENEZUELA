@@ -1017,6 +1017,9 @@ export default function App() {
         room={selectedRoom}
         consumos={appState.consumos}
         productos={appState.productos}
+        tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
+        token={token}
+        onSubmitSuccess={fetchState}
         onClose={() => setIsDetalleOcupadaOpen(false)}
         onAddConsumo={handleConsumoSubmit}
         onDeleteConsumo={handleConsumoDelete}

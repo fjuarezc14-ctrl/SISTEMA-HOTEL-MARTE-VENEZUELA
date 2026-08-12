@@ -726,6 +726,71 @@ app.put('/api/habitaciones/:num', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/habitaciones/:num/cambiar-modalidad', requireAuth, async (req, res) => {
+  const { num } = req.params;
+  const { montoDiferencia, metodo, codigoVerificacion, comprobante } = req.body;
+
+  try {
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [num]);
+    if (!room) {
+      return res.status(404).json({ error: `La habitación ${num} no existe.` });
+    }
+    if (room.estado !== 'Ocupada') {
+      return res.status(400).json({ error: `La habitación ${num} no está ocupada (Estado actual: ${room.estado}).` });
+    }
+    if (room.modalidad === 'pernocta') {
+      return res.status(400).json({ error: `La habitación ${num} ya se encuentra en modalidad Pernocta.` });
+    }
+
+    // 1. Calculate check-out time for Pernocta (11:00 AM next day)
+    const salidaCalculada = calcularHoraSalida('pernocta');
+
+    // 2. Update room modality and checkout time
+    await db.run(
+      `UPDATE habitaciones 
+       SET modalidad = 'pernocta', salida = ? 
+       WHERE num = ?`,
+      [salidaCalculada, num]
+    );
+
+    // 3. Register transaction in Cash register if amount > 0
+    const finalMonto = parseFloat(montoDiferencia) || 0;
+    if (finalMonto > 0) {
+      const transactionId = 't_' + Date.now();
+      const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          transactionId, 
+          'Ingreso', 
+          `Hospedaje Cambio de Modalidad a Pernocta Hab ${num} (${room.huesped || 'Huésped'}) - ${comprobante || 'Sin Comprobante'}`, 
+          finalMonto, 
+          metodoTexto || 'Efectivo Bolívares', 
+          getFechaHoraActual(),
+          req.user.id,
+          req.user.nombre,
+          'Hospedaje'
+        ]
+      );
+    }
+
+    // 4. Log audit trail
+    await registrarAuditoria(
+      req.user.id, 
+      req.user.nombre, 
+      req.user.rol, 
+      'Cambio Modalidad', 
+      `Cambio de modalidad a Pernocta en Hab #${num} (${room.huesped || 'Huésped'}). Salida: ${salidaCalculada}. Diferencia pagada: $${finalMonto.toFixed(2)} USD`, 
+      req.ip
+    );
+
+    res.json({ success: true, message: `Modalidad de habitación #${num} cambiada a Pernocta correctamente.` });
+  } catch (error) {
+    console.error('Error changing modality:', error);
+    res.status(500).json({ error: 'Error al cambiar la modalidad de estadía.' });
+  }
+});
+
 // Helper: Calcular hora de salida según modalidad (4 Horas + Horas Extra iniciales o Pernocta 11:00 AM)
 function calcularHoraSalida(modalidad, horasExtraUpfront = 0) {
   const now = new Date();

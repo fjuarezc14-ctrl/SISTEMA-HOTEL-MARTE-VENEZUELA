@@ -2946,6 +2946,9 @@ export function DetalleHabitacionOcupadaModal({
   room,
   consumos = [],
   productos = [],
+  tasaUsd = 50.00,
+  token = '',
+  onSubmitSuccess,
   onClose,
   onAddConsumo,
   onDeleteConsumo,
@@ -2958,6 +2961,53 @@ export function DetalleHabitacionOcupadaModal({
   const [cantidad, setCantidad] = useState(1);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // States for changing modality to pernocta
+  const [showPernoctaForm, setShowPernoctaForm] = useState(false);
+  const [montoDiferencia, setMontoDiferencia] = useState('');
+  const [metodoPernocta, setMetodoPernocta] = useState('Efectivo ($)');
+  const [codigoVerificacionPernocta, setCodigoVerificacionPernocta] = useState('');
+  const [comprobantePernocta, setComprobantePernocta] = useState('Sin Comprobante');
+  const [isSubmittingPernocta, setIsSubmittingPernocta] = useState(false);
+
+  const handleChangeModalidadPernocta = async (e) => {
+    e.preventDefault();
+    if (isSubmittingPernocta) return;
+    setIsSubmittingPernocta(true);
+
+    try {
+      const response = await fetch(`/api/habitaciones/${room.num}/cambiar-modalidad`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          montoDiferencia: parseFloat(montoDiferencia) || 0,
+          metodo: metodoPernocta,
+          codigoVerificacion: ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPernocta) ? codigoVerificacionPernocta : '',
+          comprobante: comprobantePernocta
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al cambiar la modalidad.');
+      }
+
+      alert(`✅ Habitación #${room.num} cambiada a Pernocta exitosamente.`);
+      setShowPernoctaForm(false);
+      setMontoDiferencia('');
+      setCodigoVerificacionPernocta('');
+      if (onSubmitSuccess) onSubmitSuccess();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert(`❌ Error: ${err.message}`);
+    } finally {
+      setIsSubmittingPernocta(false);
+    }
+  };
 
   const filteredProducts = productos.filter(p => 
     p.nombre.toLowerCase().includes(concepto.toLowerCase())
@@ -3034,6 +3084,8 @@ export function DetalleHabitacionOcupadaModal({
             <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-600 font-semibold">
               <div><span className="text-slate-400">Tipo Hab:</span> {room.tipo}</div>
               <div><span className="text-slate-400">Ingreso:</span> {room.ingreso || 'N/A'}</div>
+              <div><span className="text-slate-400">Modalidad:</span> <strong className="text-emerald-700 uppercase">{room.modalidad === 'pernocta' ? 'Pernocta' : 'Por Horas (4h)'}</strong></div>
+              <div><span className="text-slate-400">Salida Programada:</span> {room.salida || 'N/A'}</div>
               {room.acomp && <div className="col-span-2"><span className="text-slate-400">Acompañante(s):</span> {room.acomp}</div>}
             </div>
 
@@ -3061,6 +3113,108 @@ export function DetalleHabitacionOcupadaModal({
               >
                 <i className="fa-solid fa-clock"></i> ➕ Agregar Horas Extra / Extender Estadía
               </button>
+            )}
+
+            {room.modalidad !== 'pernocta' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPernoctaForm(!showPernoctaForm);
+                }}
+                className="w-full mt-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+              >
+                <i className="fa-solid fa-moon"></i> 🌙 Cambiar / Mejorar a Pernocta
+              </button>
+            )}
+
+            {showPernoctaForm && room.modalidad !== 'pernocta' && (
+              <form onSubmit={handleChangeModalidadPernocta} className="mt-3 p-3 bg-emerald-50 rounded-xl border border-emerald-200 space-y-3 fade-in text-xs">
+                <div className="flex justify-between items-center border-b border-emerald-200/60 pb-1">
+                  <span className="font-black text-emerald-950 uppercase text-[10px]">
+                    <i className="fa-solid fa-moon mr-1"></i> Formulario de Cambio a Pernocta
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPernoctaForm(false)} 
+                    className="text-emerald-700 hover:text-rose-500 font-bold"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-800 uppercase mb-0.5">Diferencia Tarifa ($ USD) *</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      required
+                      value={montoDiferencia}
+                      onChange={(e) => setMontoDiferencia(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 rounded border border-emerald-300 bg-white text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-800 uppercase mb-0.5">Equivalente (Bs. VES)</label>
+                    <div className="w-full px-2.5 py-1.5 rounded border border-emerald-200 bg-emerald-100/50 text-xs font-black text-emerald-900 mt-0.5">
+                      Bs. {((parseFloat(montoDiferencia) || 0) * tasaUsd).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-800 uppercase mb-0.5">Método de Pago</label>
+                    <select
+                      value={metodoPernocta}
+                      onChange={(e) => setMetodoPernocta(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded border border-emerald-300 bg-white text-xs font-bold text-slate-800"
+                    >
+                      <option value="Efectivo ($)">Efectivo ($)</option>
+                      <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                      <option value="Pago Móvil">Pago Móvil</option>
+                      <option value="Punto de Venta">Punto de Venta</option>
+                      <option value="Zelle">Zelle</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-800 uppercase mb-0.5">Comprobante</label>
+                    <select
+                      value={comprobantePernocta}
+                      onChange={(e) => setComprobantePernocta(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded border border-emerald-300 bg-white text-xs font-bold text-slate-800"
+                    >
+                      <option value="Sin Comprobante">Sin Comprobante</option>
+                      <option value="Nota de Venta">Nota de Venta</option>
+                      <option value="Factura">Factura</option>
+                    </select>
+                  </div>
+                </div>
+
+                {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPernocta) && (
+                  <div>
+                    <label className="block text-[10px] font-black text-amber-950 uppercase mb-0.5">Referencia / Código de Verificación *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={codigoVerificacionPernocta}
+                      onChange={(e) => setCodigoVerificacionPernocta(e.target.value)}
+                      placeholder="Ej. Ref 987654"
+                      className="w-full px-2.5 py-1.5 rounded border border-amber-300 bg-white text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingPernocta}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg shadow-sm transition-all text-xs"
+                >
+                  {isSubmittingPernocta ? 'Procesando...' : 'Confirmar Cambio a Pernocta'}
+                </button>
+              </form>
             )}
           </div>
 
