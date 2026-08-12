@@ -68,6 +68,9 @@ function formatGuestName(fullName) {
   if (!fullName) return '';
   const parts = fullName.trim().split(/\s+/);
   if (parts.length === 0) return '';
+  if (parts.length === 1) {
+    return parts[0][0] ? parts[0][0].toUpperCase() + parts[0].slice(1) : parts[0];
+  }
   const firstInitial = parts[0][0] ? parts[0][0].toUpperCase() + '.' : '';
   const rest = parts.slice(1).join(' ');
   return `${firstInitial} ${rest}`.trim();
