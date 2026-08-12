@@ -101,6 +101,66 @@ export default function EntregaTurnos({
     return 0;
   };
 
+  const parseCleanMetodoAndRef = (str) => {
+    if (!str) return { cleanMetodo: 'Efectivo', refCode: '-' };
+    const regex = /^(.*?)(?:\s*[-–—]\s*|\s*\(\s*|\s+)(?:Ref:?|Ref\s*#?|Referencia:?)\s*#?\s*([^()\-]+?)\s*\)?$/i;
+    const match = str.match(regex);
+
+    if (match && match[2] && match[2].trim().length > 0) {
+      return {
+        cleanMetodo: match[1].trim() || 'Pago Móvil',
+        refCode: match[2].trim()
+      };
+    }
+
+    if (str.toLowerCase().includes('ref')) {
+      const parts = str.split(/ref:?|ref\s*#/i);
+      if (parts.length >= 2) {
+        let cleanM = parts[0].replace(/[-–—()]/g, '').trim();
+        let refC = parts[1].replace(/[()]/g, '').trim();
+        return {
+          cleanMetodo: cleanM || 'Pago Digital',
+          refCode: refC || '-'
+        };
+      }
+    }
+
+    return {
+      cleanMetodo: str.trim(),
+      refCode: '-'
+    };
+  };
+
+  const getMovementsForPrint = () => {
+    if (!printableReport) return [];
+    
+    // If it's a historical report
+    if (printableReport.id) {
+      const idx = (entregaTurnos || []).findIndex(x => x.id === printableReport.id);
+      const prevDelivery = idx !== -1 && idx < entregaTurnos.length - 1 ? entregaTurnos[idx + 1] : null;
+      const startStr = prevDelivery ? prevDelivery.fechaHoraEntrega : null;
+      const endStr = printableReport.fechaHoraEntrega || printableReport.fecha;
+
+      const startTime = startStr ? new Date(startStr) : new Date(0);
+      const endTime = new Date(endStr);
+
+      return (caja || []).filter(item => {
+        // Fallback checks for user ID or user name
+        const matchUser = item.usuarioId === printableReport.usuarioSalienteId || item.usuarioNombre === printableReport.recepcionista;
+        if (!matchUser) return false;
+        
+        if (item.hora) {
+          const itemDate = parseCajaFecha(item.hora);
+          return itemDate >= startTime && itemDate <= endTime;
+        }
+        return false;
+      });
+    }
+
+    // Otherwise, it's the current active shift
+    return myMovements;
+  };
+
   // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM" and ISO strings)
   const parseCajaFecha = (horaStr) => {
     if (!horaStr) return new Date(0);
@@ -276,10 +336,13 @@ export default function EntregaTurnos({
     try { equipObj = typeof t.llavesHerramientasConteo === 'string' ? JSON.parse(t.llavesHerramientasConteo) : t.llavesHerramientasConteo || {}; } catch(e){}
 
     const reportData = {
+      id: t.id,
       titulo: `REPORTE DE ENTREGA DE TURNO N° ${t.id}`,
       fecha: new Date(t.fechaHoraEntrega).toLocaleString('es-VE'),
+      fechaHoraEntrega: t.fechaHoraEntrega,
       recepcionista: t.usuarioSalienteNombre || 'Recepcionista',
       entrante: t.usuarioEntranteNombre || 'Pendiente',
+      usuarioSalienteId: t.usuarioSalienteId,
       estado: t.estado,
       saldoUsd: parseFloat(t.saldoEfectivoUsd) || 0,
       saldoVes: parseFloat(t.saldoEfectivoVes) || 0,
@@ -1198,10 +1261,64 @@ export default function EntregaTurnos({
               </table>
             </div>
 
+            {/* 2. Registro de Movimientos y Huéspedes del Turno */}
+            <div>
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">2. Detalle de Movimientos del Turno (Control de Ingresos)</h3>
+              <table className="w-full text-left border border-black text-[10px]">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-black font-bold">
+                    <th className="p-1.5 border-r border-black">Hora</th>
+                    <th className="p-1.5 border-r border-black text-center">Hab</th>
+                    <th className="p-1.5 border-r border-black">Huésped / Concepto</th>
+                    <th className="p-1.5 border-r border-black">Medio de Pago</th>
+                    <th className="p-1.5 border-r border-black text-right">Monto ($)</th>
+                    <th className="p-1.5 text-right">Monto (Bs)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getMovementsForPrint().map((item, index) => {
+                    // Extract room number
+                    const habMatch = item.concepto.match(/Hab\s*(\d+)/i);
+                    const habNum = habMatch ? habMatch[1] : '-';
+
+                    // Extract guest name if in parentheses
+                    const guestMatch = item.concepto.match(/\(([^)]+)\)/);
+                    const guestName = guestMatch ? guestMatch[1] : item.concepto;
+
+                    const { cleanMetodo, refCode } = parseCleanMetodoAndRef(item.metodo);
+
+                    const isVes = ['efectivo (bs)', 'efectivo', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.toLowerCase().includes(m));
+                    const displayUsd = isVes ? (parseFloat(item.monto) / tasaUsd) : parseFloat(item.monto);
+                    const displayVes = isVes ? parseFloat(item.monto_ves || (item.monto * tasaUsd)) : (parseFloat(item.monto) * tasaUsd);
+
+                    return (
+                      <tr key={item.id || index} className="border-b border-slate-300">
+                        <td className="p-1.5 border-r border-slate-300 font-mono">{item.hora ? item.hora.split(',')[1]?.trim() || item.hora : '-'}</td>
+                        <td className="p-1.5 border-r border-slate-300 text-center font-bold">{habNum}</td>
+                        <td className="p-1.5 border-r border-slate-300 font-semibold">{guestName}</td>
+                        <td className="p-1.5 border-r border-slate-300">
+                          {cleanMetodo} {refCode !== '-' ? `(Ref: ${refCode})` : ''}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 text-right font-bold">${displayUsd.toFixed(2)}</td>
+                        <td className="p-1.5 text-right font-semibold">Bs. {displayVes.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                  {getMovementsForPrint().length === 0 && (
+                    <tr>
+                      <td colSpan="6" className="p-3 text-center text-slate-400 font-bold italic">
+                        No se registraron movimientos en este turno.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
             {/* Lencería y Equipamiento */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">2. Lencería en Recepción</h3>
+                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">3. Lencería en Recepción</h3>
                 <ul className="space-y-1 text-xs font-semibold">
                   <li>• Toallas de Baño: <strong>{printableReport.lenceria?.toallasBanio || 0}</strong></li>
                   <li>• Toallas de Mano: <strong>{printableReport.lenceria?.toallasMano || 0}</strong></li>
@@ -1211,7 +1328,7 @@ export default function EntregaTurnos({
               </div>
 
               <div>
-                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">3. Equipamiento</h3>
+                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">4. Equipamiento</h3>
                 <ul className="space-y-1 text-xs font-semibold">
                   <li>• Llaves de Habitaciones: <strong>{printableReport.equipamiento?.llavesHabitaciones ? 'Entregadas OK' : 'Faltantes'}</strong></li>
                   <li>• POS Inalámbrico: <strong>{printableReport.equipamiento?.posInalambrico ? 'Operativo OK' : 'No entregado'}</strong></li>
@@ -1222,7 +1339,7 @@ export default function EntregaTurnos({
 
             {/* Novedades */}
             <div>
-              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">4. Novedades y Observaciones de Recepción</h3>
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">5. Novedades y Observaciones de Recepción</h3>
               <div className="p-3 border border-black rounded bg-slate-50 italic text-xs font-medium">
                 "{printableReport.novedades}"
               </div>
