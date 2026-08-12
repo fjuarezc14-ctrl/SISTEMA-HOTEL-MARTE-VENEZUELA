@@ -410,6 +410,13 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const caja = await db.all('SELECT * FROM caja');
     const consumos = await db.all('SELECT * FROM consumos');
     const productos = await db.all('SELECT * FROM productos');
+    // Compute dynamic stock for combos
+    for (const p of productos) {
+      if (p.es_combo === 1 && p.producto_padre_id) {
+        const parent = productos.find(x => x.id === p.producto_padre_id);
+        p.stock = parent ? Math.floor(parent.stock / (p.unidades_por_combo || 1)) : 0;
+      }
+    }
     const tarifas = await db.all('SELECT * FROM tarifas');
     const tickets = await db.all('SELECT * FROM tickets ORDER BY fechaCreacion DESC');
     const entregaTurnos = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
@@ -2377,7 +2384,15 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
     const pagosList = Array.isArray(pagos) ? pagos : (pagos ? [pagos] : []);
     const isPagoMixto = pagosList.length > 1;
     
-    let conceptoItems = items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+    // Build item concepts list using actual quantities/combos
+    let conceptoItemsList = [];
+    for (const item of items) {
+      const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
+      const qtyToDisplay = prod && prod.es_combo === 1 ? (parseInt(item.cantidad) * (prod.unidades_por_combo || 1)) : parseInt(item.cantidad);
+      conceptoItemsList.push(`${qtyToDisplay}x ${item.nombre}`);
+    }
+    let conceptoItems = conceptoItemsList.join(', ');
+
     let clienteInfo = clienteNombre ? ` - Cliente: ${clienteNombre.trim()}` : '';
     if (clienteCi) clienteInfo += ` (CI: ${clienteCi.trim()})`;
  
@@ -2386,15 +2401,20 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
  
     if (isPreConsumo) {
       for (const item of items) {
+        const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
         const cnsId = 'cns_pre_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+        const isCombo = prod && prod.es_combo === 1 && prod.producto_padre_id;
+        const finalCant = isCombo ? (parseInt(item.cantidad) * (prod.unidades_por_combo || 1)) : parseInt(item.cantidad);
+        const finalPrecio = isCombo ? (parseFloat(item.precio_venta) / (prod.unidades_por_combo || 1)) : parseFloat(item.precio_venta);
+
         await db.run(
           'INSERT INTO consumos (id, numHabitacion, concepto, monto, cantidad, fecha, cliente_ci, cliente_nombre, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [
             cnsId,
             'EN_ESPERA',
-            item.nombre,
-            parseFloat(item.precio_venta),
-            parseInt(item.cantidad),
+            prod ? prod.nombre : item.nombre,
+            finalPrecio,
+            finalCant,
             getFechaHoraActual(),
             (clienteCi || '').trim(),
             (clienteNombre || '').trim(),
@@ -2407,15 +2427,20 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
       if (numHabitacion) {
         const cState = cargarHabitacion ? 'cargado_habitacion' : 'pagado_inmediato';
         for (const item of items) {
+          const prod = await db.get('SELECT * FROM productos WHERE id = ?', [item.id]);
           const cnsId = 'cns_pos_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
+          const isCombo = prod && prod.es_combo === 1 && prod.producto_padre_id;
+          const finalCant = isCombo ? (parseInt(item.cantidad) * (prod.unidades_por_combo || 1)) : parseInt(item.cantidad);
+          const finalPrecio = isCombo ? (parseFloat(item.precio_venta) / (prod.unidades_por_combo || 1)) : parseFloat(item.precio_venta);
+
           await db.run(
             'INSERT INTO consumos (id, numHabitacion, concepto, monto, cantidad, fecha, cliente_ci, cliente_nombre, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
               cnsId,
               numHabitacion,
-              item.nombre,
-              parseFloat(item.precio_venta),
-              parseInt(item.cantidad),
+              prod ? prod.nombre : item.nombre,
+              finalPrecio,
+              finalCant,
               getFechaHoraActual(),
               (clienteCi || '').trim(),
               (clienteNombre || '').trim(),
@@ -2546,19 +2571,43 @@ app.post('/api/consumos', requireAuth, async (req, res) => {
       catalogProduct = await db.get('SELECT * FROM productos WHERE LOWER(nombre) = LOWER(?)', [concepto.trim()]);
     }
 
+    let finalCantToLog = cant;
+    let finalPriceToLog = finalMonto;
+
     if (catalogProduct) {
-      // 1. Bloquear al precio de venta oficial del catálogo
       finalMonto = catalogProduct.precio_venta;
 
-      // 2. Validar disponibilidad de stock
-      if (catalogProduct.stock < cant) {
-        return res.status(400).json({ 
-          error: `Stock insuficiente para "${catalogProduct.nombre}". Quedan ${catalogProduct.stock} unidad(es) en inventario.` 
-        });
+      if (catalogProduct.es_combo === 1 && catalogProduct.producto_padre_id) {
+        // Promoción / Combo
+        const parentProd = await db.get('SELECT * FROM productos WHERE id = ?', [catalogProduct.producto_padre_id]);
+        if (!parentProd) {
+          return res.status(404).json({ error: `El producto base para la promoción "${catalogProduct.nombre}" no existe.` });
+        }
+        const requiredParentStock = cant * (catalogProduct.unidades_por_combo || 1);
+        if (parentProd.stock < requiredParentStock) {
+          const availableCombos = Math.floor(parentProd.stock / (catalogProduct.unidades_por_combo || 1));
+          return res.status(400).json({ 
+            error: `Stock insuficiente de "${parentProd.nombre}" para la promoción "${catalogProduct.nombre}". Solo quedan ${availableCombos} combos disponibles.` 
+          });
+        }
+        // Descontar del producto padre
+        await db.run('UPDATE productos SET stock = MAX(0, stock - ?) WHERE id = ?', [requiredParentStock, catalogProduct.producto_padre_id]);
+        
+        finalCantToLog = requiredParentStock;
+        finalPriceToLog = finalMonto / (catalogProduct.unidades_por_combo || 1);
+      } else {
+        // Producto normal
+        if (catalogProduct.stock < cant) {
+          return res.status(400).json({ 
+            error: `Stock insuficiente para "${catalogProduct.nombre}". Quedan ${catalogProduct.stock} unidad(es) en inventario.` 
+          });
+        }
+        // Descontar del catálogo
+        await db.run('UPDATE productos SET stock = MAX(0, stock - ?) WHERE id = ?', [cant, catalogProduct.id]);
+        
+        finalCantToLog = cant;
+        finalPriceToLog = finalMonto;
       }
-
-      // 3. Descontar el stock en la base de datos
-      await db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [cant, catalogProduct.id]);
     }
 
     const id = 'cns_' + Date.now();
@@ -2567,7 +2616,7 @@ app.post('/api/consumos', requireAuth, async (req, res) => {
     
     await db.run(
       'INSERT INTO consumos (id, numHabitacion, concepto, monto, cantidad, fecha) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, numHabitacion, catalogProduct ? catalogProduct.nombre : concepto.trim(), finalMonto, cant, fecha]
+      [id, numHabitacion, catalogProduct ? catalogProduct.nombre : concepto.trim(), finalPriceToLog, finalCantToLog, fecha]
     );
     res.json({ success: true, message: 'Consumo registrado correctamente' });
   } catch (error) {
@@ -2583,9 +2632,13 @@ app.delete('/api/consumos/:id', requireAuth, async (req, res) => {
     const consumo = await db.get('SELECT * FROM consumos WHERE id = ?', [id]);
     if (consumo) {
       // Verificar si el consumo pertenecía a un producto del catálogo para devolver el stock
-      const catalogProduct = await db.get('SELECT id FROM productos WHERE LOWER(nombre) = LOWER(?)', [consumo.concepto.trim()]);
+      const catalogProduct = await db.get('SELECT * FROM productos WHERE LOWER(nombre) = LOWER(?)', [consumo.concepto.trim()]);
       if (catalogProduct) {
-        await db.run('UPDATE productos SET stock = stock + ? WHERE id = ?', [consumo.cantidad, catalogProduct.id]);
+        if (catalogProduct.es_combo === 1 && catalogProduct.producto_padre_id) {
+          await db.run('UPDATE productos SET stock = stock + ? WHERE id = ?', [consumo.cantidad, catalogProduct.producto_padre_id]);
+        } else {
+          await db.run('UPDATE productos SET stock = stock + ? WHERE id = ?', [consumo.cantidad, catalogProduct.id]);
+        }
       }
       await db.run('DELETE FROM consumos WHERE id = ?', [id]);
     }
@@ -2604,6 +2657,13 @@ app.delete('/api/consumos/:id', requireAuth, async (req, res) => {
 app.get('/api/productos', requireAuth, async (req, res) => {
   try {
     const list = await db.all('SELECT * FROM productos ORDER BY nombre ASC');
+    // Compute dynamic stock for combos
+    for (const p of list) {
+      if (p.es_combo === 1 && p.producto_padre_id) {
+        const parent = list.find(x => x.id === p.producto_padre_id);
+        p.stock = parent ? Math.floor(parent.stock / (p.unidades_por_combo || 1)) : 0;
+      }
+    }
     res.json(list);
   } catch (error) {
     console.error(error);
@@ -2629,8 +2689,8 @@ app.post('/api/productos', requireAuth, async (req, res) => {
 
     const id = 'p_' + Date.now();
     const precio = parseFloat(precio_venta) || 0;
-    const stk = parseInt(stock) || 0;
     const isComboVal = es_combo ? 1 : 0;
+    const stk = isComboVal === 1 ? 0 : (parseInt(stock) || 0);
     const parentIdVal = isComboVal ? (producto_padre_id || null) : null;
     const unitsPerComboVal = isComboVal ? (parseInt(unidades_por_combo) || 1) : 1;
 
@@ -2661,8 +2721,8 @@ app.put('/api/productos/:id', requireAuth, async (req, res) => {
     }
 
     const precio = parseFloat(precio_venta);
-    const stk = parseInt(stock);
     const isComboVal = es_combo ? 1 : 0;
+    const stk = isComboVal === 1 ? 0 : (parseInt(stock) || 0);
     const parentIdVal = isComboVal ? (producto_padre_id || null) : null;
     const unitsPerComboVal = isComboVal ? (parseInt(unidades_por_combo) || 1) : 1;
 

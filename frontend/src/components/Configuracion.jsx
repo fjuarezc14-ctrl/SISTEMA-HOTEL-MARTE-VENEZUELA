@@ -100,7 +100,7 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
     const payload = {
       nombre: prodNombre.trim(),
       precio_venta: parseFloat(prodPrecio),
-      stock: baseStock + addLote,
+      stock: esCombo ? 0 : (baseStock + addLote),
       es_combo: esCombo ? 1 : 0,
       producto_padre_id: esCombo ? productoPadreId : null,
       unidades_por_combo: esCombo ? (parseInt(unidadesPorCombo) || 1) : 1
@@ -855,19 +855,18 @@ export default function Configuracion({ token, currentUser, appState, onStateCha
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                    Stock Actual {editingProduct && !isAdmin && <span className="text-[9px] text-amber-600 font-normal">(Solo lectura)</span>}
+                    {esCombo ? 'Stock Calculado (Virtual)' : 'Stock Actual'} {editingProduct && !isAdmin && <span className="text-[9px] text-amber-600 font-normal">(Solo lectura)</span>}
                   </label>
                   <input 
-                    type="number" 
-                    value={prodStock}
-                    onChange={(e) => setProdStock(e.target.value)}
-                    readOnly={editingProduct && !isAdmin}
-                    min="0"
-                    placeholder="Ej: 30"
+                    type="text" 
+                    value={esCombo ? 'Calculado dinámicamente' : prodStock}
+                    onChange={(e) => !esCombo && setProdStock(e.target.value)}
+                    readOnly={esCombo || (editingProduct && !isAdmin)}
+                    placeholder={esCombo ? 'Stock virtual' : 'Ej: 30'}
                     className={`w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] font-bold ${
-                      editingProduct && !isAdmin ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                      esCombo || (editingProduct && !isAdmin) ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'
                     }`}
-                    required
+                    required={!esCombo}
                   />
                 </div>
               </div>
