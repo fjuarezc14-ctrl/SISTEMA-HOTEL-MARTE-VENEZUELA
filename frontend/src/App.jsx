@@ -900,6 +900,7 @@ export default function App() {
                   productos={appState.productos || []}
                   habitaciones={appState.habitaciones || []}
                   caja={appState.caja || []}
+                  historialEstadias={appState.historialEstadias || []}
                   token={token}
                   currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}

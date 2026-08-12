@@ -113,6 +113,11 @@
     overflow: visible !important;
   }
 
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
   @page {
     margin: 1cm;
     size: auto;

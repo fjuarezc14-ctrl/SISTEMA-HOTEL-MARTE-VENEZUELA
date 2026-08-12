@@ -201,6 +201,25 @@ export async function initDb() {
       precio_usd REAL DEFAULT 0,
       tipo_tarifa TEXT DEFAULT 'fija'
     );
+
+    CREATE TABLE IF NOT EXISTS historial_estadias (
+      id TEXT PRIMARY KEY,
+      numHabitacion TEXT NOT NULL,
+      huesped TEXT NOT NULL,
+      clienteCi TEXT,
+      acomp TEXT,
+      ingreso TEXT NOT NULL,
+      salida TEXT,
+      cantidad_huespedes INTEGER DEFAULT 1,
+      monto_usd REAL DEFAULT 0,
+      monto_ves REAL DEFAULT 0,
+      metodo_pago TEXT,
+      referencia TEXT,
+      usuarioId TEXT,
+      usuarioNombre TEXT,
+      modalidad TEXT,
+      horas_extra INTEGER DEFAULT 0
+    );
   `);
 
   // ALTER EXISTING TABLES TO ADD NEW COLUMNS (v5)

@@ -5,6 +5,7 @@ export default function EntregaTurnos({
   productos = [], 
   habitaciones = [], 
   caja = [], 
+  historialEstadias = [],
   token, 
   currentUser, 
   tasaUsd = 50.00, 
@@ -316,6 +317,14 @@ export default function EntregaTurnos({
       return isVes ? sum + (parseFloat(t.monto_ves || (t.monto * tasaUsd)) || 0) : sum;
     }, 0);
 
+    const myStays = (historialEstadias || []).filter(s => {
+      if (s.ingreso) {
+        const sDate = parseCajaFecha(s.ingreso);
+        return sDate >= shiftCutoffTime;
+      }
+      return true;
+    });
+
     const reportData = {
       titulo: 'REPORTE DE CIERRE DE TURNO (PREVIO A ENTREGA)',
       fecha: new Date().toLocaleString('es-VE'),
@@ -332,7 +341,11 @@ export default function EntregaTurnos({
       marketVES,
       lenceria,
       equipamiento,
-      novedades: novedades.trim() || 'Sin novedades declaradas'
+      novedades: novedades.trim() || 'Sin novedades declaradas',
+      stays: myStays,
+      startCashUsd: startCashUsd,
+      startCashVes: startCashVes,
+      grupo: mostRecentDelivery ? mostRecentDelivery.id || '1' : '1'
     };
     setPrintableReport(reportData);
     setTimeout(() => {
@@ -380,6 +393,18 @@ export default function EntregaTurnos({
       return isVes ? sum + (parseFloat(item.monto_ves || (item.monto * tasaUsd)) || 0) : sum;
     }, 0);
 
+    const histStays = (historialEstadias || []).filter(s => {
+      if (s.ingreso) {
+        const sDate = parseCajaFecha(s.ingreso);
+        return sDate >= histCutoff && sDate <= histEnd;
+      }
+      return true;
+    });
+
+    const prevShift = (idx < (entregaTurnos || []).length - 1) ? (entregaTurnos || [])[idx + 1] : null;
+    const histStartCashUsd = prevShift ? parseFloat(prevShift.saldoEfectivoUsd || 0) : 0;
+    const histStartCashVes = prevShift ? parseFloat(prevShift.saldoEfectivoVes || 0) : 0;
+
     const reportData = {
       id: t.id,
       titulo: `REPORTE DE ENTREGA DE TURNO N° ${t.id}`,
@@ -401,7 +426,11 @@ export default function EntregaTurnos({
       lenceria: lenceriaObj,
       equipamiento: equipObj,
       novedades: t.novedades || 'Sin novedades',
-      obsConfirmacion: t.observacionesConfirmacion
+      obsConfirmacion: t.observacionesConfirmacion,
+      stays: histStays,
+      startCashUsd: histStartCashUsd,
+      startCashVes: histStartCashVes,
+      grupo: t.id || '1'
     };
     setPrintableReport(reportData);
     setTimeout(() => {
@@ -1382,10 +1411,170 @@ export default function EntregaTurnos({
               </table>
             </div>
 
+            {/* 3. Control de Ingreso Clientes Diario */}
+            <div className="page-break-before pt-4">
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">3. Control de Ingreso Clientes Diario</h3>
+              
+              {/* Header Box mimicking Excel header exactly */}
+              <div className="border border-black mb-3 text-[10px]">
+                {/* Row 1: Fecha, Grupo, Nombre */}
+                <div className="flex border-b border-black bg-slate-100 font-bold">
+                  <div className="w-1/6 p-1.5 border-r border-black">FECHA:</div>
+                  <div className="w-1/6 p-1.5 border-r border-black bg-white font-black">{printableReport.fecha ? printableReport.fecha.split(' ')[0] : '-'}</div>
+                  <div className="w-1/6 p-1.5 border-r border-black">GRUPO / TURNO:</div>
+                  <div className="w-1/6 p-1.5 border-r border-black bg-white font-black">{printableReport.grupo || '1'}</div>
+                  <div className="w-1/6 p-1.5 border-r border-black">RECEPCIONISTA:</div>
+                  <div className="w-1/3 p-1.5 bg-white font-black uppercase">{printableReport.recepcionista}</div>
+                </div>
+                {/* Row 2: Fondo Divisas, Fondo Bs */}
+                <div className="flex font-bold">
+                  <div className="w-1/6 p-1.5 border-r border-black bg-slate-50">FONDO DIVISAS:</div>
+                  <div className="w-1/6 p-1.5 border-r border-black bg-white font-black">${(printableReport.startCashUsd || 0).toFixed(2)}</div>
+                  <div className="w-1/6 p-1.5 border-r border-black bg-slate-50">FONDO BS:</div>
+                  <div className="w-1/6 p-1.5 border-r border-black bg-white font-black">Bs. {(printableReport.startCashVes || 0).toFixed(2)}</div>
+                  <div className="w-1/6 p-1.5 border-r border-black bg-emerald-100 text-emerald-800 text-center">TASA DÍA:</div>
+                  <div className="w-1/3 p-1.5 bg-emerald-50 text-emerald-900 font-black">Bs. {tasaUsd.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {/* Table mimicking Excel table exactly */}
+              <table className="w-full text-left border border-black text-[9px] font-sans">
+                <thead>
+                  {/* Excel top row headers */}
+                  <tr className="bg-slate-100 border-b border-black font-bold text-center">
+                    <th className="p-1 border-r border-black w-[4%]">N°</th>
+                    <th className="p-1 border-r border-black w-[25%] text-left">NOMBRE Y APELLIDO</th>
+                    <th className="p-1 border-r border-black w-[12%]">C. IDENTIDAD</th>
+                    <th className="p-1 border-r border-black w-[8%]">CHECK IN</th>
+                    <th className="p-1 border-r border-black w-[8%]">CHECK OUT</th>
+                    <th className="p-1 border-r border-black w-[6%]">N° HUESPED</th>
+                    <th className="p-1 border-r border-black w-[10%] text-right">MONTO BS</th>
+                    <th className="p-1 border-r border-black w-[9%] text-right">MONTO $</th>
+                    <th className="p-1 border-r border-black w-[10%]">FORMA DE PAGO</th>
+                    <th className="p-1 border-r border-black w-[6%]">N° HAB</th>
+                    <th className="p-1 w-[8%]">REF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const rows = [];
+                    let itemIndex = 1;
+                    
+                    const parseCompanions = (acompStr) => {
+                      if (!acompStr || !acompStr.trim()) return [];
+                      return acompStr.split(',').map(part => {
+                        const ciMatch = part.match(/(.+?)\s*\(CI:\s*([^)]+)\)/);
+                        if (ciMatch) {
+                          return { nombre: ciMatch[1].trim(), ci: ciMatch[2].trim() };
+                        }
+                        const menorMatch = part.match(/(.+?)\s*\(Menor de edad/);
+                        if (menorMatch) {
+                          return { nombre: menorMatch[1].trim(), ci: 'Menor de edad' };
+                        }
+                        return { nombre: part.trim(), ci: '-' };
+                      });
+                    };
+
+                    (printableReport.stays || []).forEach((s) => {
+                      // Main row
+                      rows.push(
+                        <tr key={`stay-main-${s.id}`} className="border-b border-slate-300 hover:bg-slate-50">
+                          <td className="p-1 border-r border-slate-300 text-center font-bold">{itemIndex++}</td>
+                          <td className="p-1 border-r border-slate-300 font-bold uppercase text-slate-800">{s.huesped}</td>
+                          <td className="p-1 border-r border-slate-300 text-center font-mono">{s.clienteCi || '-'}</td>
+                          <td className="p-1 border-r border-slate-300 text-center font-mono">
+                            {s.ingreso ? s.ingreso.substring(11, 16) : '-'}
+                          </td>
+                          <td className="p-1 border-r border-slate-300 text-center font-mono">
+                            {s.salida ? s.salida.substring(11, 16) : (s.horas_extra > 0 ? `${s.horas_extra}h Extra` : '-')}
+                          </td>
+                          <td className="p-1 border-r border-slate-300 text-center">{s.cantidad_huespedes || 1}</td>
+                          <td className="p-1 border-r border-slate-300 text-right font-black">
+                            {s.monto_ves > 0 ? `Bs. ${s.monto_ves.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : '-'}
+                          </td>
+                          <td className="p-1 border-r border-slate-300 text-right font-black">
+                            {s.monto_usd > 0 ? `$${s.monto_usd.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="p-1 border-r border-slate-300 text-center font-bold text-[8px] uppercase">
+                            {s.metodo_pago ? s.metodo_pago.replace('Efectivo ', '').replace('Ventas por ', '').replace('Pago Móvil', 'PM').replace('Punto de Venta', 'PUNTO') : '-'}
+                          </td>
+                          <td className="p-1 border-r border-slate-300 text-center font-bold">{s.numHabitacion}</td>
+                          <td className="p-1 text-center font-mono text-[8px]">{s.referencia || '-'}</td>
+                        </tr>
+                      );
+
+                      // Companion rows
+                      const companions = parseCompanions(s.acomp);
+                      companions.forEach((comp, cIdx) => {
+                        rows.push(
+                          <tr key={`stay-comp-${s.id}-${cIdx}`} className="border-b border-slate-300 text-slate-500 italic bg-slate-50/50">
+                            <td className="p-1 border-r border-slate-300 text-center"></td>
+                            <td className="p-1 border-r border-slate-300 pl-4 uppercase font-semibold text-[8.5px]">{comp.nombre}</td>
+                            <td className="p-1 border-r border-slate-300 text-center font-mono text-[8.5px]">{comp.ci}</td>
+                            <td className="p-1 border-r border-slate-300 text-center"></td>
+                            <td className="p-1 border-r border-slate-300 text-center"></td>
+                            <td className="p-1 border-r border-slate-300 text-center"></td>
+                            <td className="p-1 border-r border-slate-300 text-right"></td>
+                            <td className="p-1 border-r border-slate-300 text-right"></td>
+                            <td className="p-1 border-r border-slate-300 text-center"></td>
+                            <td className="p-1 border-r border-slate-300 text-center"></td>
+                            <td className="p-1 text-center"></td>
+                          </tr>
+                        );
+                      });
+                    });
+
+                    // Pad empty rows if list is short to look like a manual sheet
+                    if (rows.length < 5) {
+                      for (let i = rows.length; i < 5; i++) {
+                        rows.push(
+                          <tr key={`stay-empty-${i}`} className="border-b border-slate-300 h-6">
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1 border-r border-slate-300"></td>
+                            <td className="p-1"></td>
+                          </tr>
+                        );
+                      }
+                    }
+
+                    // Totals Row
+                    const totalBs = (printableReport.stays || []).reduce((sum, s) => sum + (s.monto_ves || 0), 0);
+                    const totalUsd = (printableReport.stays || []).reduce((sum, s) => sum + (s.monto_usd || 0), 0);
+
+                    rows.push(
+                      <tr key="stay-totals" className="bg-slate-100 font-bold border-t border-black">
+                        <td className="p-1 border-r border-black"></td>
+                        <td className="p-1 border-r border-black uppercase text-right" colSpan="5">TOTALES:</td>
+                        <td className="p-1 border-r border-black text-right font-black text-slate-900">
+                          Bs. {totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-1 border-r border-black text-right font-black text-slate-900">
+                          ${totalUsd.toFixed(2)}
+                        </td>
+                        <td className="p-1 border-r border-black"></td>
+                        <td className="p-1 border-r border-black"></td>
+                        <td className="p-1"></td>
+                      </tr>
+                    );
+
+                    return rows;
+                  })()}
+                </tbody>
+              </table>
+            </div>
+
             {/* Lencería y Equipamiento */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">3. Lencería en Recepción</h3>
+                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">4. Lencería en Recepción</h3>
                 <ul className="space-y-1 text-xs font-semibold">
                   <li>• Toallas de Baño: <strong>{printableReport.lenceria?.toallasBanio || 0}</strong></li>
                   <li>• Toallas de Mano: <strong>{printableReport.lenceria?.toallasMano || 0}</strong></li>
@@ -1395,7 +1584,7 @@ export default function EntregaTurnos({
               </div>
 
               <div>
-                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">4. Equipamiento</h3>
+                <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">5. Equipamiento</h3>
                 <ul className="space-y-1 text-xs font-semibold">
                   <li>• Llaves de Habitaciones: <strong>{printableReport.equipamiento?.llavesHabitaciones ? 'Entregadas OK' : 'Faltantes'}</strong></li>
                   <li>• POS Inalámbrico: <strong>{printableReport.equipamiento?.posInalambrico ? 'Operativo OK' : 'No entregado'}</strong></li>
@@ -1406,7 +1595,7 @@ export default function EntregaTurnos({
 
             {/* Novedades */}
             <div>
-              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">5. Novedades y Observaciones de Recepción</h3>
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">6. Novedades y Observaciones de Recepción</h3>
               <div className="p-3 border border-black rounded bg-slate-50 italic text-xs font-medium">
                 "{printableReport.novedades}"
               </div>

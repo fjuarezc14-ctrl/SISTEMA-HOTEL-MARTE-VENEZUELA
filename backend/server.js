@@ -423,6 +423,7 @@ app.get('/api/state', requireAuth, async (req, res) => {
     const inventarioLenceria = await db.all('SELECT * FROM inventario_lenceria');
     const inventarioHabitaciones = await db.all('SELECT * FROM inventario_habitaciones');
     const tablaDanos = await db.all('SELECT * FROM tabla_danos');
+    const historialEstadias = await db.all('SELECT * FROM historial_estadias ORDER BY ingreso DESC');
 
     const configuracionList = await db.all('SELECT * FROM configuracion');
     const configuracion = {};
@@ -441,7 +442,8 @@ app.get('/api/state', requireAuth, async (req, res) => {
       entregaTurnos,
       inventarioLenceria,
       inventarioHabitaciones,
-      tablaDanos
+      tablaDanos,
+      historialEstadias
     });
   } catch (error) {
     console.error('Error fetching state:', error);
@@ -888,6 +890,20 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     const salidaCalculada = calcularHoraSalida(modalidad, horasExtraIniciales);
     const formattedName = formatGuestName(nombre);
     let acompText = nomAcomp ? nomAcomp.trim() : '';
+    const docAcomp = (ciAcomp || dniAcomp || '').trim();
+    if (acompText && docAcomp) {
+      const names = acompText.split(',').map(x => x.trim());
+      const docs = docAcomp.split(',').map(x => x.trim());
+      const formattedAcomps = [];
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        const doc = docs[i] || '';
+        if (name) {
+          formattedAcomps.push(doc ? `${name} (CI: ${doc})` : name);
+        }
+      }
+      acompText = formattedAcomps.join(', ');
+    }
     if (esMenor) {
       acompText += ' (Menor de edad - Sin recargo)';
     }
@@ -899,8 +915,66 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       [formattedName, acompText, getFechaHoraActual(), salidaCalculada, clientId, numDoc, modalidad || '4h', numHabitacion]
     );
 
-    // 3. Register transaction in Cash register if amount > 0
+    // Save check-in record to historial_estadias
+    const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
+    const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+    const estadiaId = 'est_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const finalMonto = parseFloat(monto) || 0;
+    
+    let usdAmount = 0;
+    let vesAmount = 0;
+    const cleanMetodo = (metodo || '').toLowerCase();
+    if (cleanMetodo.includes('pago mixto')) {
+      const usdMatch = cleanMetodo.match(/efectivo \(\$\):\s*\$(\d+(\.\d+)?)/);
+      const zelleMatch = cleanMetodo.match(/zelle:\s*\$(\d+(\.\d+)?)/);
+      const vesCashMatch = cleanMetodo.match(/efectivo \(bs\):\s*bs\.\s*(\d+(\.\d+)?)/);
+      const pmMatch = cleanMetodo.match(/pago m[óo]vil:\s*bs\.\s*(\d+(\.\d+)?)/);
+      const puntoMatch = cleanMetodo.match(/punto:\s*bs\.\s*(\d+(\.\d+)?)/);
+      
+      const valUsdCash = usdMatch ? parseFloat(usdMatch[1]) : 0;
+      const valZelle = zelleMatch ? parseFloat(zelleMatch[1]) : 0;
+      const valVesCash = vesCashMatch ? parseFloat(vesCashMatch[1]) : 0;
+      const valPm = pmMatch ? parseFloat(pmMatch[1]) : 0;
+      const valPunto = puntoMatch ? parseFloat(puntoMatch[1]) : 0;
+      
+      usdAmount = valUsdCash + valZelle;
+      vesAmount = valVesCash + valPm + valPunto;
+    } else {
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.includes(m)) && !cleanMetodo.includes('($)');
+      if (isVes) {
+        vesAmount = finalMonto * tasaUsd;
+      } else {
+        usdAmount = finalMonto;
+      }
+    }
+
+    const cantHuespedes = (nomAcomp ? nomAcomp.split(',').length : 0) + 1;
+
+    await db.run(
+      `INSERT INTO historial_estadias (
+        id, numHabitacion, huesped, clienteCi, acomp, ingreso, 
+        cantidad_huespedes, monto_usd, monto_ves, metodo_pago, referencia, 
+        usuarioId, usuarioNombre, modalidad
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        estadiaId,
+        numHabitacion,
+        formattedName,
+        numDoc,
+        acompText || '',
+        getFechaHoraActual(),
+        cantHuespedes,
+        usdAmount,
+        vesAmount,
+        metodo || 'Efectivo',
+        codigoVerificacion || '-',
+        req.user.id,
+        req.user.nombre,
+        modalidad || '4h'
+      ]
+    );
+
+    // 3. Register transaction in Cash register if amount > 0
     if (finalMonto > 0) {
       const transactionId = 't_' + Date.now();
       const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
@@ -1021,8 +1095,34 @@ app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => 
 
     await db.run('UPDATE habitaciones SET acomp = ? WHERE num = ?', [updatedAcomp, num]);
 
+    const cantHuespedes = (updatedAcomp ? updatedAcomp.split(',').length : 0) + 1;
+    await db.run(
+      'UPDATE historial_estadias SET acomp = ?, cantidad_huespedes = ? WHERE numHabitacion = ? AND salida IS NULL',
+      [updatedAcomp, cantHuespedes, num]
+    );
+
     const finalMonto = parseFloat(monto) || 0;
     if (finalMonto > 0) {
+      const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
+      const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+      let usdAdd = 0;
+      let vesAdd = 0;
+      const cleanMetodo = (metodo || '').toLowerCase();
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.includes(m)) && !cleanMetodo.includes('($)');
+      if (isVes) {
+        vesAdd = finalMonto * tasaUsd;
+      } else {
+        usdAdd = finalMonto;
+      }
+
+      await db.run(
+        `UPDATE historial_estadias 
+         SET monto_usd = COALESCE(monto_usd, 0) + ?, 
+             monto_ves = COALESCE(monto_ves, 0) + ?
+         WHERE numHabitacion = ? AND salida IS NULL`,
+        [usdAdd, vesAdd, num]
+      );
+
       const transactionId = 't_' + Date.now();
       const metodoTexto = codigoVerificacion 
         ? `${metodo} (Ref: ${codigoVerificacion})` 
@@ -1248,9 +1348,26 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
     // 3. Create reservation record
     const resId = 'r_' + Date.now();
     const resCode = 'RES-' + Math.floor(Math.random() * 9000 + 1000);
+
+    let acompText = nomAcomp ? nomAcomp.trim() : '';
+    const docAcomp = (ciAcomp || dniAcomp || '').trim();
+    if (acompText && docAcomp) {
+      const names = acompText.split(',').map(x => x.trim());
+      const docs = docAcomp.split(',').map(x => x.trim());
+      const formattedAcomps = [];
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        const doc = docs[i] || '';
+        if (name) {
+          formattedAcomps.push(doc ? `${name} (CI: ${doc})` : name);
+        }
+      }
+      acompText = formattedAcomps.join(', ');
+    }
+
     await db.run(
       'INSERT INTO reservas (id, res, clienteId, nombreAcomp, numHabitacion, hora) VALUES (?, ?, ?, ?, ?, ?)',
-      [resId, resCode, clientId, nomAcomp ? nomAcomp.trim() : '', numHabitacion, hora]
+      [resId, resCode, clientId, acompText, numHabitacion, hora]
     );
 
     // 4. Register deposit payment in Caja if amount > 0
@@ -1295,19 +1412,80 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'No se encontró reserva para esta habitación' });
     }
 
-    // Fetch guest CI
-    const cliente = await db.get('SELECT ci, dni FROM clientes WHERE id = ?', [reserva.clienteId]);
+    // Fetch guest details
+    const cliente = await db.get('SELECT nombre, ci, dni FROM clientes WHERE id = ?', [reserva.clienteId]);
     const clientCi = cliente ? (cliente.ci || cliente.dni) : '';
+    const clientNombre = cliente ? cliente.nombre : 'Huésped';
 
     // Increment guest visits
     await db.run('UPDATE clientes SET visitas = visitas + 1 WHERE id = ?', [reserva.clienteId]);
 
-    // Update room status to Ocupada with Pernocta checkout time (11:00 AM)
+    const formattedName = formatGuestName(clientNombre);
+    const acompText = reserva.nombreAcomp || '';
+
+    // Update room status to Ocupada and set huesped
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ?, modalidad = 'pernocta' 
+       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ?, modalidad = 'pernocta' 
        WHERE num = ?`,
-      [reserva.nombreAcomp || '', getFechaHoraActual(), calcularHoraSalida('pernocta'), reserva.clienteId, clientCi, numHabitacion]
+      [formattedName, acompText, getFechaHoraActual(), calcularHoraSalida('pernocta'), reserva.clienteId, clientCi, numHabitacion]
+    );
+
+    // Save stay record to historial_estadias
+    const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
+    const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+    const estadiaId = 'est_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+
+    const resTx = await db.get(
+      "SELECT * FROM caja WHERE (concepto LIKE ? OR concepto LIKE ?) ORDER BY hora DESC LIMIT 1",
+      [`%Reserva%Hab ${numHabitacion}%`, `%Reserva%Hab.${numHabitacion}%`]
+    );
+
+    let usdAmount = 0;
+    let vesAmount = 0;
+    let metodoPago = 'Reserva';
+    let referencia = '-';
+
+    if (resTx) {
+      metodoPago = resTx.metodo || 'Reserva';
+      const cleanMetodo = metodoPago.toLowerCase();
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.includes(m)) && !cleanMetodo.includes('($)');
+      if (isVes) {
+        vesAmount = resTx.monto_ves || (resTx.monto * tasaUsd);
+      } else {
+        usdAmount = resTx.monto;
+      }
+      
+      const refMatch = metodoPago.match(/Ref:\s*(\S+)/i);
+      if (refMatch) {
+        referencia = refMatch[1];
+      }
+    }
+
+    const cantHuespedes = (acompText ? acompText.split(',').length : 0) + 1;
+
+    await db.run(
+      `INSERT INTO historial_estadias (
+        id, numHabitacion, huesped, clienteCi, acomp, ingreso, 
+        cantidad_huespedes, monto_usd, monto_ves, metodo_pago, referencia, 
+        usuarioId, usuarioNombre, modalidad
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        estadiaId,
+        numHabitacion,
+        formattedName,
+        clientCi,
+        acompText,
+        getFechaHoraActual(),
+        cantHuespedes,
+        usdAmount,
+        vesAmount,
+        metodoPago,
+        referencia,
+        req.user.id,
+        req.user.nombre,
+        'pernocta'
+      ]
     );
 
     // Delete reservation
@@ -1350,6 +1528,93 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
 
     const huespedNombre = room.huesped || 'Huésped';
     const metodo = metodoPago || 'Efectivo Bolívares';
+
+    // Update stay history record for checkout
+    const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
+    const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+
+    const checkoutStayTotal = (parseFloat(montoHabitacion) || 0) + (parseFloat(montoHorasExtras) || 0) + (parseFloat(penalidad) || 0);
+
+    let usdCheckout = 0;
+    let vesCheckout = 0;
+
+    const cleanMetodo = metodo.toLowerCase();
+    if (cleanMetodo.includes('pago mixto')) {
+      const usdMatch = cleanMetodo.match(/efectivo \(\$\):\s*\$(\d+(\.\d+)?)/);
+      const zelleMatch = cleanMetodo.match(/zelle:\s*\$(\d+(\.\d+)?)/);
+      const vesCashMatch = cleanMetodo.match(/efectivo \(bs\):\s*bs\.\s*(\d+(\.\d+)?)/);
+      const pmMatch = cleanMetodo.match(/pago m[óo]vil:\s*bs\.\s*(\d+(\.\d+)?)/);
+      const puntoMatch = cleanMetodo.match(/punto:\s*bs\.\s*(\d+(\.\d+)?)/);
+      
+      const valUsdCash = usdMatch ? parseFloat(usdMatch[1]) : 0;
+      const valZelle = zelleMatch ? parseFloat(zelleMatch[1]) : 0;
+      const valVesCash = vesCashMatch ? parseFloat(vesCashMatch[1]) : 0;
+      const valPm = pmMatch ? parseFloat(pmMatch[1]) : 0;
+      const valPunto = puntoMatch ? parseFloat(puntoMatch[1]) : 0;
+
+      usdCheckout = valUsdCash + valZelle;
+      vesCheckout = valVesCash + valPm + valPunto;
+    } else {
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.includes(m)) && !cleanMetodo.includes('($)');
+      if (isVes) {
+        vesCheckout = checkoutStayTotal * tasaUsd;
+      } else {
+        usdCheckout = checkoutStayTotal;
+      }
+    }
+
+    // Calculate extra hours count
+    const roomTarifa = await db.get('SELECT precio_hora_extra_usd FROM tarifas WHERE tipo = ?', [room.tipo]);
+    const hourlyRate = roomTarifa && roomTarifa.precio_hora_extra_usd ? parseFloat(roomTarifa.precio_hora_extra_usd) : 5.00;
+    const hoursExtraCount = hourlyRate > 0 ? Math.round(parseFloat(montoHorasExtras || 0) / hourlyRate) : 0;
+
+    // Find if the room has an active stay in history
+    const activeStay = await db.get('SELECT * FROM historial_estadias WHERE numHabitacion = ? AND salida IS NULL', [numHabitacion]);
+    if (activeStay) {
+      await db.run(
+        `UPDATE historial_estadias 
+         SET salida = ?, 
+             monto_usd = COALESCE(monto_usd, 0) + ?, 
+             monto_ves = COALESCE(monto_ves, 0) + ?, 
+             horas_extra = COALESCE(horas_extra, 0) + ?
+         WHERE id = ?`,
+        [
+          getFechaHoraActual(),
+          usdCheckout,
+          vesCheckout,
+          hoursExtraCount,
+          activeStay.id
+        ]
+      );
+    } else {
+      const estadiaId = 'est_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      const cantHuespedes = (room.acomp ? room.acomp.split(',').length : 0) + 1;
+      await db.run(
+        `INSERT INTO historial_estadias (
+          id, numHabitacion, huesped, clienteCi, acomp, ingreso, salida,
+          cantidad_huespedes, monto_usd, monto_ves, metodo_pago, referencia, 
+          usuarioId, usuarioNombre, modalidad, horas_extra
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          estadiaId,
+          numHabitacion,
+          huespedNombre,
+          room.clienteCi || '-',
+          room.acomp || '',
+          room.ingreso || getFechaHoraActual(),
+          getFechaHoraActual(),
+          cantHuespedes,
+          usdCheckout,
+          vesCheckout,
+          metodo,
+          '-',
+          req.user.id,
+          req.user.nombre,
+          room.modalidad || '4h',
+          hoursExtraCount
+        ]
+      );
+    }
 
     // 1. Update room status to Limpieza and clear active guest details
     await db.run(
@@ -1851,6 +2116,17 @@ app.get('/api/entrega-turnos', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching entrega_turnos:', error);
     res.status(500).json({ error: 'Error al consultar entregas de turno.' });
+  }
+});
+
+// GET /api/historial-estadias - Historial completo de estadias (walk-ins y check-ins)
+app.get('/api/historial-estadias', requireAuth, async (req, res) => {
+  try {
+    const list = await db.all('SELECT * FROM historial_estadias ORDER BY ingreso DESC');
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching historial_estadias:', error);
+    res.status(500).json({ error: 'Error al consultar historial de estadías.' });
   }
 });
 
