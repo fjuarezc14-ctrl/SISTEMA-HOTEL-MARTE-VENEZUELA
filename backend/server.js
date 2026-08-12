@@ -1328,6 +1328,7 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     metodoPago, 
     montoHabitacion, 
     montoConsumos, 
+    montoHorasExtras,
     detallePenalidad,
     vetarCliente,
     clienteId,
@@ -1478,6 +1479,26 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
           'Ingreso',
           `Cobro Saldo Pendiente Hab ${numHabitacion} (${huespedNombre})`,
           finalHab,
+          metodo,
+          getFechaHoraActual(),
+          req.user.id,
+          req.user.nombre,
+          'Hospedaje'
+        ]
+      );
+    }
+
+    // 3b. Register extra hours payment in Caja if > 0
+    const finalHorasExtras = parseFloat(montoHorasExtras) || 0;
+    if (finalHorasExtras > 0) {
+      const transactionId = 't_hextra_' + Date.now();
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          transactionId,
+          'Ingreso',
+          `Cobro Horas Extras Hab ${numHabitacion} (${huespedNombre})`,
+          finalHorasExtras,
           metodo,
           getFechaHoraActual(),
           req.user.id,

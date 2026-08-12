@@ -674,7 +674,7 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
                         </td>
 
                         {(() => {
-                          const isVesPayment = ['Efectivo (Bs)', 'Efectivo', 'Pago Móvil', 'Punto de Venta'].some(m => cleanMetodo.toLowerCase().includes(m.toLowerCase()));
+                          const isVesPayment = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].some(m => cleanMetodo.toLowerCase().includes(m.toLowerCase())) || (cleanMetodo.toLowerCase().includes('efectivo') && !cleanMetodo.toLowerCase().includes('($)'));
                           const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0)
                             ? parseFloat(t.monto_ves).toFixed(2)
                             : (montoUsdVal * tasaUsd).toFixed(2);

@@ -2385,6 +2385,7 @@ export function CheckoutModal({
       detallePenalidad: finalDetalle,
       montoConsumos: totalConsumos,
       montoHabitacion: finalHab,
+      montoHorasExtras: montoHorasExtras,
       metodoPago: finalMetodoPago,
       vetarCliente,
       clienteId: room.clienteId,
