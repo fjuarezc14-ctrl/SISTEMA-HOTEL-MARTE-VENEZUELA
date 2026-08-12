@@ -11,6 +11,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
   const [ci, setCi] = useState('');
   const [tel, setTel] = useState('');
   const [fotoCi, setFotoCi] = useState('');
+  const [fechaNacimiento, setFechaNacimiento] = useState('');
   
   // Webcam state
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
@@ -50,6 +51,7 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
     setCi('');
     setTel('');
     setFotoCi('');
+    setFechaNacimiento('');
     setIsModalOpen(true);
   };
 
@@ -79,7 +81,8 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
           dni: ci.trim(),
           ci: ci.trim(),
           tel: tel.trim(),
-          foto_ci: fotoCi
+          foto_ci: fotoCi,
+          fechaNacimiento: fechaNacimiento
         })
       });
 
@@ -411,6 +414,16 @@ export default function Clientes({ clientes = [], token, tasaUsd = 50.0, onState
                   value={tel}
                   onChange={(e) => setTel(e.target.value)}
                   placeholder="Ej: 0412-1234567"
+                  className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha de Nacimiento</label>
+                <input 
+                  type="date" 
+                  value={fechaNacimiento}
+                  onChange={(e) => setFechaNacimiento(e.target.value)}
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-[#ff331f] bg-white font-semibold"
                 />
               </div>

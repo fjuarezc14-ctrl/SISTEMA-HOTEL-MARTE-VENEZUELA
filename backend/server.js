@@ -2759,7 +2759,7 @@ app.post('/api/clientes', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere el permiso del módulo Clientes.' });
   }
 
-  const { nombre, ci, dni, tel, foto_ci } = req.body;
+  const { nombre, ci, dni, tel, foto_ci, fechaNacimiento } = req.body;
   const numDoc = (ci || dni || '').trim();
 
   if (!nombre || !numDoc) {
@@ -2774,8 +2774,8 @@ app.post('/api/clientes', requireAuth, async (req, res) => {
 
     const id = 'c_' + Date.now();
     await db.run(
-      'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas, vetado, monto_deuda_usd, motivo_veto, foto_ci) VALUES (?, ?, ?, ?, ?, 0, 0, 0, "", ?)',
-      [id, nombre.trim(), numDoc, numDoc, tel ? tel.trim() : '', foto_ci || '']
+      'INSERT INTO clientes (id, nombre, dni, ci, tel, visitas, vetado, monto_deuda_usd, motivo_veto, foto_ci, fechaNacimiento) VALUES (?, ?, ?, ?, ?, 0, 0, 0, "", ?, ?)',
+      [id, nombre.trim(), numDoc, numDoc, tel ? tel.trim() : '', foto_ci || '', fechaNacimiento || '']
     );
 
     await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Cliente Creado CRM', `Cliente ${nombre.trim()} (CI: ${numDoc}) registrado`, req.ip);
@@ -2783,7 +2783,7 @@ app.post('/api/clientes', requireAuth, async (req, res) => {
     res.json({ 
       success: true, 
       message: 'Cliente registrado correctamente en el CRM.', 
-      cliente: { id, nombre: nombre.trim(), dni: numDoc, ci: numDoc, tel: tel ? tel.trim() : '', visitas: 0, vetado: 0, monto_deuda_usd: 0, foto_ci: foto_ci || '' } 
+      cliente: { id, nombre: nombre.trim(), dni: numDoc, ci: numDoc, tel: tel ? tel.trim() : '', visitas: 0, vetado: 0, monto_deuda_usd: 0, foto_ci: foto_ci || '', fechaNacimiento: fechaNacimiento || '' } 
     });
   } catch (error) {
     console.error(error);
