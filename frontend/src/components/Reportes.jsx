@@ -47,16 +47,11 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     try {
       if (typeof horaStr === 'string') {
         if (horaStr.includes('/')) {
-          const datePart = horaStr.split(',')[0].trim();
-          const parts = datePart.split('/');
-          if (parts.length === 3) {
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1;
-            const year = parseInt(parts[2], 10);
-            if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-              return new Date(year, month, day);
-            }
-          }
+          const parts = horaStr.split(',');
+          const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
+          const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
+          const parsed = new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+          if (!isNaN(parsed.getTime())) return parsed;
         }
         const d = new Date(horaStr);
         if (!isNaN(d.getTime())) return d;
@@ -251,18 +246,20 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return t.usuarioNombre || 'Cliente';
   };
 
-  // Filtrar transacciones por rango de fechas (recepFechaInicio/recepFechaFin)
+  // Filtrar transacciones por rango de fechas (recepFechaInicio/recepFechaFin) alineado al turno de 8am a 8am
   const isInRecepDateRange = (horaStr) => {
     if (!recepFechaInicio && !recepFechaFin) return true;
     const d = parseDate(horaStr);
     if (recepFechaInicio) {
       const [y, m, day] = recepFechaInicio.split('-').map(Number);
-      const s = new Date(y, m - 1, day, 0, 0, 0);
+      const s = new Date(y, m - 1, day, 8, 0, 0);
       if (d < s) return false;
     }
     if (recepFechaFin) {
       const [y, m, day] = recepFechaFin.split('-').map(Number);
-      const e = new Date(y, m - 1, day, 23, 59, 59);
+      const e = new Date(y, m - 1, day, 8, 0, 0);
+      e.setDate(e.getDate() + 1);
+      e.setSeconds(e.getSeconds() - 1);
       if (d > e) return false;
     }
     return true;
@@ -698,38 +695,12 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
         <div className="space-y-6 fade-in">
           {/* Filtros del reporte */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 print:hidden">
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap items-end gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Recepcionista</label>
                 <select value={selectedRecepcionista} onChange={e => setSelectedRecepcionista(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500">
                   <option value="TODOS">Todos</option>
                   {recepList.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Turno</label>
-                <select value={recepTurnoFilter} onChange={e => setRecepTurnoFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="TODOS">Todos</option>
-                  <option value="Mañana">Mañana (06:00-13:59)</option>
-                  <option value="Tarde">Tarde (14:00-21:59)</option>
-                  <option value="Noche">Noche (22:00-05:59)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo</label>
-                <select value={recepTipoFilter} onChange={e => setRecepTipoFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="TODOS">Todos</option>
-                  <option value="Check In">Check In</option>
-                  <option value="Check Out">Check Out</option>
-                  <option value="Market">Market</option>
-                  <option value="Egreso">Egreso</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Método de Pago</label>
-                <select value={recepMetodoFilter} onChange={e => setRecepMetodoFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="TODOS">Todos</option>
-                  {metodosList.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div>
@@ -740,16 +711,10 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label>
                 <input type="date" value={recepFechaFin} onChange={e => setRecepFechaFin(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none" />
               </div>
-              <div className="flex-1 min-w-[180px]">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Búsqueda (Hab / Cliente / Concepto)</label>
-                <input type="text" value={recepBusqueda} onChange={e => setRecepBusqueda(e.target.value)} placeholder="Ej: 101, Juan, Check In..." className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500" />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleExportRecepCSV} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow transition-all flex items-center gap-1.5">
-                  <i className="fa-solid fa-file-csv"></i> Exportar CSV
-                </button>
-                <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow transition-all flex items-center gap-1.5">
-                  <i className="fa-solid fa-print"></i> Imprimir
+              <div className="flex-1"></div>
+              <div>
+                <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5">
+                  <i className="fa-solid fa-print"></i> Imprimir Reporte
                 </button>
               </div>
             </div>
