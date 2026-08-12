@@ -1271,8 +1271,8 @@ export default function EntregaTurnos({
                     <th className="p-1.5 border-r border-black text-center">Hab</th>
                     <th className="p-1.5 border-r border-black">Huésped / Concepto</th>
                     <th className="p-1.5 border-r border-black">Medio de Pago</th>
-                    <th className="p-1.5 border-r border-black text-right">Monto ($)</th>
-                    <th className="p-1.5 text-right">Monto (Bs)</th>
+                    <th className="p-1.5 border-r border-black text-right">Monto Pagado</th>
+                    <th className="p-1.5 text-right">Equivalente</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1287,9 +1287,11 @@ export default function EntregaTurnos({
 
                     const { cleanMetodo, refCode } = parseCleanMetodoAndRef(item.metodo);
 
-                    const isVes = ['efectivo (bs)', 'efectivo', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.toLowerCase().includes(m));
-                    const displayUsd = isVes ? (parseFloat(item.monto) / tasaUsd) : parseFloat(item.monto);
-                    const displayVes = isVes ? parseFloat(item.monto_ves || (item.monto * tasaUsd)) : (parseFloat(item.monto) * tasaUsd);
+                    const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.toLowerCase().includes(m)) || (cleanMetodo.toLowerCase().includes('efectivo') && !cleanMetodo.toLowerCase().includes('($)'));
+                    const displayUsd = parseFloat(item.monto) || 0;
+                    const displayVes = (item.monto_ves && parseFloat(item.monto_ves) > 0)
+                      ? parseFloat(item.monto_ves)
+                      : (displayUsd * tasaUsd);
 
                     return (
                       <tr key={item.id || index} className="border-b border-slate-300">
@@ -1299,8 +1301,12 @@ export default function EntregaTurnos({
                         <td className="p-1.5 border-r border-slate-300">
                           {cleanMetodo} {refCode !== '-' ? `(Ref: ${refCode})` : ''}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 text-right font-bold">${displayUsd.toFixed(2)}</td>
-                        <td className="p-1.5 text-right font-semibold">Bs. {displayVes.toFixed(2)}</td>
+                        <td className="p-1.5 border-r border-slate-300 text-right font-black text-slate-800">
+                          {isVes ? `Bs. ${displayVes.toFixed(2)}` : `$${displayUsd.toFixed(2)} USD`}
+                        </td>
+                        <td className="p-1.5 text-right font-medium text-slate-500">
+                          {isVes ? `~ $${displayUsd.toFixed(2)} USD` : `~ Bs. ${displayVes.toFixed(2)}`}
+                        </td>
                       </tr>
                     );
                   })}
