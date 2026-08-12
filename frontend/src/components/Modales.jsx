@@ -2202,10 +2202,13 @@ export function CheckoutModal({
   const roomConsumos = room ? consumos.filter(c => c.numHabitacion === room.num && c.estado !== 'pagado_inmediato') : [];
   const totalConsumos = roomConsumos.reduce((sum, c) => sum + (c.monto * c.cantidad), 0);
 
-  // Compute stay overtime extra charge
+  // Compute stay overtime extra charge with 10-minute grace period
   const expirationStatus = room ? getStayExpirationStatus(room.salida) : null;
   const isExpired = expirationStatus?.isExpired && expirationStatus?.minutesOverdue > 0;
-  const hoursOverdue = isExpired ? Math.ceil(expirationStatus.minutesOverdue / 60) : 0;
+  const gracePeriod = 10; // 10 minutes grace period
+  const hoursOverdue = (isExpired && expirationStatus.minutesOverdue > gracePeriod)
+    ? Math.floor((expirationStatus.minutesOverdue - gracePeriod - 1) / 60) + 1
+    : 0;
   
   // Find hourly rate for room type
   const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
