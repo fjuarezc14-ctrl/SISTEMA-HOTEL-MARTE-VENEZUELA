@@ -134,6 +134,19 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
           setErrorMsg(`⚠️ El desglose de pago mixto ($${totalPagadoMixto.toFixed(2)}) no coincide con el total de la venta ($${totalUsd.toFixed(2)}). Diferencia: $${diferenciaMixta.toFixed(2)} USD.`);
           return;
         }
+
+        // Validate digital reference codes for mixed payments
+        for (const p of pagosMixtos) {
+          const inputAmount = parseFloat(p.monto_usd) || 0;
+          if (inputAmount > 0) {
+            const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(p.metodo);
+            if (isDigital && !(p.codigoRef || '').trim()) {
+              setErrorMsg(`⚠️ Debe ingresar el Código de Referencia para el pago digital (${p.metodo}) en el desglose.`);
+              return;
+            }
+          }
+        }
+
         finalPagos = pagosMixtos
           .map(p => {
             const isVes = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(p.metodo);
@@ -618,6 +631,17 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                                 }
                               </span>
                             </div>
+
+                            {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(pago.metodo) && (
+                              <input 
+                                type="text"
+                                value={pago.codigoRef || ''}
+                                onChange={(e) => handlePagoRowChange(index, 'codigoRef', e.target.value)}
+                                placeholder="Ref / Código *"
+                                className="w-24 px-2 py-1 rounded-lg border border-amber-300 text-[10.5px] font-black text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 bg-amber-50/20"
+                                required
+                              />
+                            )}
 
                             {pagosMixtos.length > 1 && (
                               <button 

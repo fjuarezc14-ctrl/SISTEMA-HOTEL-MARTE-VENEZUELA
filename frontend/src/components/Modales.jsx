@@ -1417,9 +1417,15 @@ export function NuevaReservaModal({
     }
 
     const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
-    if (isDigital && adelantoNum > 0 && !codigoVerificacion.trim()) {
-      alert('⚠️ Debe ingresar el Código de Verificación / Referencia para adelantos digitales.');
-      return;
+    if (isDigital) {
+      if (adelantoNum <= 0) {
+        alert(`⚠️ Para el método de pago digital (${metodo}) debe ingresar un monto de adelanto mayor a cero.`);
+        return;
+      }
+      if (!codigoVerificacion.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación / Referencia para el adelanto digital.');
+        return;
+      }
     }
 
     const confirmReserva = window.confirm(
@@ -1956,8 +1962,8 @@ export function NuevaReservaModal({
                     </select>
                   </div>
 
-                  {/* Verification code if digital deposit > 0 */}
-                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo) && adelantoNum > 0 && (
+                  {/* Verification code if digital method is selected */}
+                  {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo) && (
                     <div className="col-span-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
                       <label className="block text-[10px] font-black text-amber-900 uppercase mb-1">Código de Verificación / Ref. Adelanto *</label>
                       <input 
