@@ -306,6 +306,16 @@ export default function EntregaTurnos({
 
   // Generate / Print Shift Report PDF
   const handlePrintCurrentShift = () => {
+    const marketUSD = marketMovements.reduce((sum, t) => {
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => t.metodo.toLowerCase().includes(m)) && !t.metodo.toLowerCase().includes('($)');
+      return isVes ? sum : sum + (parseFloat(t.monto) || 0);
+    }, 0);
+
+    const marketVES = marketMovements.reduce((sum, t) => {
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => t.metodo.toLowerCase().includes(m)) && !t.metodo.toLowerCase().includes('($)');
+      return isVes ? sum + (parseFloat(t.monto_ves || (t.monto * tasaUsd)) || 0) : sum;
+    }, 0);
+
     const reportData = {
       titulo: 'REPORTE DE CIERRE DE TURNO (PREVIO A ENTREGA)',
       fecha: new Date().toLocaleString('es-VE'),
@@ -318,6 +328,8 @@ export default function EntregaTurnos({
       saldoZelle: parseFloat(saldoZelle) || 0,
       esperadoUsd: myEfectivoUSD,
       ventasMarket: myMarketSales,
+      marketUSD,
+      marketVES,
       lenceria,
       equipamiento,
       novedades: novedades.trim() || 'Sin novedades declaradas'
@@ -335,6 +347,39 @@ export default function EntregaTurnos({
     let equipObj = {};
     try { equipObj = typeof t.llavesHerramientasConteo === 'string' ? JSON.parse(t.llavesHerramientasConteo) : t.llavesHerramientasConteo || {}; } catch(e){}
 
+    const idx = (entregaTurnos || []).findIndex(x => x.id === t.id);
+    const startStr = (idx < (entregaTurnos || []).length - 1)
+      ? (entregaTurnos || [])[idx + 1].fechaHoraEntrega
+      : null;
+    const endStr = t.fechaHoraEntrega || t.fecha;
+
+    const histCutoff = startStr ? new Date(startStr) : new Date(0);
+    const histEnd = endStr ? new Date(endStr) : new Date();
+
+    const histMovements = (caja || []).filter(item => {
+      const matchUser = item.usuarioId === t.usuarioSalienteId || item.usuarioNombre === t.usuarioSalienteNombre;
+      if (!matchUser) return false;
+      if (item.hora) {
+        const tDate = parseCajaFecha(item.hora);
+        return tDate >= histCutoff && tDate <= histEnd;
+      }
+      return true;
+    });
+
+    const histMarketMovements = histMovements.filter(item => 
+      item.tipo === 'Ingreso' && (item.origen === 'Market' || (item.concepto || '').toLowerCase().includes('market') || (item.concepto || '').toLowerCase().includes('tienda'))
+    );
+
+    const marketUSD = histMarketMovements.reduce((sum, item) => {
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => item.metodo.toLowerCase().includes(m)) && !item.metodo.toLowerCase().includes('($)');
+      return isVes ? sum : sum + (parseFloat(item.monto) || 0);
+    }, 0);
+
+    const marketVES = histMarketMovements.reduce((sum, item) => {
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => item.metodo.toLowerCase().includes(m)) && !item.metodo.toLowerCase().includes('($)');
+      return isVes ? sum + (parseFloat(item.monto_ves || (item.monto * tasaUsd)) || 0) : sum;
+    }, 0);
+
     const reportData = {
       id: t.id,
       titulo: `REPORTE DE ENTREGA DE TURNO N° ${t.id}`,
@@ -351,6 +396,8 @@ export default function EntregaTurnos({
       saldoZelle: parseFloat(t.saldoZelle) || 0,
       esperadoUsd: parseFloat(t.saldoEfectivoUsd) || 0,
       ventasMarket: parseFloat(t.ventasMarket) || 0,
+      marketUSD,
+      marketVES,
       lenceria: lenceriaObj,
       equipamiento: equipObj,
       novedades: t.novedades || 'Sin novedades',
@@ -1223,39 +1270,53 @@ export default function EntregaTurnos({
                   <tr className="bg-slate-100 border-b border-black font-bold">
                     <th className="p-2 border-r border-black">Canal de Pago / Concepto</th>
                     <th className="p-2 border-r border-black text-right">Monto ($ USD)</th>
-                    <th className="p-2 text-right">Equivalente (Bs. VES)</th>
+                    <th className="p-2 text-right">Monto (Bs)</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Efectivo Físico ($ USD)</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoUsd.toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoUsd * tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">
+                      {printableReport.saldoUsd > 0 ? `$${printableReport.saldoUsd.toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-2 text-right font-semibold">-</td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Efectivo Físico en Bolívares (Bs)</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${(printableReport.saldoVes / tasaUsd).toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">Bs. {printableReport.saldoVes.toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">-</td>
+                    <td className="p-2 text-right font-semibold">
+                      {printableReport.saldoVes > 0 ? `Bs. ${printableReport.saldoVes.toFixed(2)}` : '-'}
+                    </td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Ventas por Pago Móvil</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${(printableReport.saldoPagoMovil / tasaUsd).toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">Bs. {printableReport.saldoPagoMovil.toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">-</td>
+                    <td className="p-2 text-right font-semibold">
+                      {printableReport.saldoPagoMovil > 0 ? `Bs. ${printableReport.saldoPagoMovil.toFixed(2)}` : '-'}
+                    </td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Ventas por Punto de Venta</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${(printableReport.saldoPunto / tasaUsd).toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">Bs. {printableReport.saldoPunto.toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">-</td>
+                    <td className="p-2 text-right font-semibold">
+                      {printableReport.saldoPunto > 0 ? `Bs. ${printableReport.saldoPunto.toFixed(2)}` : '-'}
+                    </td>
                   </tr>
                   <tr className="border-b border-slate-300">
                     <td className="p-2 border-r border-slate-300 font-bold">Ventas por Zelle</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">${printableReport.saldoZelle.toFixed(2)}</td>
-                    <td className="p-2 text-right font-semibold">~ Bs. {(printableReport.saldoZelle * tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 border-r border-slate-300 text-right font-black">
+                      {printableReport.saldoZelle > 0 ? `$${printableReport.saldoZelle.toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-2 text-right font-semibold">-</td>
                   </tr>
                   <tr className="bg-slate-50 font-black">
                     <td className="p-2 border-r border-black uppercase">Ventas Minimarket / Snacks (Mi Turno)</td>
-                    <td className="p-2 border-r border-black text-right text-sm">${printableReport.ventasMarket.toFixed(2)}</td>
-                    <td className="p-2 text-right text-xs">~ Bs. {(printableReport.ventasMarket * tasaUsd).toFixed(2)}</td>
+                    <td className="p-2 border-r border-black text-right text-sm">
+                      {printableReport.marketUSD > 0 ? `$${printableReport.marketUSD.toFixed(2)}` : (printableReport.ventasMarket > 0 ? `$${printableReport.ventasMarket.toFixed(2)}` : '-')}
+                    </td>
+                    <td className="p-2 text-right text-xs">
+                      {printableReport.marketVES > 0 ? `Bs. ${printableReport.marketVES.toFixed(2)}` : '-'}
+                    </td>
                   </tr>
                 </tbody>
               </table>
