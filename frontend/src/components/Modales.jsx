@@ -266,9 +266,10 @@ export function AsignarDirectoModal({
 
   const basePrice = getBasePrice(room.tipo, modalidad);
   const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
-  // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas (mantiene registro único de la habitación)
-  const hourlyRate = basePrice * 0.5;
-  const extraHoursCostUsd = (modalidad === '4h') ? (basePrice * 0.5 * horasExtraIniciales) : 0;
+  const hourlyRate = roomTarifa && roomTarifa.precio_hora_extra_usd !== undefined && roomTarifa.precio_hora_extra_usd !== null
+    ? (parseFloat(roomTarifa.precio_hora_extra_usd) || 0)
+    : (basePrice * 0.5);
+  const extraHoursCostUsd = (modalidad === '4h') ? (hourlyRate * horasExtraIniciales) : 0;
 
   // Compute total companion surcharges (50% of base stay price for 3rd+ adult guest; $0 for minors)
   const recargoIndividual = basePrice * 0.50;
@@ -2207,12 +2208,13 @@ export function CheckoutModal({
   const hoursOverdue = isExpired ? Math.ceil(expirationStatus.minutesOverdue / 60) : 0;
   
   // Find hourly rate for room type
-  const roomTarifa = room ? tarifas.find(t => t.tipo === room.tipo) : null;
-  // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas (mantiene registro único de la habitación)
+  const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
   const basePriceCheckout = roomTarifa
     ? (parseFloat(roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) || 20)
     : (room?.tipo === 'Mini Suite' ? 24 : 20);
-  const hourlyRate = basePriceCheckout * 0.5;
+  const hourlyRate = roomTarifa && roomTarifa.precio_hora_extra_usd !== undefined && roomTarifa.precio_hora_extra_usd !== null
+    ? (parseFloat(roomTarifa.precio_hora_extra_usd) || 0)
+    : (basePriceCheckout * 0.5);
   const montoHorasExtras = isExpired ? hoursOverdue * hourlyRate : 0;
 
   useEffect(() => {
@@ -3801,11 +3803,12 @@ export function ExtenderHorasModal({
 
   const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
   const roomTarifa = (tarifas || []).find(t => t.tipo === room.tipo);
-  // BUG 1 FIX: Hora extra = Precio base * 0.5 * Cantidad horas (mantiene registro único de la habitación)
   const basePriceExtender = roomTarifa
     ? (parseFloat(roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) || 20)
     : (room.tipo === 'Mini Suite' ? 24 : 20);
-  const hourlyRate = basePriceExtender * 0.5;
+  const hourlyRate = roomTarifa && roomTarifa.precio_hora_extra_usd !== undefined && roomTarifa.precio_hora_extra_usd !== null
+    ? (parseFloat(roomTarifa.precio_hora_extra_usd) || 0)
+    : (basePriceExtender * 0.5);
 
   const totalUsdCalculado = horasAdicionales * hourlyRate;
   const totalVesCalculado = (totalUsdCalculado * tasaUsd).toFixed(2);
