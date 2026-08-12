@@ -576,7 +576,7 @@ export default function InventarioLenceria({
                 { key: 'ducha', label: 'Ducha/Regadera', val: eq.ducha || 'Operativo' }
               ];
 
-              const tieneFalla = itemsList.some(i => i.val !== 'Operativo');
+              const tieneFalla = itemsList.some(i => i.val !== 'Operativo' && i.val !== 'No Aplica');
 
               return (
                 <div key={r.num} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3 flex flex-col justify-between">
@@ -600,9 +600,12 @@ export default function InventarioLenceria({
                           <span className="font-semibold text-slate-600 truncate">{item.label}</span>
                           <span className={`font-bold ${
                             item.val === 'Operativo' ? 'text-emerald-600' :
+                            item.val === 'No Aplica' ? 'text-slate-400 font-medium' :
                             item.val === 'En Revisión' ? 'text-amber-600' : 'text-rose-600'
                           }`}>
-                            {item.val === 'Operativo' ? '✅' : item.val === 'En Revisión' ? '🛠️' : '❌'}
+                            {item.val === 'Operativo' ? '✅' :
+                             item.val === 'No Aplica' ? '➖' :
+                             item.val === 'En Revisión' ? '🛠️' : '❌'}
                           </span>
                         </div>
                       ))}
