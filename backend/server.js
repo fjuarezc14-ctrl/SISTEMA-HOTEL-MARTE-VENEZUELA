@@ -66,14 +66,10 @@ function calcularEdadBackend(fechaNacStr) {
 // Helper: Format full name to reception shorthand (e.g., "Laura Medina" -> "L. Medina")
 function formatGuestName(fullName) {
   if (!fullName) return '';
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 0) return '';
-  if (parts.length === 1) {
-    return parts[0][0] ? parts[0][0].toUpperCase() + parts[0].slice(1) : parts[0];
-  }
-  const firstInitial = parts[0][0] ? parts[0][0].toUpperCase() + '.' : '';
-  const rest = parts.slice(1).join(' ');
-  return `${firstInitial} ${rest}`.trim();
+  return fullName.trim().split(/\s+/).map(word => {
+    if (!word) return '';
+    return word[0].toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
 }
 
 // Helper: Registrar evento en la bitácora de auditoría (v3 - Fase 3)
