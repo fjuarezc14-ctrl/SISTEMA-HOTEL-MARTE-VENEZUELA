@@ -2283,9 +2283,14 @@ app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
       return tDate >= startRange && tDate <= endRange;
     });
 
-    // Sum physical cash declarations
-    const declaredUsdCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoUsd) || 0), 0);
-    const declaredVesCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoVes) || 0), 0);
+    // Physical cash is non-cumulative (from the last shift of the day)
+    dailyTurnos.sort((a, b) => parseDBDate(a.fechaHoraEntrega) - parseDBDate(b.fechaHoraEntrega));
+    const lastShift = dailyTurnos[dailyTurnos.length - 1];
+
+    const declaredUsdCash = lastShift ? (parseFloat(lastShift.saldoEfectivoUsd) || 0) : 0;
+    const declaredVesCash = lastShift ? (parseFloat(lastShift.saldoEfectivoVes) || 0) : 0;
+
+    // Digital payments are cumulative across all shifts of the day
     const declaredPagoMovil = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPagoMovil) || 0), 0);
     const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
     const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
@@ -2423,8 +2428,14 @@ app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
         return tDate >= startRange && tDate <= endRange;
       });
 
-      const declaredUsdCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoUsd) || 0), 0);
-      const declaredVesCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoVes) || 0), 0);
+      // Physical cash is non-cumulative (from the last shift of the day)
+      dailyTurnos.sort((a, b) => parseDBDate(a.fechaHoraEntrega) - parseDBDate(b.fechaHoraEntrega));
+      const lastShift = dailyTurnos[dailyTurnos.length - 1];
+
+      const declaredUsdCash = lastShift ? (parseFloat(lastShift.saldoEfectivoUsd) || 0) : 0;
+      const declaredVesCash = lastShift ? (parseFloat(lastShift.saldoEfectivoVes) || 0) : 0;
+
+      // Digital payments are cumulative across all shifts of the day
       const declaredPagoMovil = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPagoMovil) || 0), 0);
       const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
       const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
