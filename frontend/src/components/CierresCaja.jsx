@@ -31,7 +31,7 @@ export default function CierresCaja() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('marte_token');
       const res = await fetch(`/api/reportes/cierre-diario?fecha=${fechaVal}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -58,7 +58,7 @@ export default function CierresCaja() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('marte_token');
       const res = await fetch(`/api/reportes/cierre-consolidado?fechaInicio=${start}&fechaFin=${end}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -81,7 +81,7 @@ export default function CierresCaja() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('marte_token');
       const res = await fetch(`/api/reportes/minibar-semanal?fechaInicio=${mondayVal}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -259,28 +259,28 @@ export default function CierresCaja() {
                     <tbody className="divide-y divide-gray-100 text-sm">
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Ventas Habitaciones</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {(diarioData.ventas.habitaciones * diarioData.tasaUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.habitaciones.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.habitaciones.usd.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Ingreso de Acompañante</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {(diarioData.ventas.acompanante * diarioData.tasaUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.acompanante.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.acompanante.usd.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Ventas Mini Bar</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {(diarioData.ventas.minibar * diarioData.tasaUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.minibar.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.minibar.usd.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Daños, Serv y Otros</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {(diarioData.ventas.danos * diarioData.tasaUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.danos.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.danos.usd.toFixed(2)}</td>
                       </tr>
                       <tr className="bg-indigo-50/50 font-bold">
                         <td className="px-4 py-2.5 text-indigo-900 text-base">TOTAL VENTAS</td>
-                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">Bs. {(diarioData.ventas.total * diarioData.tasaUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">${diarioData.ventas.total.toFixed(2)}</td>
+                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">Bs. {diarioData.ventas.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">${diarioData.ventas.total.usd.toFixed(2)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -340,14 +340,14 @@ export default function CierresCaja() {
                             (diarioData.declarado.divisas +
                             (diarioData.declarado.efectivoBs / diarioData.tasaUsd) +
                             ((diarioData.declarado.pagoMovil + diarioData.declarado.punto) / diarioData.tasaUsd) +
-                            diarioData.declarado.zelle) - diarioData.ventas.total
+                            diarioData.declarado.zelle) - (diarioData.ventas.total.usd + (diarioData.ventas.total.ves / diarioData.tasaUsd))
                           ) >= 0 ? 'text-green-600' : 'text-red-600'
                         }`}>
                           ${(
                             (diarioData.declarado.divisas +
                             (diarioData.declarado.efectivoBs / diarioData.tasaUsd) +
                             ((diarioData.declarado.pagoMovil + diarioData.declarado.punto) / diarioData.tasaUsd) +
-                            diarioData.declarado.zelle) - diarioData.ventas.total
+                            diarioData.declarado.zelle) - (diarioData.ventas.total.usd + (diarioData.ventas.total.ves / diarioData.tasaUsd))
                           ).toFixed(2)}
                         </td>
                       </tr>
@@ -499,37 +499,67 @@ export default function CierresCaja() {
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Ventas Habitaciones</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">${d.ventas.habitaciones.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r">
+                        <div className="font-semibold text-gray-800">${d.ventas.habitaciones.usd.toFixed(2)}</div>
+                        <div className="font-semibold text-gray-800">Bs. {d.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </td>
                     ))}
-                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">${consolidadoData.totales.ventas.habitaciones.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">
+                      <div>${consolidadoData.totales.ventas.habitaciones.usd.toFixed(2)}</div>
+                      <div>Bs. {consolidadoData.totales.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Ingreso de Acompañante</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">${d.ventas.acompanante.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r">
+                        <div className="font-semibold text-gray-800">${d.ventas.acompanante.usd.toFixed(2)}</div>
+                        <div className="font-semibold text-gray-800">Bs. {d.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </td>
                     ))}
-                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">${consolidadoData.totales.ventas.acompanante.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">
+                      <div>${consolidadoData.totales.ventas.acompanante.usd.toFixed(2)}</div>
+                      <div>Bs. {consolidadoData.totales.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Ventas Mini Bar</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">${d.ventas.minibar.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r">
+                        <div className="font-semibold text-gray-800">${d.ventas.minibar.usd.toFixed(2)}</div>
+                        <div className="font-semibold text-gray-800">Bs. {d.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </td>
                     ))}
-                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">${consolidadoData.totales.ventas.minibar.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">
+                      <div>${consolidadoData.totales.ventas.minibar.usd.toFixed(2)}</div>
+                      <div>Bs. {consolidadoData.totales.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Daños, Serv y Otros</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">${d.ventas.danos.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r">
+                        <div className="font-semibold text-gray-800">${d.ventas.danos.usd.toFixed(2)}</div>
+                        <div className="font-semibold text-gray-800">Bs. {d.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </td>
                     ))}
-                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">${consolidadoData.totales.ventas.danos.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">
+                      <div>${consolidadoData.totales.ventas.danos.usd.toFixed(2)}</div>
+                      <div>Bs. {consolidadoData.totales.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </td>
                   </tr>
                   <tr className="bg-indigo-50/20 font-bold border-b-2">
                     <td className="px-3 py-2 text-indigo-900 border-r">TOTAL VENTAS DIARIAS</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-indigo-900 border-r">${d.ventas.total.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r text-indigo-900">
+                        <div>${d.ventas.total.usd.toFixed(2)}</div>
+                        <div>Bs. {d.ventas.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </td>
                     ))}
-                    <td className="px-3 py-2 text-right font-black text-indigo-900 bg-indigo-50/60">${consolidadoData.totales.ventas.total.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-black text-indigo-900 bg-indigo-50/60">
+                      <div>${consolidadoData.totales.ventas.total.usd.toFixed(2)}</div>
+                      <div>Bs. {consolidadoData.totales.ventas.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </td>
                   </tr>
 
                   {/* Category: Disponible */}
@@ -539,47 +569,44 @@ export default function CierresCaja() {
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Divisas ($ Físicos)</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">${d.declarado.divisas.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r font-semibold text-gray-800">${d.declarado.divisas.toFixed(2)}</td>
                     ))}
                     <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">${consolidadoData.totales.declarado.divisas.toFixed(2)}</td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Efectivo BSS (Bs Físicos)</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">Bs. {d.declarado.efectivoBs.toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r font-semibold text-gray-800">Bs. {d.declarado.efectivoBs.toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
                     ))}
                     <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">Bs. {consolidadoData.totales.declarado.efectivoBs.toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Transf / Pago Móvil / Punto</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">Bs. {(d.declarado.pagoMovil + d.declarado.punto).toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r font-semibold text-gray-800">Bs. {(d.declarado.pagoMovil + d.declarado.punto).toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
                     ))}
                     <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">Bs. {(consolidadoData.totales.declarado.pagoMovil + consolidadoData.totales.declarado.punto).toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-gray-700 border-r font-medium">Zelle</td>
                     {consolidadoData.dias.map(d => (
-                      <td key={d.fecha} className="px-2 py-2 text-center text-gray-600 border-r">${d.declarado.zelle.toFixed(2)}</td>
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r font-semibold text-gray-800">${d.declarado.zelle.toFixed(2)}</td>
                     ))}
                     <td className="px-3 py-2 text-right font-black text-indigo-950 bg-indigo-50/30">${consolidadoData.totales.declarado.zelle.toFixed(2)}</td>
                   </tr>
                   <tr className="bg-gray-100/50 font-bold border-b">
-                    <td className="px-3 py-2 text-gray-800 border-r">Efectivo $ (USD Total Recibido)</td>
-                    {consolidadoData.dias.map(d => {
-                      const totalD = d.declarado.divisas + (d.declarado.efectivoBs / consolidadoData.tasaUsd) + ((d.declarado.pagoMovil + d.declarado.punto) / consolidadoData.tasaUsd) + d.declarado.zelle;
-                      return (
-                        <td key={d.fecha} className="px-2 py-2 text-center text-gray-800 border-r">${totalD.toFixed(2)}</td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-right font-black text-gray-900 bg-gray-100">
-                      ${(
-                        consolidadoData.totales.declarado.divisas +
-                        (consolidadoData.totales.declarado.efectivoBs / consolidadoData.tasaUsd) +
-                        ((consolidadoData.totales.declarado.pagoMovil + consolidadoData.totales.declarado.punto) / consolidadoData.tasaUsd) +
-                        consolidadoData.totales.declarado.zelle
-                      ).toFixed(2)}
-                    </td>
+                    <td className="px-3 py-2 text-gray-800 border-r">Total Recibido ($)</td>
+                    {consolidadoData.dias.map(d => (
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r text-gray-800 font-semibold">${(d.declarado.divisas + d.declarado.zelle).toFixed(2)}</td>
+                    ))}
+                    <td className="px-3 py-2 text-right font-black text-gray-900 bg-gray-100">${(consolidadoData.totales.declarado.divisas + consolidadoData.totales.declarado.zelle).toFixed(2)}</td>
+                  </tr>
+                  <tr className="bg-gray-100/50 font-bold border-b">
+                    <td className="px-3 py-2 text-gray-800 border-r">Total Recibido (Bs)</td>
+                    {consolidadoData.dias.map(d => (
+                      <td key={d.fecha} className="px-2 py-2 text-center border-r text-gray-800 font-semibold">Bs. {(d.declarado.efectivoBs + d.declarado.pagoMovil + d.declarado.punto).toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
+                    ))}
+                    <td className="px-3 py-2 text-right font-black text-gray-900 bg-gray-100">Bs. {(consolidadoData.totales.declarado.efectivoBs + consolidadoData.totales.declarado.pagoMovil + consolidadoData.totales.declarado.punto).toLocaleString('es-VE', { maximumFractionDigits: 0 })}</td>
                   </tr>
 
                   {/* Category: Egresos */}

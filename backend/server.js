@@ -2146,56 +2146,71 @@ function parseDBDate(horaStr) {
   }
 }
 
-// Helper: Parse normal and mixed payments in caja transaction to USD amount
-function getAmountForMethodBackend(t, targetMethod) {
-  const val = parseFloat(t.monto) || 0;
-  if (!t.metodo) return 0;
-  
-  if (t.metodo === targetMethod) return val;
-  
+// Helper: Parse normal and mixed payments in a caja transaction to get USD and VES breakdown
+function getPaymentBreakdown(t, tasaUsd) {
+  const montoUsd = parseFloat(t.monto) || 0;
+  const breakdown = {
+    usdCash: 0,
+    zelle: 0,
+    vesCash: 0,
+    pagoMovil: 0,
+    punto: 0
+  };
+
+  if (!t.metodo) return breakdown;
+
   const cleanMetodo = t.metodo.toLowerCase();
+  
   if (!cleanMetodo.includes('pago mixto')) {
-    if (targetMethod === 'Pago Móvil' && cleanMetodo.includes('pago móvil')) return val;
-    if (targetMethod === 'Punto de Venta' && cleanMetodo.includes('punto')) return val;
-    if (targetMethod === 'Zelle' && cleanMetodo.includes('zelle')) return val;
-    if (targetMethod === 'Efectivo ($)' && cleanMetodo === 'efectivo ($)') return val;
-    if (targetMethod === 'Efectivo (Bs)' && cleanMetodo === 'efectivo (bs)') return val;
-    return 0;
+    // Single payment method
+    if (cleanMetodo.includes('efectivo ($)') || cleanMetodo === 'efectivo' || cleanMetodo === 'dólares' || cleanMetodo === 'dolares') {
+      breakdown.usdCash = montoUsd;
+    } else if (cleanMetodo.includes('zelle')) {
+      breakdown.zelle = montoUsd;
+    } else if (cleanMetodo.includes('efectivo (bs)') || cleanMetodo === 'efectivo bolívares' || cleanMetodo === 'efectivo bolivares') {
+      breakdown.vesCash = montoUsd * tasaUsd;
+    } else if (cleanMetodo.includes('pago móvil') || cleanMetodo.includes('pago movil') || cleanMetodo.includes('móvil') || cleanMetodo.includes('movil')) {
+      breakdown.pagoMovil = montoUsd * tasaUsd;
+    } else if (cleanMetodo.includes('punto')) {
+      breakdown.punto = montoUsd * tasaUsd;
+    } else {
+      breakdown.usdCash = montoUsd;
+    }
+    return breakdown;
   }
-  
-  let regex;
-  if (targetMethod === 'Efectivo ($)') {
-    regex = /Efectivo\s*\(\$\):\s*\$?([\d.]+)/i;
-  } else if (targetMethod === 'Efectivo (Bs)') {
-    regex = /Efectivo\s*\(Bs\):\s*Bs\.\s*([\d.]+)/i;
-  } else if (targetMethod === 'Pago Móvil') {
-    regex = /Pago\s*Móvil:\s*Bs\.\s*([\d.]+)/i;
-  } else if (targetMethod === 'Punto de Venta') {
-    regex = /Punto:\s*Bs\.\s*([\d.]+)/i;
-  } else if (targetMethod === 'Zelle') {
-    regex = /Zelle:\s*\$?([\d.]+)/i;
+
+  // Mixed payment parsing
+  const usdCashMatch = t.metodo.match(/Efectivo\s*\(\$\):\s*\$?([\d.]+)/i);
+  if (usdCashMatch) breakdown.usdCash = parseFloat(usdCashMatch[1]) || 0;
+
+  const zelleMatch = t.metodo.match(/Zelle:\s*\$?([\d.]+)/i);
+  if (zelleMatch) breakdown.zelle = parseFloat(zelleMatch[1]) || 0;
+
+  const vesCashMatch = t.metodo.match(/Efectivo\s*\(Bs\):\s*Bs\.\s*([\d.]+)/i);
+  if (vesCashMatch) {
+    breakdown.vesCash = parseFloat(vesCashMatch[1]) || 0;
+  } else {
+    const fb = t.metodo.match(/Efectivo\s*\(Bs\):\s*([\d.]+)/i);
+    if (fb) breakdown.vesCash = parseFloat(fb[1]) || 0;
   }
-  
-  if (regex) {
-    const match = t.metodo.match(regex);
-    if (match && match[1]) {
-      return parseFloat(match[1]) || 0;
-    }
-    // Fallback if Bs. or $ is omitted in text
-    if (targetMethod === 'Efectivo (Bs)') {
-      const fallbackMatch = t.metodo.match(/Efectivo\s*\(Bs\):\s*([\d.]+)/i);
-      if (fallbackMatch && fallbackMatch[1]) return parseFloat(fallbackMatch[1]) || 0;
-    }
-    if (targetMethod === 'Pago Móvil') {
-      const fallbackMatch = t.metodo.match(/Pago\s*Móvil:\s*([\d.]+)/i);
-      if (fallbackMatch && fallbackMatch[1]) return parseFloat(fallbackMatch[1]) || 0;
-    }
-    if (targetMethod === 'Punto de Venta') {
-      const fallbackMatch = t.metodo.match(/Punto:\s*([\d.]+)/i);
-      if (fallbackMatch && fallbackMatch[1]) return parseFloat(fallbackMatch[1]) || 0;
-    }
+
+  const pagoMovilMatch = t.metodo.match(/Pago\s*Móvil:\s*Bs\.\s*([\d.]+)/i);
+  if (pagoMovilMatch) {
+    breakdown.pagoMovil = parseFloat(pagoMovilMatch[1]) || 0;
+  } else {
+    const fb = t.metodo.match(/Pago\s*Móvil:\s*([\d.]+)/i);
+    if (fb) breakdown.pagoMovil = parseFloat(fb[1]) || 0;
   }
-  return 0;
+
+  const puntoMatch = t.metodo.match(/Punto:\s*Bs\.\s*([\d.]+)/i);
+  if (puntoMatch) {
+    breakdown.punto = parseFloat(puntoMatch[1]) || 0;
+  } else {
+    const fb = t.metodo.match(/Punto:\s*([\d.]+)/i);
+    if (fb) breakdown.punto = parseFloat(fb[1]) || 0;
+  }
+
+  return breakdown;
 }
 
 // GET /api/reportes/cierre-diario - Generar reporte consolidado de un día
@@ -2220,28 +2235,39 @@ app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
       return tDate >= startRange && tDate <= endRange;
     });
 
-    // Calculate theoretical revenues in USD
-    let ventasHabitaciones = 0;
-    let ingresoAcompanante = 0;
-    let ventasMinibar = 0;
-    let danosOtros = 0;
+    // Calculate theoretical revenues split by USD and VES
+    let ventasHabitacionesUsd = 0;
+    let ventasHabitacionesVes = 0;
+    let ingresoAcompananteUsd = 0;
+    let ingresoAcompananteVes = 0;
+    let ventasMinibarUsd = 0;
+    let ventasMinibarVes = 0;
+    let danosOtrosUsd = 0;
+    let danosOtrosVes = 0;
 
     dailyTx.forEach(t => {
       if (t.tipo === 'Ingreso') {
-        const amount = parseFloat(t.monto) || 0;
+        const bd = getPaymentBreakdown(t, tasaUsd);
+        const u = bd.usdCash + bd.zelle;
+        const v = bd.vesCash + bd.pagoMovil + bd.punto;
+
         const conceptLower = (t.concepto || '').toLowerCase();
         const isMarket = t.origen === 'Market' || conceptLower.includes('market') || conceptLower.includes('tienda');
         const isAcomp = conceptLower.includes('3er huésped') || conceptLower.includes('acompañante');
         const isDanos = conceptLower.includes('penalidad check-out') || conceptLower.includes('incumplimiento de checklist') || conceptLower.includes('reposición de') || conceptLower.includes('daño');
 
         if (isMarket) {
-          ventasMinibar += amount;
+          ventasMinibarUsd += u;
+          ventasMinibarVes += v;
         } else if (isAcomp) {
-          ingresoAcompanante += amount;
+          ingresoAcompananteUsd += u;
+          ingresoAcompananteVes += v;
         } else if (isDanos) {
-          danosOtros += amount;
+          danosOtrosUsd += u;
+          danosOtrosVes += v;
         } else {
-          ventasHabitaciones += amount;
+          ventasHabitacionesUsd += u;
+          ventasHabitacionesVes += v;
         }
       }
     });
@@ -2261,18 +2287,28 @@ app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
     const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
 
     // Sum egresos
-    const egresosBs = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo (Bs)'), 0);
-    const egresosUsd = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo ($)'), 0);
+    let egresosBs = 0;
+    let egresosUsd = 0;
+    dailyTx.forEach(t => {
+      if (t.tipo === 'Egreso') {
+        const bd = getPaymentBreakdown(t, tasaUsd);
+        egresosBs += bd.vesCash;
+        egresosUsd += bd.usdCash;
+      }
+    });
 
     res.json({
       fecha,
       tasaUsd,
       ventas: {
-        habitaciones: ventasHabitaciones,
-        acompanante: ingresoAcompanante,
-        minibar: ventasMinibar,
-        danos: danosOtros,
-        total: ventasHabitaciones + ingresoAcompanante + ventasMinibar + danosOtros
+        habitaciones: { usd: ventasHabitacionesUsd, ves: ventasHabitacionesVes },
+        acompanante: { usd: ingresoAcompananteUsd, ves: ingresoAcompananteVes },
+        minibar: { usd: ventasMinibarUsd, ves: ventasMinibarVes },
+        danos: { usd: danosOtrosUsd, ves: danosOtrosVes },
+        total: {
+          usd: ventasHabitacionesUsd + ingresoAcompananteUsd + ventasMinibarUsd + danosOtrosUsd,
+          ves: ventasHabitacionesVes + ingresoAcompananteVes + ventasMinibarVes + danosOtrosVes
+        }
       },
       declarado: {
         divisas: declaredUsdCash,
@@ -2314,7 +2350,13 @@ app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
 
     const dias = [];
     const totals = {
-      ventas: { habitaciones: 0, acompanante: 0, minibar: 0, danos: 0, total: 0 },
+      ventas: {
+        habitaciones: { usd: 0, ves: 0 },
+        acompanante: { usd: 0, ves: 0 },
+        minibar: { usd: 0, ves: 0 },
+        danos: { usd: 0, ves: 0 },
+        total: { usd: 0, ves: 0 }
+      },
       declarado: { divisas: 0, efectivoBs: 0, pagoMovil: 0, punto: 0, zelle: 0 },
       egresos: { bs: 0, usd: 0 }
     };
@@ -2336,27 +2378,38 @@ app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
         return tDate >= startRange && tDate <= endRange;
       });
 
-      let ventasHabitaciones = 0;
-      let ingresoAcompanante = 0;
-      let ventasMinibar = 0;
-      let danosOtros = 0;
+      let ventasHabitacionesUsd = 0;
+      let ventasHabitacionesVes = 0;
+      let ingresoAcompananteUsd = 0;
+      let ingresoAcompananteVes = 0;
+      let ventasMinibarUsd = 0;
+      let ventasMinibarVes = 0;
+      let danosOtrosUsd = 0;
+      let danosOtrosVes = 0;
 
       dailyTx.forEach(t => {
         if (t.tipo === 'Ingreso') {
-          const amount = parseFloat(t.monto) || 0;
+          const bd = getPaymentBreakdown(t, tasaUsd);
+          const u = bd.usdCash + bd.zelle;
+          const v = bd.vesCash + bd.pagoMovil + bd.punto;
+
           const conceptLower = (t.concepto || '').toLowerCase();
           const isMarket = t.origen === 'Market' || conceptLower.includes('market') || conceptLower.includes('tienda');
           const isAcomp = conceptLower.includes('3er huésped') || conceptLower.includes('acompañante');
           const isDanos = conceptLower.includes('penalidad check-out') || conceptLower.includes('incumplimiento de checklist') || conceptLower.includes('reposición de') || conceptLower.includes('daño');
 
           if (isMarket) {
-            ventasMinibar += amount;
+            ventasMinibarUsd += u;
+            ventasMinibarVes += v;
           } else if (isAcomp) {
-            ingresoAcompanante += amount;
+            ingresoAcompananteUsd += u;
+            ingresoAcompananteVes += v;
           } else if (isDanos) {
-            danosOtros += amount;
+            danosOtrosUsd += u;
+            danosOtrosVes += v;
           } else {
-            ventasHabitaciones += amount;
+            ventasHabitacionesUsd += u;
+            ventasHabitacionesVes += v;
           }
         }
       });
@@ -2372,19 +2425,27 @@ app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
       const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
       const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
 
-      const egresosBs = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo (Bs)'), 0);
-      const egresosUsd = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo ($)'), 0);
+      let egresosBs = 0;
+      let egresosUsd = 0;
+      dailyTx.forEach(t => {
+        if (t.tipo === 'Egreso') {
+          const bd = getPaymentBreakdown(t, tasaUsd);
+          egresosBs += bd.vesCash;
+          egresosUsd += bd.usdCash;
+        }
+      });
 
-      const totalVentas = ventasHabitaciones + ingresoAcompanante + ventasMinibar + danosOtros;
+      const totalVentasUsd = ventasHabitacionesUsd + ingresoAcompananteUsd + ventasMinibarUsd + danosOtrosUsd;
+      const totalVentasVes = ventasHabitacionesVes + ingresoAcompananteVes + ventasMinibarVes + danosOtrosVes;
 
       dias.push({
         fecha: curFechaStr,
         ventas: {
-          habitaciones: ventasHabitaciones,
-          acompanante: ingresoAcompanante,
-          minibar: ventasMinibar,
-          danos: danosOtros,
-          total: totalVentas
+          habitaciones: { usd: ventasHabitacionesUsd, ves: ventasHabitacionesVes },
+          acompanante: { usd: ingresoAcompananteUsd, ves: ingresoAcompananteVes },
+          minibar: { usd: ventasMinibarUsd, ves: ventasMinibarVes },
+          danos: { usd: danosOtrosUsd, ves: danosOtrosVes },
+          total: { usd: totalVentasUsd, ves: totalVentasVes }
         },
         declarado: {
           divisas: declaredUsdCash,
@@ -2399,11 +2460,16 @@ app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
         }
       });
 
-      totals.ventas.habitaciones += ventasHabitaciones;
-      totals.ventas.acompanante += ingresoAcompanante;
-      totals.ventas.minibar += ventasMinibar;
-      totals.ventas.danos += danosOtros;
-      totals.ventas.total += totalVentas;
+      totals.ventas.habitaciones.usd += ventasHabitacionesUsd;
+      totals.ventas.habitaciones.ves += ventasHabitacionesVes;
+      totals.ventas.acompanante.usd += ingresoAcompananteUsd;
+      totals.ventas.acompanante.ves += ingresoAcompananteVes;
+      totals.ventas.minibar.usd += ventasMinibarUsd;
+      totals.ventas.minibar.ves += ventasMinibarVes;
+      totals.ventas.danos.usd += danosOtrosUsd;
+      totals.ventas.danos.ves += danosOtrosVes;
+      totals.ventas.total.usd += totalVentasUsd;
+      totals.ventas.total.ves += totalVentasVes;
 
       totals.declarado.divisas += declaredUsdCash;
       totals.declarado.efectivoBs += declaredVesCash;
