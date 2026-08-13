@@ -2133,14 +2133,18 @@ app.get('/api/historial-estadias', requireAuth, async (req, res) => {
   }
 });
 
-// Helper: Parse SQLite date DD/MM/YYYY, HH:MM to JS Date
+// Helper: Parse SQLite date DD/MM/YYYY, HH:MM or ISO string to JS Date
 function parseDBDate(horaStr) {
   if (!horaStr) return new Date(0);
   try {
+    if (!horaStr.includes('/')) {
+      return new Date(horaStr);
+    }
     const parts = horaStr.split(',');
     const dateParts = parts[0].trim().split('/').map(Number);
     const timeParts = (parts[1] || '00:00').trim().split(':').map(Number);
-    return new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+    const d = new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+    return isNaN(d.getTime()) ? new Date(horaStr) : d;
   } catch (e) {
     return new Date(horaStr);
   }
