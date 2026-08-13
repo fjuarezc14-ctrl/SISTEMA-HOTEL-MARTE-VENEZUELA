@@ -259,22 +259,22 @@ export default function CierresCaja() {
                     <tbody className="divide-y divide-gray-100 text-sm">
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Ventas Habitaciones</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.habitaciones.usd.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Ingreso de Acompañante</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.acompanante.usd.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Ventas Mini Bar</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.minibar.usd.toFixed(2)}</td>
                       </tr>
                       <tr>
                         <td className="px-4 py-2 text-gray-700">Daños, Serv y Otros</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-500">Bs. {diarioData.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.danos.usd.toFixed(2)}</td>
                       </tr>
                       <tr className="bg-indigo-50/50 font-bold">
