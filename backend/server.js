@@ -1775,13 +1775,17 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     // 4. Register consumption consolidated payment in Caja if > 0
     const finalConsumos = parseFloat(montoConsumos) || 0;
     if (finalConsumos > 0) {
+      const roomConsumos = await db.all('SELECT concepto, cantidad FROM consumos WHERE numHabitacion = ?', [numHabitacion]);
+      const consumosDetails = roomConsumos.length > 0
+        ? roomConsumos.map(c => `${c.concepto} x${c.cantidad}`).join(', ')
+        : 'Consumos Varios';
       const transactionId = 't_cns_' + Date.now();
       await db.run(
         'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           transactionId,
           'Ingreso',
-          `Cobro Consumos Extras Hab ${numHabitacion} (${huespedNombre})`,
+          `Cobro Consumos Extras Hab ${numHabitacion} (${consumosDetails}) [${huespedNombre}]`,
           finalConsumos,
           metodo,
           getFechaHoraActual(),
@@ -2126,6 +2130,386 @@ app.get('/api/historial-estadias', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching historial_estadias:', error);
     res.status(500).json({ error: 'Error al consultar historial de estadías.' });
+  }
+});
+
+// Helper: Parse SQLite date DD/MM/YYYY, HH:MM to JS Date
+function parseDBDate(horaStr) {
+  if (!horaStr) return new Date(0);
+  try {
+    const parts = horaStr.split(',');
+    const dateParts = parts[0].trim().split('/').map(Number);
+    const timeParts = (parts[1] || '00:00').trim().split(':').map(Number);
+    return new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+  } catch (e) {
+    return new Date(horaStr);
+  }
+}
+
+// Helper: Parse normal and mixed payments in caja transaction to USD amount
+function getAmountForMethodBackend(t, targetMethod) {
+  const val = parseFloat(t.monto) || 0;
+  if (!t.metodo) return 0;
+  
+  if (t.metodo === targetMethod) return val;
+  
+  const cleanMetodo = t.metodo.toLowerCase();
+  if (!cleanMetodo.includes('pago mixto')) {
+    if (targetMethod === 'Pago Móvil' && cleanMetodo.includes('pago móvil')) return val;
+    if (targetMethod === 'Punto de Venta' && cleanMetodo.includes('punto')) return val;
+    if (targetMethod === 'Zelle' && cleanMetodo.includes('zelle')) return val;
+    if (targetMethod === 'Efectivo ($)' && cleanMetodo === 'efectivo ($)') return val;
+    if (targetMethod === 'Efectivo (Bs)' && cleanMetodo === 'efectivo (bs)') return val;
+    return 0;
+  }
+  
+  let regex;
+  if (targetMethod === 'Efectivo ($)') {
+    regex = /Efectivo\s*\(\$\):\s*\$?([\d.]+)/i;
+  } else if (targetMethod === 'Efectivo (Bs)') {
+    regex = /Efectivo\s*\(Bs\):\s*Bs\.\s*([\d.]+)/i;
+  } else if (targetMethod === 'Pago Móvil') {
+    regex = /Pago\s*Móvil:\s*Bs\.\s*([\d.]+)/i;
+  } else if (targetMethod === 'Punto de Venta') {
+    regex = /Punto:\s*Bs\.\s*([\d.]+)/i;
+  } else if (targetMethod === 'Zelle') {
+    regex = /Zelle:\s*\$?([\d.]+)/i;
+  }
+  
+  if (regex) {
+    const match = t.metodo.match(regex);
+    if (match && match[1]) {
+      return parseFloat(match[1]) || 0;
+    }
+    // Fallback if Bs. or $ is omitted in text
+    if (targetMethod === 'Efectivo (Bs)') {
+      const fallbackMatch = t.metodo.match(/Efectivo\s*\(Bs\):\s*([\d.]+)/i);
+      if (fallbackMatch && fallbackMatch[1]) return parseFloat(fallbackMatch[1]) || 0;
+    }
+    if (targetMethod === 'Pago Móvil') {
+      const fallbackMatch = t.metodo.match(/Pago\s*Móvil:\s*([\d.]+)/i);
+      if (fallbackMatch && fallbackMatch[1]) return parseFloat(fallbackMatch[1]) || 0;
+    }
+    if (targetMethod === 'Punto de Venta') {
+      const fallbackMatch = t.metodo.match(/Punto:\s*([\d.]+)/i);
+      if (fallbackMatch && fallbackMatch[1]) return parseFloat(fallbackMatch[1]) || 0;
+    }
+  }
+  return 0;
+}
+
+// GET /api/reportes/cierre-diario - Generar reporte consolidado de un día
+app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
+  const { fecha } = req.query;
+  if (!fecha) {
+    return res.status(400).json({ error: 'Debe especificar una fecha (YYYY-MM-DD)' });
+  }
+
+  try {
+    const [y, m, d] = fecha.split('-').map(Number);
+    const startRange = new Date(y, m - 1, d, 8, 0, 0);
+    const endRange = new Date(y, m - 1, d + 1, 7, 59, 59);
+
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = config ? parseFloat(config.valor) : 50.00;
+
+    // Fetch all caja transactions
+    const caja = await db.all("SELECT * FROM caja");
+    const dailyTx = caja.filter(t => {
+      const tDate = parseDBDate(t.hora);
+      return tDate >= startRange && tDate <= endRange;
+    });
+
+    // Calculate theoretical revenues in USD
+    let ventasHabitaciones = 0;
+    let ingresoAcompanante = 0;
+    let ventasMinibar = 0;
+    let danosOtros = 0;
+
+    dailyTx.forEach(t => {
+      if (t.tipo === 'Ingreso') {
+        const amount = parseFloat(t.monto) || 0;
+        const conceptLower = (t.concepto || '').toLowerCase();
+        const isMarket = t.origen === 'Market' || conceptLower.includes('market') || conceptLower.includes('tienda');
+        const isAcomp = conceptLower.includes('3er huésped') || conceptLower.includes('acompañante');
+        const isDanos = conceptLower.includes('penalidad check-out') || conceptLower.includes('incumplimiento de checklist') || conceptLower.includes('reposición de') || conceptLower.includes('daño');
+
+        if (isMarket) {
+          ventasMinibar += amount;
+        } else if (isAcomp) {
+          ingresoAcompanante += amount;
+        } else if (isDanos) {
+          danosOtros += amount;
+        } else {
+          ventasHabitaciones += amount;
+        }
+      }
+    });
+
+    // Fetch declared shifts balances
+    const turnos = await db.all("SELECT * FROM entrega_turnos");
+    const dailyTurnos = turnos.filter(t => {
+      const tDate = parseDBDate(t.fechaHoraEntrega);
+      return tDate >= startRange && tDate <= endRange;
+    });
+
+    // Sum physical cash declarations
+    const declaredUsdCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoUsd) || 0), 0);
+    const declaredVesCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoVes) || 0), 0);
+    const declaredPagoMovil = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPagoMovil) || 0), 0);
+    const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
+    const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
+
+    // Sum egresos
+    const egresosBs = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo (Bs)'), 0);
+    const egresosUsd = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo ($)'), 0);
+
+    res.json({
+      fecha,
+      tasaUsd,
+      ventas: {
+        habitaciones: ventasHabitaciones,
+        acompanante: ingresoAcompanante,
+        minibar: ventasMinibar,
+        danos: danosOtros,
+        total: ventasHabitaciones + ingresoAcompanante + ventasMinibar + danosOtros
+      },
+      declarado: {
+        divisas: declaredUsdCash,
+        efectivoBs: declaredVesCash,
+        pagoMovil: declaredPagoMovil,
+        punto: declaredPunto,
+        zelle: declaredZelle
+      },
+      egresos: {
+        bs: egresosBs,
+        usd: egresosUsd
+      }
+    });
+  } catch (error) {
+    console.error('Error generating daily closure:', error);
+    res.status(500).json({ error: 'Error interno del servidor al calcular el cierre diario.' });
+  }
+});
+
+// GET /api/reportes/cierre-consolidado - Generar reporte consolidado por rango de fechas
+app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
+  const { fechaInicio, fechaFin } = req.query;
+  if (!fechaInicio || !fechaFin) {
+    return res.status(400).json({ error: 'Debe especificar fechaInicio y fechaFin (YYYY-MM-DD)' });
+  }
+
+  try {
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = config ? parseFloat(config.valor) : 50.00;
+
+    const caja = await db.all("SELECT * FROM caja");
+    const turnos = await db.all("SELECT * FROM entrega_turnos");
+
+    const startDay = new Date(fechaInicio);
+    const endDay = new Date(fechaFin);
+
+    const diffTime = Math.abs(endDay - startDay);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    const dias = [];
+    const totals = {
+      ventas: { habitaciones: 0, acompanante: 0, minibar: 0, danos: 0, total: 0 },
+      declarado: { divisas: 0, efectivoBs: 0, pagoMovil: 0, punto: 0, zelle: 0 },
+      egresos: { bs: 0, usd: 0 }
+    };
+
+    const dateParts = fechaInicio.split('-').map(Number);
+
+    for (let i = 0; i < diffDays; i++) {
+      const current = new Date(dateParts[0], dateParts[1] - 1, dateParts[2] + i);
+      const year = current.getFullYear();
+      const month = String(current.getMonth() + 1).padStart(2, '0');
+      const day = String(current.getDate()).padStart(2, '0');
+      const curFechaStr = `${year}-${month}-${day}`;
+
+      const startRange = new Date(year, current.getMonth(), current.getDate(), 8, 0, 0);
+      const endRange = new Date(year, current.getMonth(), current.getDate() + 1, 7, 59, 59);
+
+      const dailyTx = caja.filter(t => {
+        const tDate = parseDBDate(t.hora);
+        return tDate >= startRange && tDate <= endRange;
+      });
+
+      let ventasHabitaciones = 0;
+      let ingresoAcompanante = 0;
+      let ventasMinibar = 0;
+      let danosOtros = 0;
+
+      dailyTx.forEach(t => {
+        if (t.tipo === 'Ingreso') {
+          const amount = parseFloat(t.monto) || 0;
+          const conceptLower = (t.concepto || '').toLowerCase();
+          const isMarket = t.origen === 'Market' || conceptLower.includes('market') || conceptLower.includes('tienda');
+          const isAcomp = conceptLower.includes('3er huésped') || conceptLower.includes('acompañante');
+          const isDanos = conceptLower.includes('penalidad check-out') || conceptLower.includes('incumplimiento de checklist') || conceptLower.includes('reposición de') || conceptLower.includes('daño');
+
+          if (isMarket) {
+            ventasMinibar += amount;
+          } else if (isAcomp) {
+            ingresoAcompanante += amount;
+          } else if (isDanos) {
+            danosOtros += amount;
+          } else {
+            ventasHabitaciones += amount;
+          }
+        }
+      });
+
+      const dailyTurnos = turnos.filter(t => {
+        const tDate = parseDBDate(t.fechaHoraEntrega);
+        return tDate >= startRange && tDate <= endRange;
+      });
+
+      const declaredUsdCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoUsd) || 0), 0);
+      const declaredVesCash = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoEfectivoVes) || 0), 0);
+      const declaredPagoMovil = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPagoMovil) || 0), 0);
+      const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
+      const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
+
+      const egresosBs = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo (Bs)'), 0);
+      const egresosUsd = dailyTx.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + getAmountForMethodBackend(t, 'Efectivo ($)'), 0);
+
+      const totalVentas = ventasHabitaciones + ingresoAcompanante + ventasMinibar + danosOtros;
+
+      dias.push({
+        fecha: curFechaStr,
+        ventas: {
+          habitaciones: ventasHabitaciones,
+          acompanante: ingresoAcompanante,
+          minibar: ventasMinibar,
+          danos: danosOtros,
+          total: totalVentas
+        },
+        declarado: {
+          divisas: declaredUsdCash,
+          efectivoBs: declaredVesCash,
+          pagoMovil: declaredPagoMovil,
+          punto: declaredPunto,
+          zelle: declaredZelle
+        },
+        egresos: {
+          bs: egresosBs,
+          usd: egresosUsd
+        }
+      });
+
+      totals.ventas.habitaciones += ventasHabitaciones;
+      totals.ventas.acompanante += ingresoAcompanante;
+      totals.ventas.minibar += ventasMinibar;
+      totals.ventas.danos += danosOtros;
+      totals.ventas.total += totalVentas;
+
+      totals.declarado.divisas += declaredUsdCash;
+      totals.declarado.efectivoBs += declaredVesCash;
+      totals.declarado.pagoMovil += declaredPagoMovil;
+      totals.declarado.punto += declaredPunto;
+      totals.declarado.zelle += declaredZelle;
+
+      totals.egresos.bs += egresosBs;
+      totals.egresos.usd += egresosUsd;
+    }
+
+    res.json({
+      tasaUsd,
+      dias,
+      totales: totals
+    });
+  } catch (error) {
+    console.error('Error generating consolidated report:', error);
+    res.status(500).json({ error: 'Error interno del servidor al calcular el reporte consolidado.' });
+  }
+});
+
+// GET /api/reportes/minibar-semanal - Obtener ventas semanales de minibar (Snacks vs Cervezas)
+app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
+  const { fechaInicio } = req.query;
+  if (!fechaInicio) {
+    return res.status(400).json({ error: 'Debe especificar la fecha de inicio (YYYY-MM-DD)' });
+  }
+
+  try {
+    const products = await db.all("SELECT * FROM productos");
+    const productMap = {};
+    products.forEach(p => {
+      productMap[p.nombre.toLowerCase().trim()] = parseFloat(p.precio_venta) || 0;
+    });
+
+    const caja = await db.all("SELECT * FROM caja WHERE origen = 'Market' OR concepto LIKE '%venta tienda%' OR concepto LIKE '%venta market%'");
+
+    const [y, m, d] = fechaInicio.split('-').map(Number);
+    const result = [];
+    const dayNames = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
+
+    for (let i = 0; i < 7; i++) {
+      const current = new Date(y, m - 1, d + i);
+      const year = current.getFullYear();
+      const month = current.getMonth();
+      const dayNum = current.getDate();
+
+      const dayStart = new Date(year, month, dayNum, 8, 0, 0);
+      const dayEnd = new Date(year, month, dayNum + 1, 7, 59, 59);
+
+      const dayTx = caja.filter(t => {
+        const tDate = parseDBDate(t.hora);
+        return tDate >= dayStart && tDate <= dayEnd;
+      });
+
+      let snacksUsd = 0;
+      let cervezasUsd = 0;
+
+      dayTx.forEach(t => {
+        const match = (t.concepto || '').match(/\(([^)]+)\)/);
+        if (match) {
+          const itemsStr = match[1];
+          const parts = itemsStr.split(',');
+          parts.forEach(part => {
+            const itemMatch = part.trim().match(/^(.*?)\s+x\s*(\d+)$/i);
+            if (itemMatch) {
+              const name = itemMatch[1].trim();
+              const qty = parseInt(itemMatch[2]) || 0;
+              const nameLower = name.toLowerCase();
+
+              let price = productMap[nameLower] || 0;
+              if (price === 0) {
+                const found = Object.keys(productMap).find(k => k.includes(nameLower) || nameLower.includes(k));
+                if (found) price = productMap[found];
+              }
+              if (price === 0) price = 1.50; // fallback
+
+              const totalItemUsd = qty * price;
+              const isBeer = nameLower.includes('cerveza') || nameLower.includes('polar') || nameLower.includes('solera') || nameLower.includes('pack') || nameLower.includes('caroreña') || nameLower.includes('solera');
+
+              if (isBeer) {
+                cervezasUsd += totalItemUsd;
+              } else {
+                snacksUsd += totalItemUsd;
+              }
+            }
+          });
+        } else {
+          snacksUsd += parseFloat(t.monto) || 0;
+        }
+      });
+
+      result.push({
+        dia: dayNames[i],
+        fecha: `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`,
+        snacks: snacksUsd,
+        cervezas: cervezasUsd,
+        total: snacksUsd + cervezasUsd
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error calculating minibar weekly report:', error);
+    res.status(500).json({ error: 'Error interno del servidor al calcular el reporte de minibar.' });
   }
 });
 

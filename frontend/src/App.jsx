@@ -11,6 +11,7 @@ import InventarioLenceria from './components/InventarioLenceria';
 import Usuarios from './components/Usuarios';
 import Configuracion from './components/Configuracion';
 import Reportes from './components/Reportes';
+import CierresCaja from './components/CierresCaja';
 import { 
   AsignarDirectoModal, 
   NuevaReservaModal, 
@@ -376,6 +377,10 @@ export default function App() {
     if (!user) return false;
     if (user.rol === 'Administrador' || user.rol === 'Super Admin' || user.rol === 'Superadmin') return true;
     
+    if (tabName === 'cierresCaja') {
+      return canAccessTab('reportes');
+    }
+    
     // Si el usuario tiene permisos configurados explícitamente, respetarlos de forma estricta
     if (user.permisos && Array.isArray(user.permisos) && user.permisos.length > 0) {
       return user.permisos.includes(tabName);
@@ -418,6 +423,7 @@ export default function App() {
       clientes: 'Directorio de Clientes VIP',
       usuarios: 'Gestión de Personal y Accesos',
       reportes: 'Reportes y Analíticas',
+      cierresCaja: 'Cierres y Reportes de Caja',
       configuracion: 'Configuración General'
     };
     return titles[activeTab] || 'Hotel Marte';
@@ -662,6 +668,19 @@ export default function App() {
               }`}
             >
               <i className="fa-solid fa-chart-pie w-5"></i> Reportes Generales
+            </button>
+          )}
+
+          {canAccessTab('cierresCaja') && (
+            <button 
+              onClick={() => setActiveTab('cierresCaja')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'cierresCaja'
+                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <i className="fa-solid fa-cash-register w-5"></i> Cierres de Caja
             </button>
           )}
 
@@ -954,6 +973,9 @@ export default function App() {
                   currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                 />
+              )}
+              {activeTab === 'cierresCaja' && canAccessTab('cierresCaja') && (
+                <CierresCaja />
               )}
               {activeTab === 'usuarios' && canAccessTab('usuarios') && (
                 <Usuarios 
