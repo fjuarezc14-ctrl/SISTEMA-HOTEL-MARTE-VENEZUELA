@@ -75,6 +75,11 @@ export default function App() {
     configuracion: { tasa_usd: '50.00' }
   });
   const [activeTab, setActiveTab] = useState('dashboard');
+  const isBlockedByPendingHandover = 
+    (appState.entregaTurnos || []).some((t, idx) => idx === 0 && t.estado === 'Pendiente Confirmación' && t.usuarioSalienteId !== user?.id) && 
+    user?.rol !== 'Administrador' && 
+    user?.rol !== 'Super Admin' && 
+    user?.rol !== 'Superadmin';
   const [loading, setLoading] = useState(true);
 
   // Modals Visibility
@@ -161,8 +166,19 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Operational control: Force redirection to shift handover if blocked
+  useEffect(() => {
+    if (isBlockedByPendingHandover && activeTab !== 'entregaTurnos') {
+      setActiveTab('entregaTurnos');
+    }
+  }, [isBlockedByPendingHandover, activeTab]);
+
   // Handler: Room click actions (dynamic depending on state & user role)
   const handleRoomClick = (room) => {
+    if (isBlockedByPendingHandover) {
+      alert("⚠️ Control Operacional: Debe confirmar la recepción del turno anterior en la pestaña 'Entrega de Turno' antes de operar.");
+      return;
+    }
     const isCamarero = user?.rol === 'Camarero' || user?.rol === 'Camarera';
 
     if (isCamarero) {
@@ -563,6 +579,15 @@ export default function App() {
         <nav className="flex-1 p-4 space-y-2 text-sm font-medium overflow-y-auto" onClick={(e) => {
           if (e.target.closest('button')) setIsMobileMenuOpen(false);
         }}>
+          {isBlockedByPendingHandover && (
+            <style>{`
+              nav button:not(.btn-entrega-turnos) {
+                opacity: 0.35 !important;
+                cursor: not-allowed !important;
+                pointer-events: none !important;
+              }
+            `}</style>
+          )}
           {/* CATEGORÍA 1: OPERACIONES PRINCIPALES */}
           {['dashboard', 'habitaciones', 'reservas', 'entregaTurnos'].some(t => canAccessTab(t)) && (
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-2 px-2">Operaciones Principales</p>
@@ -610,7 +635,7 @@ export default function App() {
           {canAccessTab('entregaTurnos') && (
             <button 
               onClick={() => setActiveTab('entregaTurnos')} 
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+              className={`btn-entrega-turnos w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
                 activeTab === 'entregaTurnos'
                   ? 'bg-[#ff331f] text-white shadow-md font-bold'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-white'
@@ -855,8 +880,16 @@ export default function App() {
 
             {canAccessTab('reservas') && (
               <button 
-                onClick={() => setIsNuevaReservaOpen(true)}
-                className="bg-[#c5920c] hover:bg-[#b08107] text-white px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-colors flex items-center gap-1.5 shrink-0"
+                onClick={() => {
+                  if (isBlockedByPendingHandover) {
+                    alert("⚠️ Control Operacional: Debe confirmar la recepción del turno anterior en la pestaña 'Entrega de Turno' antes de operar.");
+                    return;
+                  }
+                  setIsNuevaReservaOpen(true);
+                }}
+                className={`bg-[#c5920c] hover:bg-[#b08107] text-white px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-colors flex items-center gap-1.5 shrink-0 ${
+                  isBlockedByPendingHandover ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
                 <i className="fa-solid fa-phone"></i>
                 <span className="hidden sm:inline">Nueva Reserva</span>
@@ -868,6 +901,17 @@ export default function App() {
 
         {/* TAB WORKSPACE */}
         <div className="p-4 sm:p-8 flex-1 overflow-x-hidden">
+          {isBlockedByPendingHandover && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-3 fade-in">
+              <i className="fa-solid fa-triangle-exclamation text-amber-500 text-lg mt-0.5 animate-pulse"></i>
+              <div>
+                <h4 className="text-amber-800 font-bold text-sm">Control Operacional: Confirmación Obligatoria de Turno</h4>
+                <p className="text-xs text-amber-700/80 mt-1 leading-relaxed">
+                  Debe confirmar la recepción del turno anterior en la pestaña <strong>Entrega de Turno</strong> para poder desbloquear las demás funciones del sistema.
+                </p>
+              </div>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff331f]"></div>
