@@ -2114,7 +2114,19 @@ app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
 // GET /api/entrega-turnos - Historial de entrega de turnos (v4 - Fase 2)
 app.get('/api/entrega-turnos', requireAuth, async (req, res) => {
   try {
-    const list = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
+    let list = await db.all('SELECT * FROM entrega_turnos ORDER BY fechaHoraEntrega DESC');
+    
+    // Filter history for non-admin users
+    const isAdmin = req.user.rol === 'Administrador' || req.user.rol === 'Super Admin' || req.user.rol === 'Superadmin';
+    if (!isAdmin) {
+      list = list.filter((t, idx) => {
+        // Always allow the most recent shift (first in list) so they can confirm it
+        if (idx === 0) return true;
+        // Allow shifts where they are the outgoing or incoming receptionist
+        return t.usuarioSalienteId === req.user.id || t.usuarioEntranteId === req.user.id;
+      });
+    }
+
     res.json(list);
   } catch (error) {
     console.error('Error fetching entrega_turnos:', error);
