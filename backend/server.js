@@ -915,8 +915,8 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     );
 
     // Save check-in record to historial_estadias
-    const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
-    const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = config ? parseFloat(config.valor) : 50.00;
     const estadiaId = 'est_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const finalMonto = parseFloat(monto) || 0;
     
@@ -1102,8 +1102,8 @@ app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => 
 
     const finalMonto = parseFloat(monto) || 0;
     if (finalMonto > 0) {
-      const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
-      const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+      const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+      const tasaUsd = config ? parseFloat(config.valor) : 50.00;
       let usdAdd = 0;
       let vesAdd = 0;
       const cleanMetodo = (metodo || '').toLowerCase();
@@ -1431,8 +1431,8 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     );
 
     // Save stay record to historial_estadias
-    const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
-    const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = config ? parseFloat(config.valor) : 50.00;
     const estadiaId = 'est_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
 
     const resTx = await db.get(
@@ -1529,8 +1529,8 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
     const metodo = metodoPago || 'Efectivo Bolívares';
 
     // Update stay history record for checkout
-    const config = await db.get('SELECT tasa_usd FROM configuracion LIMIT 1');
-    const tasaUsd = config ? parseFloat(config.tasa_usd) : 50.00;
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = config ? parseFloat(config.valor) : 50.00;
 
     const checkoutStayTotal = (parseFloat(montoHabitacion) || 0) + (parseFloat(montoHorasExtras) || 0) + (parseFloat(penalidad) || 0);
 
