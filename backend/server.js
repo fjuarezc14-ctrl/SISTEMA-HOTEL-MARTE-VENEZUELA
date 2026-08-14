@@ -2527,6 +2527,9 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
   }
 
   try {
+    const configRow = await db.get("SELECT tasa_usd FROM configuracion LIMIT 1");
+    const tasaUsd = configRow ? parseFloat(configRow.tasa_usd) : 50.0;
+
     const products = await db.all("SELECT * FROM productos");
     const productMap = {};
     products.forEach(p => {
@@ -2538,6 +2541,7 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
     const [y, m, d] = fechaInicio.split('-').map(Number);
     const result = [];
     const dayNames = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
+    const weeklyDetails = {}; // { productDisplayName: { producto: String, precio: Number, cantidad: Number, totalUsd: Number, totalVes: Number } }
 
     for (let i = 0; i < 7; i++) {
       const current = new Date(y, m - 1, d + i);
@@ -2553,11 +2557,44 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
         return tDate >= dayStart && tDate <= dayEnd;
       });
 
-      let snacksUsd = 0;
-      let cervezasUsd = 0;
+      let snacks = { usd: 0, ves: 0 };
+      let cervezas = { usd: 0, ves: 0 };
 
+      // Group dayTx by saleCode to avoid double counting items in split/mixed payments
+      const salesGroup = {};
       dayTx.forEach(t => {
-        const match = (t.concepto || '').match(/\(([^)]+)\)/);
+        const conceptLower = (t.concepto || '').toLowerCase();
+        const matchVta = conceptLower.match(/#vta-(\d+)/);
+        const saleCode = matchVta ? `VTA-${matchVta[1]}` : `TX-${t.id}`;
+
+        if (!salesGroup[saleCode]) {
+          salesGroup[saleCode] = {
+            txs: [],
+            totalUsdPay: 0,
+            totalVesPay: 0,
+            totalPay: 0,
+            concepto: t.concepto
+          };
+        }
+
+        salesGroup[saleCode].txs.push(t);
+        
+        const cleanM = (t.metodo || '').split(' - ')[0].trim();
+        if (cleanM === 'Efectivo ($)' || cleanM === 'Zelle') {
+          salesGroup[saleCode].totalUsdPay += parseFloat(t.monto) || 0;
+        } else {
+          salesGroup[saleCode].totalVesPay += parseFloat(t.monto) || 0;
+        }
+      });
+
+      Object.keys(salesGroup).forEach(code => {
+        const s = salesGroup[code];
+        s.totalPay = s.totalUsdPay + (s.totalVesPay / tasaUsd);
+      });
+
+      Object.keys(salesGroup).forEach(code => {
+        const s = salesGroup[code];
+        const match = (s.concepto || '').match(/\(([^)]+)\)/);
         if (match) {
           const itemsStr = match[1];
           const parts = itemsStr.split(',');
@@ -2590,30 +2627,74 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
               if (price === 0) price = 1.50; // fallback
 
               const totalItemUsd = qty * price;
+              
+              // Calculate proportion paid in USD vs VES
+              const totalPay = s.totalPay || 1;
+              const usdRatio = s.totalUsdPay / totalPay;
+              const vesRatio = (s.totalVesPay / tasaUsd) / totalPay;
+
+              const usdPaid = totalItemUsd * usdRatio;
+              const vesPaid = totalItemUsd * vesRatio * tasaUsd; // in Bs
+
               const isBeer = nameLower.includes('cerveza') || nameLower.includes('polar') || nameLower.includes('solera') || nameLower.includes('pack') || nameLower.includes('caroreña');
 
               if (isBeer) {
-                cervezasUsd += totalItemUsd;
+                cervezas.usd += usdPaid;
+                cervezas.ves += vesPaid;
               } else {
-                snacksUsd += totalItemUsd;
+                snacks.usd += usdPaid;
+                snacks.ves += vesPaid;
               }
+
+              // Accumulate details for the week
+              const displayName = name;
+              if (!weeklyDetails[displayName]) {
+                weeklyDetails[displayName] = {
+                  producto: displayName,
+                  precio: price,
+                  cantidad: 0,
+                  totalUsd: 0,
+                  totalVes: 0
+                };
+              }
+              weeklyDetails[displayName].cantidad += qty;
+              weeklyDetails[displayName].totalUsd += usdPaid;
+              weeklyDetails[displayName].totalVes += vesPaid;
             }
           });
         } else {
-          snacksUsd += parseFloat(t.monto) || 0;
+          // Fallback if no concept parentheses: distribute directly by transaction payment types
+          s.txs.forEach(t => {
+            const cleanM = (t.metodo || '').split(' - ')[0].trim();
+            const isUsd = cleanM === 'Efectivo ($)' || cleanM === 'Zelle';
+            const m = parseFloat(t.monto) || 0;
+            if (isUsd) {
+              snacks.usd += m;
+            } else {
+              snacks.ves += m;
+            }
+          });
         }
       });
 
       result.push({
         dia: dayNames[i],
         fecha: `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`,
-        snacks: snacksUsd,
-        cervezas: cervezasUsd,
-        total: snacksUsd + cervezasUsd
+        snacks,
+        cervezas,
+        total: {
+          usd: snacks.usd + cervezas.usd,
+          ves: snacks.ves + cervezas.ves
+        }
       });
     }
 
-    res.json(result);
+    const detallesArray = Object.values(weeklyDetails).sort((a, b) => b.cantidad - a.cantidad);
+
+    res.json({
+      dias: result,
+      detalles: detallesArray
+    });
   } catch (error) {
     console.error('Error calculating minibar weekly report:', error);
     res.status(500).json({ error: 'Error interno del servidor al calcular el reporte de minibar.' });

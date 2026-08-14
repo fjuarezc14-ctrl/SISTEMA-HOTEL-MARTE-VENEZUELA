@@ -692,38 +692,96 @@ export default function CierresCaja() {
           )}
 
           {!loading && minibarData && (
-            <div className="bg-white p-6 rounded-2xl border shadow-sm printable-modal max-w-2xl mx-auto">
-              <div className="border-b pb-4 mb-6 text-center">
+            <div className="bg-white p-6 rounded-2xl border shadow-sm printable-modal max-w-2xl mx-auto space-y-8">
+              <div className="border-b pb-4 text-center">
                 <h2 className="text-xl font-black text-gray-800">AUDITORÍA DE VENTAS MINIBAR X SEMANA</h2>
                 <p className="text-xs text-gray-400">Semana del Lunes {minibarMonday} al Domingo</p>
               </div>
 
-              <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-bold text-gray-500 border-b">Día de la Semana</th>
-                    <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Snacks y Otros ($ USD)</th>
-                    <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Cervezas ($ USD)</th>
-                    <th className="px-4 py-2 text-right font-black text-indigo-950 bg-indigo-50/30 border-b">Total Diario ($)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {minibarData.map((d, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-2.5 font-bold text-gray-700">{d.dia} <span className="text-[10px] text-gray-400 font-normal">({d.fecha.split('-').slice(1).join('/')})</span></td>
-                      <td className="px-4 py-2.5 text-right font-medium text-gray-600">${d.snacks.toFixed(2)}</td>
-                      <td className="px-4 py-2.5 text-right font-medium text-gray-600">${d.cervezas.toFixed(2)}</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-indigo-900 bg-indigo-50/10">${d.total.toFixed(2)}</td>
+              <div>
+                <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-bold text-gray-500 border-b">Día de la Semana</th>
+                      <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Snacks y Otros ($ / Bs)</th>
+                      <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Cervezas ($ / Bs)</th>
+                      <th className="px-4 py-2 text-right font-black text-indigo-950 bg-indigo-50/30 border-b">Total Diario ($ / Bs)</th>
                     </tr>
-                  ))}
-                  <tr className="bg-gray-950 text-white font-black text-base border-t-2">
-                    <td className="px-4 py-3">TOTAL GENERAL</td>
-                    <td className="px-4 py-3 text-right">${minibarData.reduce((s, d) => s + d.snacks, 0).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">${minibarData.reduce((s, d) => s + d.cervezas, 0).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-green-400 bg-gray-950">${minibarData.reduce((s, d) => s + d.total, 0).toFixed(2)}</td>
-                  </tr>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {minibarData.dias && minibarData.dias.map((d, index) => (
+                      <tr key={index}>
+                        <td className="px-4 py-2.5 font-bold text-gray-700">{d.dia} <span className="text-[10px] text-gray-400 font-normal">({d.fecha.split('-').slice(1).join('/')})</span></td>
+                        <td className="px-4 py-2.5 text-right text-gray-800">
+                          <div className="font-semibold">${d.snacks.usd.toFixed(2)}</div>
+                          <div className="text-[10px] text-gray-400">Bs. {d.snacks.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-800">
+                          <div className="font-semibold">${d.cervezas.usd.toFixed(2)}</div>
+                          <div className="text-[10px] text-gray-400">Bs. {d.cervezas.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-bold text-indigo-900 bg-indigo-50/10">
+                          <div>${d.total.usd.toFixed(2)}</div>
+                          <div className="text-[10px] text-indigo-600/70">Bs. {d.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </td>
+                      </tr>
+                    ))}
+                    {minibarData.dias && (
+                      <tr className="bg-gray-950 text-white font-black text-sm border-t-2">
+                        <td className="px-4 py-3">TOTAL GENERAL</td>
+                        <td className="px-4 py-3 text-right">
+                          <div>${minibarData.dias.reduce((s, d) => s + d.snacks.usd, 0).toFixed(2)}</div>
+                          <div className="text-[10px] text-gray-400 font-normal">Bs. {minibarData.dias.reduce((s, d) => s + d.snacks.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div>${minibarData.dias.reduce((s, d) => s + d.cervezas.usd, 0).toFixed(2)}</div>
+                          <div className="text-[10px] text-gray-400 font-normal">Bs. {minibarData.dias.reduce((s, d) => s + d.cervezas.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-green-400 bg-gray-900">
+                          <div>${minibarData.dias.reduce((s, d) => s + d.total.usd, 0).toFixed(2)}</div>
+                          <div className="text-[10px] text-green-200/80 font-normal">Bs. {minibarData.dias.reduce((s, d) => s + d.total.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Detailed product counts table */}
+              <div className="pt-4 border-t">
+                <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <i className="fa-solid fa-boxes-stacked text-amber-500"></i> Desglose de Unidades Vendidas en el Período
+                </h3>
+                <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-bold text-gray-500 border-b">Descripción</th>
+                      <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Precio</th>
+                      <th className="px-4 py-2 text-center font-bold text-gray-500 border-b">Cant.</th>
+                      <th className="px-4 py-2 text-right font-black text-indigo-950 bg-indigo-50/30 border-b">Total Venta</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {minibarData.detalles && minibarData.detalles.length > 0 ? (
+                      minibarData.detalles.map((p, idx) => (
+                        <tr key={idx}>
+                          <td className="px-4 py-2.5 font-bold text-gray-700">{p.producto}</td>
+                          <td className="px-4 py-2.5 text-right text-gray-600">${p.precio.toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-center font-semibold text-gray-800">{p.cantidad}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-indigo-900 bg-indigo-50/10">
+                            <div>${p.totalUsd.toFixed(2)}</div>
+                            <div className="text-[10px] text-indigo-600/70">Bs. {p.totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-gray-400">No hay ventas registradas esta semana.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
