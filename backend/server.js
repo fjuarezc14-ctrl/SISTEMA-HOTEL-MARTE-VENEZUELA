@@ -2527,8 +2527,8 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
   }
 
   try {
-    const configRow = await db.get("SELECT tasa_usd FROM configuracion LIMIT 1");
-    const tasaUsd = configRow ? parseFloat(configRow.tasa_usd) : 50.0;
+    const configRow = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = configRow ? parseFloat(configRow.valor) : 50.0;
 
     const products = await db.all("SELECT * FROM productos");
     const productMap = {};
