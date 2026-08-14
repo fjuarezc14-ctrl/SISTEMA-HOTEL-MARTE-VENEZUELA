@@ -1575,6 +1575,42 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/reservas/:id - Cancels and deletes a reservation, making the room available
+app.delete('/api/reservas/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
+    if (!reserva) {
+      return res.status(404).json({ error: 'Reserva no encontrada.' });
+    }
+
+    // 1. Delete reservation
+    await db.run('DELETE FROM reservas WHERE id = ?', [id]);
+
+    // 2. Restore room status to Libre and clear guest
+    await db.run(
+      `UPDATE habitaciones SET estado = 'Libre', huesped = NULL WHERE num = ?`,
+      [reserva.numHabitacion]
+    );
+
+    // 3. Register audit log
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      req.user.rol,
+      'Cancelación Reserva',
+      `Se canceló la reserva ${reserva.res} de la Habitación ${reserva.numHabitacion}.`,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Reserva cancelada correctamente.' });
+  } catch (error) {
+    console.error('Error al cancelar la reserva:', error);
+    res.status(500).json({ error: 'Error interno del servidor al cancelar la reserva.' });
+  }
+});
+
 // 5. POST /api/checkout - Process guest check-out and send room to cleaning (v3 - Fase 4)
 app.post('/api/checkout', requireAuth, async (req, res) => {
   const { 

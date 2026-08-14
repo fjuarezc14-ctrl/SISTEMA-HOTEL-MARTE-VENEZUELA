@@ -2069,7 +2069,8 @@ export function AccionesReservaModal({
   reserva,
   onClose,
   onCheckinReserva,
-  onAlquilerTemporal
+  onAlquilerTemporal,
+  onCancelarReserva
 }) {
   if (!isOpen || !room || !reserva) return null;
 
@@ -2137,6 +2138,20 @@ export function AccionesReservaModal({
               </span>
             </div>
           )}
+
+          <button
+            onClick={() => {
+              const confirmDelete = window.confirm(
+                `¿Está seguro de que desea cancelar la reserva ${reserva.res} del huésped ${reserva.cliente?.nombre || 'Huésped'}? Esta acción liberará la Habitación ${room.num}.`
+              );
+              if (!confirmDelete) return;
+              onCancelarReserva(reserva.id);
+              onClose();
+            }}
+            className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md flex items-center justify-center gap-2"
+          >
+            <i className="fa-solid fa-trash"></i> Cancelar / Eliminar Reserva
+          </button>
         </div>
       </div>
     </div>

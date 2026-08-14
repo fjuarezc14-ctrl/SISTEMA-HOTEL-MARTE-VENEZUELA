@@ -318,6 +318,22 @@ export default function App() {
     }
   };
 
+  const handleCancelarReserva = async (reservaId) => {
+    try {
+      const res = await authFetch(`/api/reservas/${reservaId}`, {
+        method: 'DELETE'
+      });
+      if (!res) return;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al cancelar la reserva');
+
+      alert(`✅ Reserva cancelada correctamente.`);
+      await fetchState();
+    } catch (error) {
+      alert(`⚠️ Error: ${error.message}`);
+    }
+  };
+
   // API Call: Process checkout
   const handleCheckoutSubmit = async (formData) => {
     try {
@@ -960,6 +976,7 @@ export default function App() {
                 <Reservas 
                   reservas={appState.reservas} 
                   onCheckinReserva={handleCheckinReserva}
+                  onCancelarReserva={handleCancelarReserva}
                 />
               )}
               {activeTab === 'tickets' && canAccessTab('tickets') && (
@@ -1084,6 +1101,7 @@ export default function App() {
         onClose={() => setIsAccionesReservaOpen(false)}
         onCheckinReserva={handleCheckinReserva}
         onAlquilerTemporal={handleAlquilerTemporal}
+        onCancelarReserva={handleCancelarReserva}
       />
 
       <CheckinExitosoModal 

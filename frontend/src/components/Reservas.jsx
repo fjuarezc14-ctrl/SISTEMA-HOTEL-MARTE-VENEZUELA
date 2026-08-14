@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Reservas({ reservas, onCheckinReserva }) {
+export default function Reservas({ reservas, onCheckinReserva, onCancelarReserva }) {
   return (
     <div className="space-y-6 fade-in">
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
@@ -49,12 +49,26 @@ export default function Reservas({ reservas, onCheckinReserva }) {
                       </span>
                     </td>
                     <td className="p-4 text-center">
-                      <button
-                        onClick={() => onCheckinReserva(r.numHabitacion)}
-                        className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
-                      >
-                        Hacer Check-In
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => onCheckinReserva(r.numHabitacion)}
+                          className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                        >
+                          Hacer Check-In
+                        </button>
+                        <button
+                          onClick={() => {
+                            const confirmDelete = window.confirm(`¿Está seguro de que desea cancelar la reserva ${r.res} del huésped ${r.cliente?.nombre || 'Huésped'}? Esta acción liberará la Habitación ${r.numHabitacion}.`);
+                            if (confirmDelete) {
+                              onCancelarReserva(r.id);
+                            }
+                          }}
+                          className="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all flex items-center justify-center"
+                          title="Cancelar Reserva"
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
