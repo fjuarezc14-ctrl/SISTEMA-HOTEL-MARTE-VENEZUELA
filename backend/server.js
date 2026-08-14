@@ -3237,6 +3237,12 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
               conceptoCaja += ` (PAGO MIXTO: $${montoPago.toFixed(2)} USD vía ${pago.metodo})`;
             }
 
+            let finalMetodo = pago.metodo || 'Efectivo (Bs)';
+            const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(finalMetodo);
+            if (isDigital && pago.codigoRef && pago.codigoRef.trim()) {
+              finalMetodo = `${finalMetodo} - Ref: ${pago.codigoRef.trim()}`;
+            }
+
             await db.run(
               'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
               [
@@ -3244,7 +3250,7 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
                 'Ingreso',
                 conceptoCaja,
                 montoPago,
-                pago.metodo || 'Efectivo Bolívares',
+                finalMetodo,
                 getFechaHoraActual(),
                 req.user.id,
                 req.user.nombre,
