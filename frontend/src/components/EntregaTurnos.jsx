@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function EntregaTurnos({ 
   entregaTurnos = [], 
@@ -9,9 +9,16 @@ export default function EntregaTurnos({
   token, 
   currentUser, 
   tasaUsd = 50.00, 
-  onStateChange 
+  onStateChange,
+  isBlockedByPendingHandover
 }) {
   const [activeSubTab, setActiveSubTab] = useState('nueva'); // 'nueva' | 'historial'
+
+  useEffect(() => {
+    if (isBlockedByPendingHandover) {
+      setActiveSubTab('historial');
+    }
+  }, [isBlockedByPendingHandover]);
   const [filterState, setFilterState] = useState('Todos'); // 'Todos' | 'Pendientes' | 'Conformes' | 'Discrepancias'
 
   // Form State for Nueva Entrega (All payment methods breakdown)
@@ -597,8 +604,16 @@ export default function EntregaTurnos({
         {/* SubTab Navigation */}
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
-            onClick={() => setActiveSubTab('nueva')}
+            onClick={() => {
+              if (isBlockedByPendingHandover) {
+                alert("⚠️ Debe confirmar la recepción del turno anterior en la pestaña de Historial antes de poder entregar su propio turno.");
+                return;
+              }
+              setActiveSubTab('nueva');
+            }}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              isBlockedByPendingHandover ? 'opacity-40 cursor-not-allowed' : ''
+            } ${
               activeSubTab === 'nueva' ? 'bg-[#ff331f] text-white shadow-md' : 'text-slate-600 hover:text-slate-900'
             }`}
           >

@@ -968,6 +968,7 @@ export default function App() {
                   currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}
                   onStateChange={fetchState}
+                  isBlockedByPendingHandover={isBlockedByPendingHandover}
                 />
               )}
               {activeTab === 'inventarioLenceria' && canAccessTab('inventarioLenceria') && (

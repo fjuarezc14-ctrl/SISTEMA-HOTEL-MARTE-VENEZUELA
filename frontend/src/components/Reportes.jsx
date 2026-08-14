@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
 export default function Reportes({ caja = [], historial = [], currentUser, tasaUsd = 50.0 }) {
+  const isAdmin = currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin' || currentUser?.rol === 'Superadmin';
+
   // Main view tab: 'general' | 'recepcionista' | 'planillaMarte'
-  const [reportTab, setReportTab] = useState('general');
+  const [reportTab, setReportTab] = useState(isAdmin ? 'general' : 'recepcionista');
 
   // State for Control de Ingreso Clientes Diario (Planilla Marte)
   const [marteFechaFilter, setMarteFechaFilter] = useState(new Date().toISOString().split('T')[0]);
@@ -16,7 +18,17 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const [customEnd, setCustomEnd] = useState('');
 
   // State for receptionist daily sales report
-  const [selectedRecepcionista, setSelectedRecepcionista] = useState('TODOS');
+  const [selectedRecepcionista, setSelectedRecepcionista] = useState(isAdmin ? 'TODOS' : (currentUser?.nombre || ''));
+
+  useEffect(() => {
+    if (currentUser) {
+      const isUserAdmin = currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin';
+      if (!isUserAdmin) {
+        setReportTab('recepcionista');
+        setSelectedRecepcionista(currentUser.nombre || '');
+      }
+    }
+  }, [currentUser]);
 
   // State for receptionist report filters (Requerimiento 1)
   const [recepTurnoFilter, setRecepTurnoFilter] = useState('TODOS'); // 'TODOS' | 'Mañana' | 'Tarde' | 'Noche'
@@ -497,14 +509,16 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
         <div className="flex items-center gap-3">
           {/* Tab buttons */}
           <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap gap-1 border border-slate-200">
-            <button
-              onClick={() => setReportTab('general')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                reportTab === 'general' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <i className="fa-solid fa-file-invoice mr-1.5 text-blue-500"></i> Reporte General
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setReportTab('general')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  reportTab === 'general' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <i className="fa-solid fa-file-invoice mr-1.5 text-blue-500"></i> Reporte General
+              </button>
+            )}
             <button
               onClick={() => setReportTab('recepcionista')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -513,14 +527,16 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             >
               <i className="fa-solid fa-user-clock mr-1.5 text-emerald-500"></i> Reporte Recepcionista
             </button>
-            <button
-              onClick={() => setReportTab('planillaMarte')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                reportTab === 'planillaMarte' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <i className="fa-solid fa-table-cells mr-1.5 text-amber-400"></i> Control de Ingreso (Excel Marte)
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setReportTab('planillaMarte')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  reportTab === 'planillaMarte' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <i className="fa-solid fa-table-cells mr-1.5 text-amber-400"></i> Control de Ingreso (Excel Marte)
+              </button>
+            )}
           </div>
 
           <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow flex items-center gap-2 transition-all">
@@ -698,10 +714,19 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             <div className="flex flex-wrap items-end gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Recepcionista</label>
-                <select value={selectedRecepcionista} onChange={e => setSelectedRecepcionista(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="TODOS">Todos</option>
-                  {recepList.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                {isAdmin ? (
+                  <select value={selectedRecepcionista} onChange={e => setSelectedRecepcionista(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500">
+                    <option value="TODOS">Todos</option>
+                    {recepList.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={currentUser?.nombre || ''}
+                    readOnly
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none bg-slate-100 text-slate-700 cursor-not-allowed w-44"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label>
