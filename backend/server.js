@@ -2562,10 +2562,24 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
           const itemsStr = match[1];
           const parts = itemsStr.split(',');
           parts.forEach(part => {
-            const itemMatch = part.trim().match(/^(.*?)\s+x\s*(\d+)$/i);
-            if (itemMatch) {
-              const name = itemMatch[1].trim();
-              const qty = parseInt(itemMatch[2]) || 0;
+            let qty = 1;
+            let name = part.trim();
+
+            const matchNew = part.trim().match(/^(\d+)\s*(?:Unid\.\s*-\s*|x\s*)(.*?)$/i);
+            const matchOld = part.trim().match(/^(.*?)\s+x\s*(\d+)$/i);
+
+            let matched = false;
+            if (matchNew) {
+              qty = parseInt(matchNew[1]) || 1;
+              name = matchNew[2].trim();
+              matched = true;
+            } else if (matchOld) {
+              qty = parseInt(matchOld[2]) || 1;
+              name = matchOld[1].trim();
+              matched = true;
+            }
+
+            if (matched || part.trim().length > 0) {
               const nameLower = name.toLowerCase();
 
               let price = productMap[nameLower] || 0;
@@ -2576,7 +2590,7 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
               if (price === 0) price = 1.50; // fallback
 
               const totalItemUsd = qty * price;
-              const isBeer = nameLower.includes('cerveza') || nameLower.includes('polar') || nameLower.includes('solera') || nameLower.includes('pack') || nameLower.includes('caroreña') || nameLower.includes('solera');
+              const isBeer = nameLower.includes('cerveza') || nameLower.includes('polar') || nameLower.includes('solera') || nameLower.includes('pack') || nameLower.includes('caroreña');
 
               if (isBeer) {
                 cervezasUsd += totalItemUsd;
