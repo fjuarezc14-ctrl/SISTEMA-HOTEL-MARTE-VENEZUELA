@@ -2619,13 +2619,21 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
             if (matched || part.trim().length > 0) {
               const nameLower = name.toLowerCase();
 
-              let price = productMap[nameLower] || 0;
-              if (price === 0) {
-                const found = Object.keys(productMap).find(k => k.includes(nameLower) || nameLower.includes(k));
-                if (found) price = productMap[found];
-              }
-              if (price === 0) price = 1.50; // fallback
+              // Look up product in products list to find if it's a combo
+              const prod = products.find(p => p.nombre.toLowerCase().trim() === nameLower)
+                || products.find(p => p.nombre.toLowerCase().trim().includes(nameLower) || nameLower.includes(p.nombre.toLowerCase().trim()));
 
+              const isCombo = prod && prod.es_combo === 1;
+              const unitsPerCombo = isCombo ? (prod.unidades_por_combo || 1) : 1;
+
+              // Price is the price of the combo (or the product if not combo)
+              let price = prod ? parseFloat(prod.precio_venta) : 0;
+              if (price === 0) price = productMap[nameLower] || 1.50;
+
+              // Quantity of original units sold
+              const finalQty = qty * unitsPerCombo;
+
+              // Total USD is qty * price (number of combo units sold * combo price)
               const totalItemUsd = qty * price;
               
               // Calculate proportion paid in USD vs VES
@@ -2647,7 +2655,7 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
               }
 
               // Accumulate details for the week
-              const displayName = name;
+              const displayName = prod ? prod.nombre : name;
               if (!weeklyDetails[displayName]) {
                 weeklyDetails[displayName] = {
                   producto: displayName,
@@ -2657,7 +2665,7 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
                   totalVes: 0
                 };
               }
-              weeklyDetails[displayName].cantidad += qty;
+              weeklyDetails[displayName].cantidad += finalQty;
               weeklyDetails[displayName].totalUsd += usdPaid;
               weeklyDetails[displayName].totalVes += vesPaid;
             }

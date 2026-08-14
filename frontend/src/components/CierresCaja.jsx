@@ -713,16 +713,16 @@ export default function CierresCaja() {
                       <tr key={index}>
                         <td className="px-4 py-2.5 font-bold text-gray-700">{d.dia} <span className="text-[10px] text-gray-400 font-normal">({d.fecha.split('-').slice(1).join('/')})</span></td>
                         <td className="px-4 py-2.5 text-right text-gray-800">
-                          <div className="font-semibold">${d.snacks.usd.toFixed(2)}</div>
-                          <div className="text-[10px] text-gray-400">Bs. {d.snacks.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="font-bold text-sm text-gray-800">${d.snacks.usd.toFixed(2)}</div>
+                          <div className="font-bold text-sm text-gray-800">Bs. {d.snacks.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-800">
-                          <div className="font-semibold">${d.cervezas.usd.toFixed(2)}</div>
-                          <div className="text-[10px] text-gray-400">Bs. {d.cervezas.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="font-bold text-sm text-gray-800">${d.cervezas.usd.toFixed(2)}</div>
+                          <div className="font-bold text-sm text-gray-800">Bs. {d.cervezas.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </td>
-                        <td className="px-4 py-2.5 text-right font-bold text-indigo-900 bg-indigo-50/10">
-                          <div>${d.total.usd.toFixed(2)}</div>
-                          <div className="text-[10px] text-indigo-600/70">Bs. {d.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <td className="px-4 py-2.5 text-right bg-indigo-50/10">
+                          <div className="font-extrabold text-sm text-indigo-900">${d.total.usd.toFixed(2)}</div>
+                          <div className="font-extrabold text-sm text-indigo-900">Bs. {d.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </td>
                       </tr>
                     ))}
@@ -730,16 +730,16 @@ export default function CierresCaja() {
                       <tr className="bg-gray-950 text-white font-black text-sm border-t-2">
                         <td className="px-4 py-3">TOTAL GENERAL</td>
                         <td className="px-4 py-3 text-right">
-                          <div>${minibarData.dias.reduce((s, d) => s + d.snacks.usd, 0).toFixed(2)}</div>
-                          <div className="text-[10px] text-gray-400 font-normal">Bs. {minibarData.dias.reduce((s, d) => s + d.snacks.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="font-extrabold text-white">${minibarData.dias.reduce((s, d) => s + d.snacks.usd, 0).toFixed(2)}</div>
+                          <div className="font-extrabold text-white">Bs. {minibarData.dias.reduce((s, d) => s + d.snacks.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div>${minibarData.dias.reduce((s, d) => s + d.cervezas.usd, 0).toFixed(2)}</div>
-                          <div className="text-[10px] text-gray-400 font-normal">Bs. {minibarData.dias.reduce((s, d) => s + d.cervezas.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="font-extrabold text-white">${minibarData.dias.reduce((s, d) => s + d.cervezas.usd, 0).toFixed(2)}</div>
+                          <div className="font-extrabold text-white">Bs. {minibarData.dias.reduce((s, d) => s + d.cervezas.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </td>
                         <td className="px-4 py-3 text-right text-green-400 bg-gray-900">
-                          <div>${minibarData.dias.reduce((s, d) => s + d.total.usd, 0).toFixed(2)}</div>
-                          <div className="text-[10px] text-green-200/80 font-normal">Bs. {minibarData.dias.reduce((s, d) => s + d.total.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="font-extrabold text-green-400">${minibarData.dias.reduce((s, d) => s + d.total.usd, 0).toFixed(2)}</div>
+                          <div className="font-extrabold text-green-400">Bs. {minibarData.dias.reduce((s, d) => s + d.total.ves, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </td>
                       </tr>
                     )}
