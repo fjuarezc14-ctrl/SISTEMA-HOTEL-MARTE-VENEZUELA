@@ -2727,7 +2727,7 @@ export function CheckoutModal({
   // Compute stay overtime extra charge with 10-minute grace period
   const expirationStatus = room ? getStayExpirationStatus(room.salida) : null;
   const isExpired = expirationStatus?.isExpired && expirationStatus?.minutesOverdue > 0;
-  const gracePeriod = 10; // 10 minutes grace period
+  const gracePeriod = 20; // 20 minutes grace period
   const hoursOverdue = (isExpired && expirationStatus.minutesOverdue > gracePeriod)
     ? Math.floor((expirationStatus.minutesOverdue - gracePeriod - 1) / 60) + 1
     : 0;
