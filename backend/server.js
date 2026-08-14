@@ -395,6 +395,9 @@ app.get('/api/state', requireAuth, async (req, res) => {
       nombreAcomp: r.nombreAcomp,
       numHabitacion: r.numHabitacion,
       hora: r.hora,
+      fechaIngreso: r.fechaIngreso || '',
+      fechaSalida: r.fechaSalida || '',
+      modalidad: r.modalidad || 'pernocta',
       cliente: {
         id: r.clienteId,
         nombre: r.clienteNombre,
@@ -1286,7 +1289,7 @@ app.get('/api/turnos/resumen-activo', requireAuth, async (req, res) => {
 
 // 3. POST /api/reservar - Bloquea una habitación y guarda la reserva (Fase 3)
 app.post('/api/reservar', requireAuth, async (req, res) => {
-  const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante, fechaNacimientoTitular, fechaIngreso, fechaSalida } = req.body;
+  const { numHabitacion, ci, dni, nombre, tel, nomAcomp, ciAcomp, dniAcomp, hora, monto, metodo, comprobante, fechaNacimientoTitular, fechaIngreso, fechaSalida, modalidad } = req.body;
   const numDoc = (ci || dni || '').trim();
 
   if (!numHabitacion || !numDoc || !nombre || !tel || !hora) {
@@ -1365,8 +1368,8 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
     }
 
     await db.run(
-      'INSERT INTO reservas (id, res, clienteId, nombreAcomp, numHabitacion, hora) VALUES (?, ?, ?, ?, ?, ?)',
-      [resId, resCode, clientId, acompText, numHabitacion, hora]
+      'INSERT INTO reservas (id, res, clienteId, nombreAcomp, numHabitacion, hora, fechaIngreso, fechaSalida, modalidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [resId, resCode, clientId, acompText, numHabitacion, hora, fechaIngreso || '', fechaSalida || '', modalidad || 'pernocta']
     );
 
     // 4. Register deposit payment in Caja if amount > 0
@@ -1398,7 +1401,7 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
 
 // 4. POST /api/checkin-reserva - Confirma el Check-In para una reserva activa (Fase 3)
 app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
-  const { numHabitacion } = req.body;
+  const { numHabitacion, metodo, codigoVerificacion, balanceAmount, balanceMetodo, balanceReferencia } = req.body;
 
   if (!numHabitacion) {
     return res.status(400).json({ error: 'Falta número de habitación' });
@@ -1422,12 +1425,13 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     const formattedName = formatGuestName(clientNombre);
     const acompText = reserva.nombreAcomp || '';
 
+    const resModalidad = reserva.modalidad || 'pernocta';
     // Update room status to Ocupada and set huesped
     await db.run(
       `UPDATE habitaciones 
-       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ?, modalidad = 'pernocta' 
+       SET estado = 'Ocupada', huesped = ?, acomp = ?, ingreso = ?, salida = ?, clienteId = ?, clienteCi = ?, modalidad = ? 
        WHERE num = ?`,
-      [formattedName, acompText, getFechaHoraActual(), calcularHoraSalida('pernocta'), reserva.clienteId, clientCi, numHabitacion]
+      [formattedName, acompText, getFechaHoraActual(), calcularHoraSalida(resModalidad), reserva.clienteId, clientCi, resModalidad, numHabitacion]
     );
 
     // Save stay record to historial_estadias
@@ -1446,6 +1450,22 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     let referencia = '-';
 
     if (resTx) {
+      if (metodo) {
+        let finalMetodo = metodo;
+        const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
+        if (isDigital && codigoVerificacion && codigoVerificacion.trim()) {
+          finalMetodo = `${metodo} - Ref: ${codigoVerificacion.trim()}`;
+        }
+        
+        const cleanNewMetodo = finalMetodo.toLowerCase();
+        const isNewVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanNewMetodo.includes(m)) && !cleanNewMetodo.includes('($)');
+        let newMontoVes = isNewVes ? (resTx.monto * tasaUsd) : 0;
+        
+        await db.run('UPDATE caja SET metodo = ?, monto_ves = ? WHERE id = ?', [finalMetodo, newMontoVes, resTx.id]);
+        resTx.metodo = finalMetodo;
+        resTx.monto_ves = newMontoVes;
+      }
+
       metodoPago = resTx.metodo || 'Reserva';
       const cleanMetodo = metodoPago.toLowerCase();
       const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.includes(m)) && !cleanMetodo.includes('($)');
@@ -1461,7 +1481,65 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
       }
     }
 
+    // Register balance payment at Check-In if balanceAmount > 0
+    const finalBalance = parseFloat(balanceAmount) || 0;
+    let balUsd = 0;
+    let balVes = 0;
+    if (finalBalance > 0 && balanceMetodo) {
+      const transactionId = 't_bal_' + Date.now();
+      await db.run(
+        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen, tasa_usd, monto_ves) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          transactionId,
+          'Ingreso',
+          `Cobro Diferencia Entrada Hab ${numHabitacion} (${clientNombre})`,
+          finalBalance,
+          balanceMetodo,
+          getFechaHoraActual(),
+          req.user.id,
+          req.user.nombre,
+          'Hospedaje',
+          tasaUsd,
+          0
+        ]
+      );
+
+      const cleanBalMetodo = balanceMetodo.toLowerCase();
+      if (cleanBalMetodo.includes('pago mixto')) {
+        const usdMatch = cleanBalMetodo.match(/efectivo \(\$\):\s*\$(\d+(\.\d+)?)/);
+        const zelleMatch = cleanBalMetodo.match(/zelle:\s*\$(\d+(\.\d+)?)/);
+        const vesCashMatch = cleanBalMetodo.match(/efectivo \(bs\):\s*bs\.\s*(\d+(\.\d+)?)/);
+        const pmMatch = cleanBalMetodo.match(/pago m[óo]vil:\s*bs\.\s*(\d+(\.\d+)?)/);
+        const puntoMatch = cleanBalMetodo.match(/punto:\s*bs\.\s*(\d+(\.\d+)?)/);
+        
+        const valUsdCash = usdMatch ? parseFloat(usdMatch[1]) : 0;
+        const valZelle = zelleMatch ? parseFloat(zelleMatch[1]) : 0;
+        const valVesCash = vesCashMatch ? parseFloat(vesCashMatch[1]) : 0;
+        const valPm = pmMatch ? parseFloat(pmMatch[1]) : 0;
+        const valPunto = puntoMatch ? parseFloat(puntoMatch[1]) : 0;
+        
+        balUsd = valUsdCash + valZelle;
+        balVes = valVesCash + valPm + valPunto;
+
+        await db.run('UPDATE caja SET monto_ves = ? WHERE id = ?', [balVes, transactionId]);
+      } else {
+        const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanBalMetodo.includes(m)) && !cleanBalMetodo.includes('($)');
+        if (isVes) {
+          balVes = finalBalance * tasaUsd;
+          await db.run('UPDATE caja SET monto_ves = ? WHERE id = ?', [balVes, transactionId]);
+        } else {
+          balUsd = finalBalance;
+        }
+      }
+    }
+
     const cantHuespedes = (acompText ? acompText.split(',').length : 0) + 1;
+
+    // Consolidate payments
+    const totalUsdPaid = usdAmount + balUsd;
+    const totalVesPaid = vesAmount + balVes;
+    const consolidatedMetodo = finalBalance > 0 ? `${metodoPago} / ${balanceMetodo}` : metodoPago;
+    const consolidatedRef = finalBalance > 0 ? `${referencia} / ${balanceReferencia || '-'}` : referencia;
 
     await db.run(
       `INSERT INTO historial_estadias (
@@ -1477,13 +1555,13 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
         acompText,
         getFechaHoraActual(),
         cantHuespedes,
-        usdAmount,
-        vesAmount,
-        metodoPago,
-        referencia,
+        totalUsdPaid,
+        totalVesPaid,
+        consolidatedMetodo,
+        consolidatedRef,
         req.user.id,
         req.user.nombre,
-        'pernocta'
+        resModalidad
       ]
     );
 

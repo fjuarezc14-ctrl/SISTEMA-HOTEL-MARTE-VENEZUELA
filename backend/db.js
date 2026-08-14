@@ -48,6 +48,9 @@ export async function initDb() {
       nombreAcomp TEXT,
       numHabitacion TEXT NOT NULL,
       hora TEXT NOT NULL,
+      fechaIngreso TEXT DEFAULT '',
+      fechaSalida TEXT DEFAULT '',
+      modalidad TEXT DEFAULT 'pernocta',
       FOREIGN KEY(numHabitacion) REFERENCES habitaciones(num),
       FOREIGN KEY(clienteId) REFERENCES clientes(id)
     );
@@ -229,6 +232,16 @@ export async function initDb() {
   } catch (err) {
     // Column might already exist
   }
+
+  try {
+    await db.run(`ALTER TABLE reservas ADD COLUMN fechaIngreso TEXT DEFAULT ''`);
+  } catch (err) {}
+  try {
+    await db.run(`ALTER TABLE reservas ADD COLUMN fechaSalida TEXT DEFAULT ''`);
+  } catch (err) {}
+  try {
+    await db.run(`ALTER TABLE reservas ADD COLUMN modalidad TEXT DEFAULT 'pernocta'`);
+  } catch (err) {}
 
   // Seed data if empty
   const countHab = await db.get('SELECT COUNT(*) as count FROM habitaciones');

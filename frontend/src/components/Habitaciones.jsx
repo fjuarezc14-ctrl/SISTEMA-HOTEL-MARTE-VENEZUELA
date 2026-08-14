@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { getStayExpirationStatus } from '../utils/timeHelper';
 import { ExtenderHorasModal } from './Modales';
 
-export default function Habitaciones({ habitaciones = [], tickets = [], tarifas = [], tasaUsd = 50.00, token, currentUser, onStateChange, onRoomClick }) {
+export default function Habitaciones({ habitaciones = [], tickets = [], tarifas = [], tasaUsd = 50.00, token, currentUser, onStateChange, onRoomClick, reservas = [] }) {
   const [filtro, setFiltro] = useState('Todas');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
@@ -251,6 +251,18 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                     {h.huesped}
                   </span>
                 )}
+
+                {h.estado === 'Reservada' && (() => {
+                  const r = (reservas || []).find(resv => resv.numHabitacion === h.num);
+                  if (!r) return null;
+                  const dateFormatted = r.fechaIngreso ? new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }) : '';
+                  return (
+                    <span className="block text-[10px] font-extrabold text-blue-600 bg-blue-100/60 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-blue-200">
+                      <i className="fa-solid fa-clock mr-1"></i>
+                      {dateFormatted ? `${dateFormatted} a las ` : ''}{r.hora}
+                    </span>
+                  );
+                })()}
                 
                 {h.estado === 'Ocupada' && h.salida && (
                   <span className="block text-[9px] text-slate-400 font-bold mt-1">

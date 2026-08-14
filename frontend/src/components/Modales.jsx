@@ -1401,21 +1401,12 @@ export function NuevaReservaModal({
       return;
     }
 
-    if (modalidad === 'pernocta' && !selectedHabNum) {
-      alert("⚠️ ¡Para reservación Pernocta debe seleccionar una habitación específica!");
+    if (!selectedHabNum) {
+      alert("⚠️ Debe seleccionar una habitación específica para registrar la reserva.");
       return;
     }
 
-    // Determine target room number (if 4h, pick first available room of that category)
-    let finalRoomNum = selectedHabNum;
-    if (modalidad === '4h') {
-      const matchingRoom = freeRooms.find(r => r.tipo === selectedHabTipo);
-      if (!matchingRoom) {
-        alert(`⚠️ No hay habitaciones disponibles en la categoría "${selectedHabTipo}" para asignar.`);
-        return;
-      }
-      finalRoomNum = matchingRoom.num;
-    }
+    const finalRoomNum = selectedHabNum;
 
     const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
     if (isDigital) {
@@ -1457,7 +1448,7 @@ export function NuevaReservaModal({
       ciAcomp: acompanantes.map(a => a.ci).join(', '),
       acompanantes,
       hora,
-      fechaIngreso: modalidad === 'pernocta' ? fechaIngreso : undefined,
+      fechaIngreso,
       fechaSalida: modalidad === 'pernocta' ? fechaSalida : undefined,
       nochesPernocta,
       monto: adelantoNum,
@@ -1574,7 +1565,10 @@ export function NuevaReservaModal({
                       <button
                         key={tipo}
                         type="button"
-                        onClick={() => setSelectedHabTipo(tipo)}
+                        onClick={() => {
+                          setSelectedHabTipo(tipo);
+                          setSelectedHabNum('');
+                        }}
                         className={`p-3 rounded-xl border text-left transition-all ${
                           selectedHabTipo === tipo
                             ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
@@ -1591,6 +1585,50 @@ export function NuevaReservaModal({
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="space-y-2 mt-3">
+                  <label className="block text-xs font-bold text-slate-500 uppercase">
+                    Seleccione Habitación Específica ({selectedHabTipo}) (4h)
+                  </label>
+                  {(() => {
+                    const filteredHabs = habitaciones.filter(h => h.estado === 'Libre' && h.tipo === selectedHabTipo);
+                    return filteredHabs.length === 0 ? (
+                      <p className="text-xs text-red-500 font-bold py-2 bg-red-50 rounded-lg text-center border border-red-100">
+                        No hay habitaciones libres en esta categoría en este momento.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1.5 border border-slate-200 rounded-xl bg-slate-50">
+                        {filteredHabs.map(h => {
+                          const marginCheck = checkRoom1HourMargin(h);
+                          const isDisabled = !marginCheck.isAvailable;
+                          return (
+                            <button 
+                              key={h.num} 
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => selectRoom(h.num, h.tipo)} 
+                              className={`border rounded-xl p-2 text-center transition-all relative ${
+                                isDisabled 
+                                  ? 'bg-rose-50 border-rose-200 opacity-60 cursor-not-allowed'
+                                  : selectedHabNum === h.num 
+                                    ? 'ring-2 ring-emerald-600 bg-emerald-50 border-emerald-600 shadow-sm' 
+                                    : 'bg-white border-slate-200 hover:border-emerald-300'
+                              }`}
+                            >
+                              <span className="block font-black text-slate-800 text-base">{h.num}</span>
+                              <span className="block text-[8px] uppercase font-black text-slate-400 truncate">{h.tipo}</span>
+                              {isDisabled && (
+                                <span className="text-[8px] font-black text-rose-600 block mt-0.5">
+                                  ⌛ Margen &lt; 1h
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (
@@ -1654,23 +1692,23 @@ export function NuevaReservaModal({
               </div>
             )}
 
-            {/* Pernocta Date Range Selection */}
-            {modalidad === 'pernocta' && (
-              <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-200 space-y-3">
-                <h4 className="text-xs font-bold text-indigo-900 uppercase flex items-center gap-1.5">
-                  <i className="fa-solid fa-calendar-days text-indigo-600"></i> Fechas y Horario de Estadía (Pernocta)
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Ingreso (Llegada)</label>
-                    <input 
-                      type="date"
-                      value={fechaIngreso}
-                      onChange={(e) => setFechaIngreso(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                      required
-                    />
-                  </div>
+            {/* Date Range & Time Selection for both modalities */}
+            <div className={`${modalidad === '4h' ? 'bg-emerald-50/60 border-emerald-200' : 'bg-indigo-50/60 border-indigo-200'} p-4 rounded-xl border space-y-3`}>
+              <h4 className={`text-xs font-bold ${modalidad === '4h' ? 'text-emerald-900' : 'text-indigo-900'} uppercase flex items-center gap-1.5`}>
+                <i className="fa-solid fa-calendar-days"></i> Fechas y Horario de Estadía ({modalidad === '4h' ? '4 Horas' : 'Pernocta'})
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Ingreso (Llegada)</label>
+                  <input 
+                    type="date"
+                    value={fechaIngreso}
+                    onChange={(e) => setFechaIngreso(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    required
+                  />
+                </div>
+                {modalidad === 'pernocta' && (
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Salida (Check-Out)</label>
                     <input 
@@ -1682,23 +1720,31 @@ export function NuevaReservaModal({
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hora Llegada Estimada</label>
-                    <input 
-                      type="time"
-                      value={hora}
-                      onChange={(e) => setHora(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                      required
-                    />
-                  </div>
+                )}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hora Llegada Estimada</label>
+                  <input 
+                    type="time"
+                    value={hora}
+                    onChange={(e) => setHora(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    required
+                  />
                 </div>
+              </div>
+              {modalidad === 'pernocta' && (
                 <div className="text-[11px] font-bold text-indigo-800 flex items-center justify-between border-t border-indigo-100 pt-2">
                   <span>Duración de Reserva: <strong>{nochesPernocta} Noche(s)</strong></span>
                   <span>Tarifa Pernocta (${baseStayPricePerNight} × {nochesPernocta}N): <strong>${(baseStayPricePerNight * nochesPernocta).toFixed(2)} USD</strong></span>
                 </div>
-              </div>
-            )}
+              )}
+              {modalidad === '4h' && (
+                <div className="text-[11px] font-bold text-emerald-800 flex items-center justify-between border-t border-emerald-100 pt-2">
+                  <span>Duración de Reserva: <strong>4 Horas</strong></span>
+                  <span>Tarifa por Categoría ({selectedHabTipo}): <strong>${(selectedHabTipo === 'Mini Suite' ? 14 : 10).toFixed(2)} USD</strong></span>
+                </div>
+              )}
+            </div>
 
             {/* Total Stay Price Summary Banner */}
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex justify-between items-center text-indigo-900 font-bold">
@@ -2098,6 +2144,466 @@ export function AccionesReservaModal({
 }
 
 // ==========================================
+// 2.6. MODAL: CONFIRMAR CHECK-IN RESERVA (Paso 3)
+// ==========================================
+export function ConfirmarCheckinReservaModal({
+  isOpen,
+  reserva,
+  configuracion,
+  caja = [],
+  habitaciones = [],
+  tarifas = [],
+  onClose,
+  onSubmit
+}) {
+  const [metodo, setMetodo] = useState('Efectivo (Bs)');
+  const [codigoVerificacion, setCodigoVerificacion] = useState('');
+  const [modificarAdelanto, setModificarAdelanto] = useState(false);
+  
+  const [balanceMetodo, setBalanceMetodo] = useState('Efectivo ($)');
+  const [balanceCodigoVerificacion, setBalanceCodigoVerificacion] = useState('');
+  const [balancePagosMixtos, setBalancePagosMixtos] = useState({
+    efectivoUsd: '',
+    efectivoVes: '',
+    pagoMovil: '',
+    pagoMovilRef: '',
+    punto: '',
+    puntoRef: '',
+    zelle: '',
+    zelleRef: ''
+  });
+
+  const tasaUsd = parseFloat(configuracion?.tasa_usd || '50.00');
+
+  const room = reserva ? (habitaciones || []).find(h => h.num === reserva.numHabitacion) : null;
+  const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
+
+  const resTx = [...(caja || [])]
+    .sort((a, b) => {
+      const getTs = (id) => parseInt(id?.match(/\d+/)?.[0] || 0, 10);
+      return getTs(b.id) - getTs(a.id);
+    })
+    .find(tx => {
+      if (!reserva) return false;
+      const conceptLower = (tx.concepto || '').toLowerCase();
+      const habNum = reserva.numHabitacion;
+      return conceptLower.includes('reserva') && 
+             (conceptLower.includes(`hab ${habNum}`) || conceptLower.includes(`hab.${habNum}`));
+    });
+
+  const stayPrice = roomTarifa
+    ? (parseFloat(reserva?.modalidad === '4h' ? roomTarifa.precio_4h_usd : (roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario)) || 20)
+    : (reserva?.modalidad === '4h' ? 10 : 20);
+  const noches = reserva?.nochesPernocta || 1;
+  const totalStayPrice = reserva?.modalidad === 'pernocta' ? (stayPrice * noches) : stayPrice;
+  const advance = resTx ? (parseFloat(resTx.monto) || 0) : 0;
+  const balance = Math.max(0, totalStayPrice - advance);
+
+  const [modalWasClosed, setModalWasClosed] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setModalWasClosed(true);
+    } else if (isOpen && modalWasClosed && reserva) {
+      setCodigoVerificacion('');
+      setBalanceCodigoVerificacion('');
+      setBalancePagosMixtos({
+        efectivoUsd: '',
+        efectivoVes: '',
+        pagoMovil: '',
+        pagoMovilRef: '',
+        punto: '',
+        puntoRef: '',
+        zelle: '',
+        zelleRef: ''
+      });
+      
+      let origMetodo = resTx ? resTx.metodo : 'Efectivo (Bs)';
+      let origRef = '';
+      if (origMetodo && origMetodo.includes(' - Ref:')) {
+        const parts = origMetodo.split(' - Ref:');
+        origMetodo = parts[0];
+        origRef = parts[1] || '';
+      }
+      setMetodo(origMetodo || 'Efectivo (Bs)');
+      setCodigoVerificacion(origRef);
+      setBalanceMetodo('Efectivo ($)');
+      setModificarAdelanto(false);
+      setModalWasClosed(false);
+    }
+  }, [isOpen, reserva, resTx, modalWasClosed]);
+
+  if (!isOpen || !reserva) return null;
+
+  const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
+  const isBalanceDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(balanceMetodo);
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    if (isDigital && !codigoVerificacion.trim()) {
+      alert('⚠️ Debe ingresar el código de verificación/referencia para el pago del adelanto.');
+      return;
+    }
+
+    let finalBalanceMetodo = balanceMetodo;
+    let finalBalanceRef = balanceCodigoVerificacion;
+
+    if (balance > 0) {
+      if (isBalanceDigital && !balanceCodigoVerificacion.trim()) {
+        alert('⚠️ Debe ingresar el código de verificación/referencia para el pago de la diferencia.');
+        return;
+      }
+      
+      if (balanceMetodo === 'Pago Mixto') {
+        const sumMixtoUSD = 
+          (parseFloat(balancePagosMixtos.efectivoUsd) || 0) +
+          ((parseFloat(balancePagosMixtos.efectivoVes) || 0) / tasaUsd) +
+          ((parseFloat(balancePagosMixtos.pagoMovil) || 0) / tasaUsd) +
+          ((parseFloat(balancePagosMixtos.punto) || 0) / tasaUsd) +
+          (parseFloat(balancePagosMixtos.zelle) || 0);
+
+        if (Math.abs(sumMixtoUSD - balance) > 0.05) {
+          alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${balance.toFixed(2)} USD).`);
+          return;
+        }
+        
+        const parts = [];
+        const refs = [];
+        if (parseFloat(balancePagosMixtos.efectivoUsd) > 0) parts.push(`Efectivo ($): $${parseFloat(balancePagosMixtos.efectivoUsd).toFixed(2)}`);
+        if (parseFloat(balancePagosMixtos.efectivoVes) > 0) parts.push(`Efectivo (Bs): Bs. ${parseFloat(balancePagosMixtos.efectivoVes).toFixed(2)}`);
+        if (parseFloat(balancePagosMixtos.zelle) > 0) {
+          if (!balancePagosMixtos.zelleRef.trim()) {
+            alert('⚠️ Debe ingresar la referencia para el monto en Zelle.');
+            return;
+          }
+          parts.push(`Zelle: $${parseFloat(balancePagosMixtos.zelle).toFixed(2)}`);
+          refs.push(`Zelle: ${balancePagosMixtos.zelleRef.trim()}`);
+        }
+        if (parseFloat(balancePagosMixtos.pagoMovil) > 0) {
+          if (!balancePagosMixtos.pagoMovilRef.trim()) {
+            alert('⚠️ Debe ingresar la referencia para el monto en Pago Móvil.');
+            return;
+          }
+          parts.push(`Pago Móvil: Bs. ${parseFloat(balancePagosMixtos.pagoMovil).toFixed(2)}`);
+          refs.push(`PM: ${balancePagosMixtos.pagoMovilRef.trim()}`);
+        }
+        if (parseFloat(balancePagosMixtos.punto) > 0) {
+          if (!balancePagosMixtos.puntoRef.trim()) {
+            alert('⚠️ Debe ingresar la referencia para el monto en Punto de Venta.');
+            return;
+          }
+          parts.push(`Punto: Bs. ${parseFloat(balancePagosMixtos.punto).toFixed(2)}`);
+          refs.push(`Punto: ${balancePagosMixtos.puntoRef.trim()}`);
+        }
+        
+        finalBalanceMetodo = `Pago Mixto (${parts.join(' + ')})`;
+        finalBalanceRef = refs.join(' / ') || 'N/A';
+      }
+    }
+
+    onSubmit({
+      numHabitacion: reserva.numHabitacion,
+      metodo,
+      codigoVerificacion: codigoVerificacion.trim(),
+      balanceAmount: balance,
+      balanceMetodo: balance > 0 ? finalBalanceMetodo : null,
+      balanceReferencia: balance > 0 ? finalBalanceRef : null
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 fade-in flex flex-col space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 className="text-md font-bold text-slate-800">
+            <i className="fa-solid fa-key text-green-600 mr-2"></i> Confirmar Entrada - Habitación {reserva.numHabitacion}
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-rose-500">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs font-semibold text-slate-600">
+          <div><span className="text-slate-400 uppercase text-[9px] block">Huésped Titular</span>
+            <span className="text-slate-800 font-black text-sm">{reserva.cliente?.nombre || 'Huésped'}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+            <div><span className="text-slate-400 uppercase text-[9px] block">Documento</span>
+              <span className="text-slate-800 font-bold">{reserva.cliente?.ci || reserva.cliente?.dni || 'N/A'}</span>
+            </div>
+            <div><span className="text-slate-400 uppercase text-[9px] block">Modalidad</span>
+              <span className="text-slate-800 font-bold capitalize">{reserva.modalidad === '4h' ? '4 Horas' : 'Pernocta'}</span>
+            </div>
+            <div><span className="text-slate-400 uppercase text-[9px] block">Costo Estadía</span>
+              <span className="text-slate-800 font-bold">${totalStayPrice.toFixed(2)} USD</span>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleFormSubmit} className="space-y-4">
+          
+          {advance > 0 && (
+            <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-4 space-y-3">
+              <div className="flex flex-wrap justify-between items-center gap-2">
+                <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider block">
+                  💵 Adelanto Registrado: ${advance.toFixed(2)} USD
+                </span>
+                {!modificarAdelanto && (
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Método: <span className="font-bold text-emerald-800">{metodo} {codigoVerificacion ? `(Ref: ${codigoVerificacion})` : ''}</span>
+                  </span>
+                )}
+              </div>
+              
+              {modificarAdelanto && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Confirmar Método</label>
+                    <select
+                      value={metodo}
+                      onChange={(e) => setMetodo(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded-lg border border-slate-300 font-bold bg-white"
+                    >
+                      <option value="Efectivo ($)">Efectivo ($)</option>
+                      <option value="Zelle">Zelle</option>
+                      <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                      <option value="Pago Móvil">Pago Móvil</option>
+                      <option value="Punto de Venta">Punto de Venta</option>
+                    </select>
+                  </div>
+
+                  {isDigital && (
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Referencia</label>
+                      <input
+                        type="text"
+                        value={codigoVerificacion}
+                        onChange={(e) => setCodigoVerificacion(e.target.value)}
+                        placeholder="Nº Ref"
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 font-bold bg-white text-slate-800"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <label className="flex items-center space-x-2 text-[10px] font-bold text-slate-500 uppercase select-none cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={modificarAdelanto}
+                  onChange={(e) => setModificarAdelanto(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 cursor-pointer"
+                />
+                <span>Modificar método de pago del adelanto</span>
+              </label>
+            </div>
+          )}
+
+          {balance > 0 ? (
+            <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3">
+              <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider block">
+                💳 Cobrar Diferencia Ahora: ${balance.toFixed(2)} USD <span className="text-[9px] font-medium text-slate-500">(Bs. {(balance * tasaUsd).toFixed(0)})</span>
+              </span>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Método de Pago de Diferencia</label>
+                  <select
+                    value={balanceMetodo}
+                    onChange={(e) => setBalanceMetodo(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                  >
+                    <option value="Efectivo ($)">Efectivo ($)</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Efectivo (Bs)">Efectivo (Bs)</option>
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Punto de Venta">Punto de Venta</option>
+                    <option value="Pago Mixto">Pago Mixto (Combinar Canales)</option>
+                  </select>
+                </div>
+
+                {isBalanceDigital && (
+                  <div className="fade-in">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Referencia Diferencia</label>
+                    <input
+                      type="text"
+                      value={balanceCodigoVerificacion}
+                      onChange={(e) => setBalanceCodigoVerificacion(e.target.value)}
+                      placeholder="Ingrese el número de referencia"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-slate-800"
+                      required
+                    />
+                  </div>
+                )}
+
+                {balanceMetodo === 'Pago Mixto' && (() => {
+                  const sumMixtoUSD = 
+                    (parseFloat(balancePagosMixtos.efectivoUsd) || 0) +
+                    ((parseFloat(balancePagosMixtos.efectivoVes) || 0) / tasaUsd) +
+                    ((parseFloat(balancePagosMixtos.pagoMovil) || 0) / tasaUsd) +
+                    ((parseFloat(balancePagosMixtos.punto) || 0) / tasaUsd) +
+                    (parseFloat(balancePagosMixtos.zelle) || 0);
+
+                  const diffMixtoUSD = balance - sumMixtoUSD;
+                  const isCuadreExacto = Math.abs(diffMixtoUSD) < 0.05;
+
+                  return (
+                    <div className="bg-indigo-50/80 p-3 rounded-xl border border-indigo-200 space-y-3 shadow-xs fade-in">
+                      <div className="flex justify-between items-center border-b border-indigo-200 pb-2">
+                        <span className="text-[10px] font-black text-indigo-950 uppercase flex items-center gap-1">
+                          <i className="fa-solid fa-layer-group"></i> Desglose Pago Mixto
+                        </span>
+                        <div>
+                          {isCuadreExacto ? (
+                            <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.5 rounded-full border border-emerald-300">
+                              ✅ Cuadre Exacto
+                            </span>
+                          ) : diffMixtoUSD > 0 ? (
+                            <span className="bg-amber-100 text-amber-900 text-[9px] font-black px-2 py-0.5 rounded-full border border-amber-300">
+                              Faltan ${diffMixtoUSD.toFixed(2)} USD
+                            </span>
+                          ) : (
+                            <span className="bg-rose-100 text-rose-800 text-[9px] font-black px-2 py-0.5 rounded-full border border-rose-300">
+                              Exceso ${Math.abs(diffMixtoUSD).toFixed(2)} USD
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="bg-white p-2 rounded-lg border border-indigo-100 space-y-1">
+                          <span className="block text-[9px] font-black text-slate-700">Efectivo ($ USD)</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={balancePagosMixtos.efectivoUsd}
+                            onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, efectivoUsd: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                          />
+                        </div>
+
+                        <div className="bg-white p-2 rounded-lg border border-indigo-100 space-y-1">
+                          <span className="block text-[9px] font-black text-slate-700">Efectivo (Bs VES)</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={balancePagosMixtos.efectivoVes}
+                            onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, efectivoVes: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                          />
+                        </div>
+
+                        <div className="bg-white p-2 rounded-lg border border-indigo-100 space-y-1 sm:col-span-2">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <span className="block text-[9px] font-black text-slate-700">Pago Móvil (Bs)</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={balancePagosMixtos.pagoMovil}
+                                onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, pagoMovil: e.target.value })}
+                                placeholder="0.00"
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                              />
+                            </div>
+                            <div>
+                              <span className="block text-[9px] font-black text-slate-700">Ref Pago Móvil</span>
+                              <input
+                                type="text"
+                                value={balancePagosMixtos.pagoMovilRef}
+                                onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, pagoMovilRef: e.target.value })}
+                                placeholder="Ref"
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-2 rounded-lg border border-indigo-100 space-y-1 sm:col-span-2">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <span className="block text-[9px] font-black text-slate-700">Punto de Venta (Bs)</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={balancePagosMixtos.punto}
+                                onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, punto: e.target.value })}
+                                placeholder="0.00"
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                              />
+                            </div>
+                            <div>
+                              <span className="block text-[9px] font-black text-slate-700">Ref Punto</span>
+                              <input
+                                type="text"
+                                value={balancePagosMixtos.puntoRef}
+                                onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, puntoRef: e.target.value })}
+                                placeholder="Ref"
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-2 rounded-lg border border-indigo-100 space-y-1 sm:col-span-2">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <span className="block text-[9px] font-black text-slate-700">Zelle ($)</span>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                value={balancePagosMixtos.zelle}
+                                onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, zelle: e.target.value })}
+                                placeholder="0.00"
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                              />
+                            </div>
+                            <div>
+                              <span className="block text-[9px] font-black text-slate-700">Ref Zelle</span>
+                              <input
+                                type="text"
+                                value={balancePagosMixtos.zelleRef}
+                                onChange={(e) => setBalancePagosMixtos({ ...balancePagosMixtos, zelleRef: e.target.value })}
+                                placeholder="Ref"
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center text-xs font-bold text-emerald-800 flex items-center justify-center gap-1.5">
+              <i className="fa-solid fa-circle-check"></i> Estadía 100% Pagada. No hay cobro pendiente.
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition-colors text-xs shadow-md flex items-center justify-center gap-2 mt-2"
+          >
+            <i className="fa-solid fa-key"></i> Confirmar Entrada y Entregar Llaves
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
 // 3. MODAL: CHECK-IN EXITOSO
 // ==========================================
 export function CheckinExitosoModal({ 
@@ -2158,6 +2664,7 @@ export function CheckoutModal({
   configuracion,
   tablaDanos = [],
   tarifas = [],
+  historialEstadias = [],
   onClose, 
   onSubmit 
 }) {
@@ -2213,15 +2720,15 @@ export function CheckoutModal({
   // Find hourly rate for room type
   const roomTarifa = room ? (tarifas || []).find(t => t.tipo === room.tipo) : null;
   const basePriceCheckout = roomTarifa
-    ? (parseFloat(roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario) || 20)
-    : (room?.tipo === 'Mini Suite' ? 24 : 20);
+    ? (parseFloat(room?.modalidad === '4h' ? roomTarifa.precio_4h_usd : (roomTarifa.precio_pernocta_usd || roomTarifa.precio_diario)) || 20)
+    : (room?.tipo === 'Mini Suite' ? (room?.modalidad === '4h' ? 14 : 24) : (room?.modalidad === '4h' ? 10 : 20));
   const hourlyRate = roomTarifa && roomTarifa.precio_hora_extra_usd !== undefined && roomTarifa.precio_hora_extra_usd !== null
     ? (parseFloat(roomTarifa.precio_hora_extra_usd) || 0)
     : (basePriceCheckout * 0.5);
   const montoHorasExtras = isExpired ? hoursOverdue * hourlyRate : 0;
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && room) {
       setSabanas(true);
       setControl(true);
       setDanos(true);
@@ -2229,7 +2736,13 @@ export function CheckoutModal({
       setSelectedDanosPrices({});
       setPenalidadManual('');
       setDetallePenalidad('');
-      setMontoHabitacion('0.00');
+      
+      const activeStay = (historialEstadias || []).find(h => h.numHabitacion === room.num && !h.salida);
+      const initialPending = activeStay 
+        ? Math.max(0, basePriceCheckout - (activeStay.monto_usd || 0))
+        : 0;
+      setMontoHabitacion(initialPending.toFixed(2));
+      
       setMetodoPago('Efectivo (Bs)');
       setVetarCliente(false);
       setPagosMixtosChannels({
@@ -2244,7 +2757,7 @@ export function CheckoutModal({
       });
       setCodigoVerificacionCheckout('');
     }
-  }, [isOpen]);
+  }, [isOpen, room, tarifas, historialEstadias, basePriceCheckout]);
 
   if (!isOpen || !room) return null;
 

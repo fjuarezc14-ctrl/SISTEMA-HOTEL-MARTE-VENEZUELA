@@ -140,6 +140,13 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
     displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1);
   }
 
+  const getCajaTimestamp = (id) => {
+    if (!id) return 0;
+    const match = id.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+  displayedCaja = [...displayedCaja].sort((a, b) => getCajaTimestamp(b.id) - getCajaTimestamp(a.id));
+
   // Calculate totals for displayed movements ($ USD and Bs. VES)
   const totalIngresos = displayedCaja
     .filter(t => t.tipo === 'Ingreso')

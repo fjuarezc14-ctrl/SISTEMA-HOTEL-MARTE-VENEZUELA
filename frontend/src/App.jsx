@@ -20,7 +20,8 @@ import {
   DetalleHabitacionOcupadaModal,
   AccionesReservaModal,
   AgregarAcompanantePosteriorModal,
-  ExtenderHorasModal
+  ExtenderHorasModal,
+  ConfirmarCheckinReservaModal
 } from './components/Modales';
 
 export default function App() {
@@ -93,6 +94,8 @@ export default function App() {
   const [isAccionesReservaOpen, setIsAccionesReservaOpen] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState(null);
   const [isAgregarAcompOpen, setIsAgregarAcompOpen] = useState(false);
+  const [isConfirmarCheckinOpen, setIsConfirmarCheckinOpen] = useState(false);
+  const [selectedReservaForCheckin, setSelectedReservaForCheckin] = useState(null);
   
   // Mobile responsive sidebar state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -277,16 +280,26 @@ export default function App() {
   };
 
   // API Call: Check-In from reservation
-  const handleCheckinReserva = async (numHabitacion) => {
+  const handleCheckinReserva = (numHabitacion) => {
+    const resv = appState.reservas.find(r => r.numHabitacion === numHabitacion);
+    if (resv) {
+      setSelectedReservaForCheckin(resv);
+      setIsConfirmarCheckinOpen(true);
+    } else {
+      alert("⚠️ No se encontró la información de la reserva.");
+    }
+  };
+
+  const handleConfirmarCheckinReserva = async (formData) => {
     try {
-      // Find guest name from reservation list first for the success modal
+      const { numHabitacion, metodo, codigoVerificacion, balanceAmount, balanceMetodo, balanceReferencia } = formData;
       const resv = appState.reservas.find(r => r.numHabitacion === numHabitacion);
       const guestName = resv ? resv.cliente?.nombre : 'Huésped';
       const hasAcomp = resv ? resv.nombreAcomp !== '' : false;
 
       const res = await authFetch('/api/checkin-reserva', {
         method: 'POST',
-        body: JSON.stringify({ numHabitacion })
+        body: JSON.stringify({ numHabitacion, metodo, codigoVerificacion, balanceAmount, balanceMetodo, balanceReferencia })
       });
       if (!res) return;
       const data = await res.json();
@@ -940,6 +953,7 @@ export default function App() {
                   currentUser={user}
                   onStateChange={fetchState}
                   onRoomClick={handleRoomClick}
+                  reservas={appState.reservas}
                 />
               )}
               {activeTab === 'reservas' && canAccessTab('reservas') && (
@@ -1120,8 +1134,20 @@ export default function App() {
         configuracion={appState.configuracion}
         tablaDanos={appState.tablaDanos || []}
         tarifas={appState.tarifas || []}
+        historialEstadias={appState.historialEstadias || []}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
+      />
+
+      <ConfirmarCheckinReservaModal
+        isOpen={isConfirmarCheckinOpen}
+        reserva={selectedReservaForCheckin}
+        configuracion={appState.configuracion}
+        caja={appState.caja || []}
+        habitaciones={appState.habitaciones || []}
+        tarifas={appState.tarifas || []}
+        onClose={() => setIsConfirmarCheckinOpen(false)}
+        onSubmit={handleConfirmarCheckinReserva}
       />
 
       <ExtenderHorasModal

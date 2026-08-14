@@ -161,6 +161,18 @@ export default function Dashboard({
                     </span>
                   )}
 
+                  {h.estado === 'Reservada' && (() => {
+                    const r = (reservas || []).find(resv => resv.numHabitacion === h.num);
+                    if (!r) return null;
+                    const dateFormatted = r.fechaIngreso ? new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }) : '';
+                    return (
+                      <span className="block text-[10px] font-extrabold text-blue-600 bg-blue-100/60 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-blue-200">
+                        <i className="fa-solid fa-clock mr-1"></i>
+                        {dateFormatted ? `${dateFormatted} a las ` : ''}{r.hora}
+                      </span>
+                    );
+                  })()}
+
                   {/* Expiration Banner */}
                   {expStatus && expStatus.isExpired && (
                     <span className="block text-[9px] font-black bg-rose-600 text-white py-0.5 px-1 rounded-md mt-2 uppercase tracking-tight">
