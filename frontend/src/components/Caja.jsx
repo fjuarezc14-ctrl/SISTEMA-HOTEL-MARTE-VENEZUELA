@@ -88,13 +88,15 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   const parseCajaFecha = (horaStr) => {
     if (!horaStr) return new Date(0);
     if (typeof horaStr !== 'string') return new Date(horaStr);
-    
     if (horaStr.includes('/')) {
       try {
         const parts = horaStr.split(',');
         const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
         const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
-        return new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
+        // Parsear siempre como hora Venezuela (UTC-4) con offset explícito
+        const isoStr = `${dateParts[2]}-${String(dateParts[1]).padStart(2,'0')}-${String(dateParts[0]).padStart(2,'0')}T${String(timeParts[0] || 0).padStart(2,'0')}:${String(timeParts[1] || 0).padStart(2,'0')}:00-04:00`;
+        const p = new Date(isoStr);
+        return isNaN(p.getTime()) ? new Date(0) : p;
       } catch (e) {
         return new Date(0);
       }
@@ -104,9 +106,14 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   };
 
   // Calculate active shift cutoff time (Fase 2)
-  const mostRecentDelivery = (entregaTurnos || [])[0];
+  // IMPORTANT: Use the last turn delivered by THIS specific user, not any user.
+  // This prevents Admin Root from seeing pre-handoff movements when switching back.
+  const myDeliveries = (entregaTurnos || []).filter(t =>
+    currentUser && (t.usuarioId === currentUser.id || t.usuarioNombre === currentUser.nombre)
+  );
+  const mostRecentDelivery = myDeliveries[0]; // entregaTurnos already sorted desc
   const lastDeliveryDate = mostRecentDelivery ? new Date(mostRecentDelivery.fechaHoraEntrega) : null;
-  
+
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
