@@ -5,22 +5,24 @@ export function getStayExpirationStatus(salidaStr) {
   let targetTime = null;
 
   if (salidaStr.includes(',')) {
-    // New robust format: "DD/MM/YYYY, HH:MM"
+    // Formato robusto: "DD/MM/YYYY, HH:MM" — siempre interpretado como hora Venezuela (UTC-4)
     try {
       const [datePart, timePart] = salidaStr.split(',');
       const [day, month, year] = datePart.trim().split('/').map(Number);
       const [hours, minutes] = timePart.trim().split(':').map(Number);
-      targetTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      // Construir ISO con offset Venezuela (-04:00) para que sea correcto sin importar
+      // la zona horaria del navegador (Perú, España, USA, etc.)
+      const isoStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00-04:00`;
+      const parsed = new Date(isoStr);
+      if (!isNaN(parsed.getTime())) targetTime = parsed;
     } catch (e) {
       targetTime = null;
     }
-  } else if (salidaStr.includes('T') || salidaStr.includes('-')) {
-    // ISO format or YYYY-MM-DD format
+  } else if (salidaStr.includes('T')) {
+    // ISO format ya tiene offset embebido, parsear directo
     try {
       const parsed = new Date(salidaStr);
-      if (!isNaN(parsed.getTime())) {
-        targetTime = parsed;
-      }
+      if (!isNaN(parsed.getTime())) targetTime = parsed;
     } catch (e) {
       targetTime = null;
     }
