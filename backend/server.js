@@ -833,7 +833,9 @@ function parseFechaBackend(fechaStr) {
       const parts = fechaStr.split(',');
       const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
       const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
-      const parsed = new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0], timeParts[1], 0, 0);
+      // Construct ISO string with Venezuela offset (-04:00) so Date object is correct UTC
+      const isoStr = `${dateParts[2]}-${String(dateParts[1]).padStart(2,'0')}-${String(dateParts[0]).padStart(2,'0')}T${String(timeParts[0]).padStart(2,'0')}:${String(timeParts[1]).padStart(2,'0')}:00-04:00`;
+      const parsed = new Date(isoStr);
       if (!isNaN(parsed.getTime())) return parsed;
     } catch (e) {
       // fallback
