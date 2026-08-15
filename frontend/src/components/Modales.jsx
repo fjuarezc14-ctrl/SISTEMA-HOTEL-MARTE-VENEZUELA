@@ -2681,7 +2681,8 @@ export function CheckoutModal({
   tarifas = [],
   historialEstadias = [],
   onClose, 
-  onSubmit 
+  onSubmit,
+  isSubmitting = false
 }) {
   const [sabanas, setSabanas] = useState(true);
   const [control, setControl] = useState(true);
@@ -2828,6 +2829,7 @@ export function CheckoutModal({
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     
     const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago);
     if (isDigital && totalCobrarEnCaja > 0 && !codigoVerificacionCheckout.trim()) {
@@ -3459,17 +3461,28 @@ export function CheckoutModal({
 
           <button 
             type="submit" 
+            disabled={isSubmitting}
             className={`w-full font-bold py-3.5 rounded-xl shadow-md transition-colors text-sm ${
-              vetarCliente 
-                ? 'bg-rose-600 hover:bg-rose-700 text-white' 
-                : 'bg-green-600 hover:bg-green-700 text-white'
+              isSubmitting
+                ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
+                : vetarCliente 
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white' 
+                  : 'bg-green-600 hover:bg-green-700 text-white'
             }`}
           >
-            <i className="fa-solid fa-check mr-2"></i> {
-              vetarCliente 
-                ? 'Vetar Cliente y Registrar Deuda Pendiente' 
-                : showPenalidadInput ? 'Aplicar Penalidad y Procesar Salida' : 'Liquidar Cuenta y Procesar Salida'
-            }
+            {isSubmitting ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin mr-2"></i> Procesando Check-Out...
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-check mr-2"></i> {
+                  vetarCliente 
+                    ? 'Vetar Cliente y Registrar Deuda Pendiente' 
+                    : showPenalidadInput ? 'Aplicar Penalidad y Procesar Salida' : 'Liquidar Cuenta y Procesar Salida'
+                }
+              </>
+            )}
           </button>
         </form>
       </div>

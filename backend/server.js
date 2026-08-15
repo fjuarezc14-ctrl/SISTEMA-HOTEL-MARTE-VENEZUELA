@@ -1639,6 +1639,10 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Habitación no encontrada' });
     }
 
+    if (room.estado !== 'Ocupada') {
+      return res.status(400).json({ error: 'La habitación no se encuentra en estado Ocupada.' });
+    }
+
     const huespedNombre = room.huesped || 'Huésped';
     const metodo = metodoPago || 'Efectivo Bolívares';
 

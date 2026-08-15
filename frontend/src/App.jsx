@@ -87,6 +87,7 @@ export default function App() {
   const [isAsignarDirectoOpen, setIsAsignarDirectoOpen] = useState(false);
   const [isNuevaReservaOpen, setIsNuevaReservaOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isCheckoutSubmitting, setIsCheckoutSubmitting] = useState(false);
   const [isDetalleOcupadaOpen, setIsDetalleOcupadaOpen] = useState(false);
   const [isCheckinExitosoOpen, setIsCheckinExitosoOpen] = useState(false);
   const [isTasaModalOpen, setIsTasaModalOpen] = useState(false);
@@ -337,11 +338,15 @@ export default function App() {
   // API Call: Process checkout
   const handleCheckoutSubmit = async (formData) => {
     try {
+      setIsCheckoutSubmitting(true);
       const res = await authFetch('/api/checkout', {
         method: 'POST',
         body: JSON.stringify(formData)
       });
-      if (!res) return;
+      if (!res) {
+        setIsCheckoutSubmitting(false);
+        return;
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al procesar checkout');
 
@@ -350,6 +355,8 @@ export default function App() {
       alert(`✅ Check-Out de Hab. ${formData.numHabitacion} realizado. Se envió a limpieza.`);
     } catch (error) {
       alert(`⚠️ Error: ${error.message}`);
+    } finally {
+      setIsCheckoutSubmitting(false);
     }
   };
 
@@ -1155,6 +1162,7 @@ export default function App() {
         historialEstadias={appState.historialEstadias || []}
         onClose={() => setIsCheckoutOpen(false)}
         onSubmit={handleCheckoutSubmit}
+        isSubmitting={isCheckoutSubmitting}
       />
 
       <ConfirmarCheckinReservaModal
