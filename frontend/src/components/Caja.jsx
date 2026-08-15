@@ -114,10 +114,15 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   const mostRecentDelivery = myDeliveries[0]; // entregaTurnos already sorted desc
   const lastDeliveryDate = mostRecentDelivery ? new Date(mostRecentDelivery.fechaHoraEntrega) : null;
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  // Fallback: inicio del turno operativo actual (8 AM a 8 AM del siguiente día)
+  // Si son antes de las 8 AM, el turno activo empezó a las 8 AM de ayer
+  const shiftStart8am = new Date();
+  if (shiftStart8am.getHours() < 8) {
+    shiftStart8am.setDate(shiftStart8am.getDate() - 1); // ayer
+  }
+  shiftStart8am.setHours(8, 0, 0, 0); // 08:00:00
 
-  const shiftCutoffTime = lastDeliveryDate ? lastDeliveryDate : startOfToday;
+  const shiftCutoffTime = lastDeliveryDate ? lastDeliveryDate : shiftStart8am;
 
   // Filter movements
   let displayedCaja = caja;
