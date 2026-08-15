@@ -14,6 +14,16 @@ export function getStayExpirationStatus(salidaStr) {
     } catch (e) {
       targetTime = null;
     }
+  } else if (salidaStr.includes('T') || salidaStr.includes('-')) {
+    // ISO format or YYYY-MM-DD format
+    try {
+      const parsed = new Date(salidaStr);
+      if (!isNaN(parsed.getTime())) {
+        targetTime = parsed;
+      }
+    } catch (e) {
+      targetTime = null;
+    }
   }
 
   // Fallback for legacy format if targetTime is not parsed or invalid

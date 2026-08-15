@@ -826,6 +826,31 @@ function getDigitsOnly(str) {
   return (str || '').replace(/[^0-9]/g, '');
 }
 
+function parseFechaBackend(fechaStr) {
+  if (!fechaStr) return new Date();
+  if (fechaStr.includes(',')) {
+    try {
+      const parts = fechaStr.split(',');
+      const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
+      const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
+      const parsed = new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0], timeParts[1], 0, 0);
+      if (!isNaN(parsed.getTime())) return parsed;
+    } catch (e) {
+      // fallback
+    }
+  }
+  const fallback = new Date(fechaStr);
+  return isNaN(fallback.getTime()) ? new Date() : fallback;
+}
+
+function formatFechaBackend(date) {
+  const options = { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+  const parts = new Intl.DateTimeFormat('es-VE', options).formatToParts(date);
+  const map = {};
+  parts.forEach(p => map[p.type] = p.value);
+  return `${map.day}/${map.month}/${map.year}, ${map.hour}:${map.minute}`;
+}
+
 // 2. POST /api/checkin-directo - Process immediate walk-in check-in (v3 - Fase 1)
 app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, codigoVerificacion, comprobante, modalidad, esMenor, fechaNacimientoTitular, horasExtraIniciales } = req.body;
@@ -1200,16 +1225,13 @@ app.post('/api/habitaciones/:num/extender-horas', requireAuth, async (req, res) 
     const montoUSD = (parseFloat(monto) || 0) > 0 ? (parseFloat(monto) || 0) : montoEsperado;
 
     // Calculate new departure date/time
-    let currentSalidaDate = room.salida ? new Date(room.salida) : new Date();
-    if (isNaN(currentSalidaDate.getTime())) {
-      currentSalidaDate = new Date();
-    }
+    let currentSalidaDate = parseFechaBackend(room.salida);
     // Add extra hours
     const newSalidaDate = new Date(currentSalidaDate.getTime() + numHrs * 60 * 60 * 1000);
-    const newSalidaIso = newSalidaDate.toISOString();
+    const newSalidaStr = formatFechaBackend(newSalidaDate);
 
     // Update room departure time
-    await db.run('UPDATE habitaciones SET salida = ? WHERE num = ?', [newSalidaIso, num]);
+    await db.run('UPDATE habitaciones SET salida = ? WHERE num = ?', [newSalidaStr, num]);
 
     // Register income transaction in caja if amount > 0
     if (montoUSD > 0) {
