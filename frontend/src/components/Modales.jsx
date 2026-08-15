@@ -4360,8 +4360,22 @@ export function ExtenderHorasModal({
   const isVesMethod = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].includes(metodoPago);
 
   const now = new Date();
-  let currentSalidaDate = room.salida ? new Date(room.salida) : now;
-  if (isNaN(currentSalidaDate.getTime())) currentSalidaDate = now;
+  // Parsear salida siempre como hora Venezuela (UTC-4), independientemente del navegador
+  let currentSalidaDate = (() => {
+    if (!room.salida) return now;
+    if (room.salida.includes(',')) {
+      try {
+        const [dp, tp] = room.salida.split(',');
+        const [d, m, y] = dp.trim().split('/').map(Number);
+        const [h, min] = tp.trim().split(':').map(Number);
+        const iso = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}T${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:00-04:00`;
+        const p = new Date(iso);
+        return isNaN(p.getTime()) ? now : p;
+      } catch { return now; }
+    }
+    const fb = new Date(room.salida);
+    return isNaN(fb.getTime()) ? now : fb;
+  })();
 
   const isOverdue = currentSalidaDate < now;
   const overdueMinutesTotal = isOverdue ? Math.floor((now.getTime() - currentSalidaDate.getTime()) / (1000 * 60)) : 0;
@@ -4445,7 +4459,9 @@ export function ExtenderHorasModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al extender horas');
 
-      alert(`✅ Extensión de ${horasAdicionales} hora(s) registrada con éxito para la Habitación #${room.num}. Nueva hora de salida estimada: ${projectedSalidaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`);
+      const proyFmt = new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: true }).format(projectedSalidaDate);
+      const proyFechaFmt = new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: 'numeric' }).format(projectedSalidaDate);
+      alert(`✅ Extensión de ${horasAdicionales} hora(s) registrada con éxito para la Habitación #${room.num}. Nueva hora de salida estimada: ${proyFmt} (${proyFechaFmt}) [hora Venezuela].`);
       
       onClose();
       if (onStateChange) await onStateChange();
@@ -4493,7 +4509,7 @@ export function ExtenderHorasModal({
               </p>
             ) : (
               <p className="text-[11px] font-bold text-emerald-700">
-                ✅ Tiempo efectivo restante desde ahora: {effectiveHoursFromNow > 0 ? `${effectiveHoursFromNow}h ` : ''}{effectiveMinsRemainder}m (Salida: {projectedSalidaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).
+                ✅ Tiempo efectivo restante desde ahora: {effectiveHoursFromNow > 0 ? `${effectiveHoursFromNow}h ` : ''}{effectiveMinsRemainder}m (Salida VZ: {new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: true }).format(projectedSalidaDate)}).
               </p>
             )}
           </div>
@@ -4531,7 +4547,7 @@ export function ExtenderHorasModal({
               </button>
             </div>
             <p className="text-[10px] text-indigo-700 font-bold mt-1 text-center">
-              Nueva hora de salida estimada: <strong>{projectedSalidaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong> ({projectedSalidaDate.toLocaleDateString()})
+              Nueva hora de salida estimada: <strong>{new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: true }).format(projectedSalidaDate)}</strong> ({new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: 'numeric' }).format(projectedSalidaDate)}) <span className="text-slate-400 text-[10px]">[hora Venezuela]</span>
             </p>
           </div>
 
