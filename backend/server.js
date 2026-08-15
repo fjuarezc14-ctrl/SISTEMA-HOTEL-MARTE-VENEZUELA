@@ -1266,7 +1266,7 @@ app.post('/api/habitaciones/:num/extender-horas', requireAuth, async (req, res) 
     res.json({ 
       success: true, 
       message: `Extensión de ${numHrs} hora(s) registrada con éxito para la Habitación ${num}.`,
-      nuevaSalida: newSalidaIso 
+      nuevaSalida: newSalidaStr 
     });
   } catch (error) {
     console.error('Error extending room hours:', error);
