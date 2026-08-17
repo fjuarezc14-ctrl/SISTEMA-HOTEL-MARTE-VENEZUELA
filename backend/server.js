@@ -1004,9 +1004,10 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     );
 
     // 3. Register transaction in Cash register if amount > 0
+    const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
+    
     if (finalMonto > 0) {
       const transactionId = 't_' + Date.now();
-      const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
       await db.run(
         'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
