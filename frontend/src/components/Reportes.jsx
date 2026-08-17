@@ -115,6 +115,42 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return isNaN(n) ? 0 : n;
   };
 
+  /**
+   * Extrae el monto real de un método de pago específico dentro de una transacción.
+   * Para pagos simples: devuelve t.monto completo si el método coincide.
+   * Para pagos MIXTOS: parsea el string del campo 'metodo' y extrae solo la porción
+   * correspondiente al método buscado (evita inflar totales con el monto total del pago).
+   * Ejemplo: metodo = "Pago Mixto (Zelle: $10.00 + Efectivo ($): $5.00)"
+   *   extractMethodAmount(t, 'zelle') → 10.00 (no 15.00)
+   */
+  const extractMethodAmount = (t, targetKey) => {
+    const m = (t.metodo || '').toLowerCase();
+    const monto = safeNum(t.monto);
+    if (!m.includes('pago mixto') && !m.includes('mixto')) {
+      // Pago simple: devolver monto completo si coincide
+      return m.includes(targetKey) ? monto : 0;
+    }
+    // Pago mixto: buscar el valor numérico junto al nombre del método
+    // Formatos comunes en el sistema:
+    // "Pago Mixto (Punto: Bs. 1780 ($2.00) + Zelle: $10.00)"
+    // "Pago Mixto - Efectivo ($): $10 + Pago Móvil: Bs. 2670 ($3.00)"
+    // "Pago Mixto (Efectivo ($): $10.00 + Pago Móvil: Bs. 2670 ($3.00) (Ref: 5998))"
+    const raw = t.metodo || '';
+    // Buscar patrón: "<Método>: $<monto>" o "<Método>: Bs. XXXX ($<monto>)"
+    // Regex: captura el monto en USD junto al nombre del método buscado
+    const patterns = [
+      // "Zelle: $10.00" o "Zelle: $10"
+      new RegExp(targetKey + '[^+)]*:\\s*\\$([\\d.]+)', 'i'),
+      // "Zelle: Bs. 8900 ($10.00)" → captura el ($ parte)
+      new RegExp(targetKey + '[^+)]*:\\s*Bs\.?[\\s\\d.]+\\(\\$([\\d.]+)\\)', 'i'),
+    ];
+    for (const re of patterns) {
+      const match = raw.match(re);
+      if (match && match[1]) return parseFloat(match[1]) || 0;
+    }
+    return 0; // No encontrado en el mixto
+  };
+
   // Helper for safe strings (prevents Object as React Child crash)
   const safeStr = (val, fallback = '') => {
     if (val === null || val === undefined) return fallback;
@@ -374,7 +410,10 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
         if (target.includes('zelle')) return m.includes('zelle');
         return m.includes(target);
       })
-      .reduce((sum, t) => sum + t.montoNum, 0);
+      .reduce((sum, t) => {
+        const target = methodName.toLowerCase();
+        return sum + extractMethodAmount(t, target);
+      }, 0);
   };
 
   // Lista de métodos de pago únicos para el filtro
@@ -421,11 +460,12 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return t.tipo === 'Ingreso';
   });
 
-  const pmTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('pago móvil')).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const ptovTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('punto')).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const zelleTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase().includes('zelle')).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const divisasTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo ($)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const bsEfectivoTotalUsd = marteDayMovements.filter(t => t.metodo === 'Efectivo (Bs)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const pmTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago móvil'), 0)
+                   + marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago movil'), 0);
+  const ptovTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'punto'), 0);
+  const zelleTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'zelle'), 0);
+  const divisasTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase() === 'efectivo ($)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const bsEfectivoTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase() === 'efectivo (bs)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
 
   const marteRows = marteDayMovements.map((t, idx) => {
     const conc = t.concepto || '';

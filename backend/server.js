@@ -1063,7 +1063,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
             'Ingreso',
             `Venta Market Check-In Hab ${numHabitacion} (${conceptList.join(', ')}) [Cliente: ${nombre.trim()}]`,
             totalMarketSale,
-            metodo || 'Efectivo Bolívares',
+            metodoTexto || 'Efectivo Bolívares',  // ← usar metodoTexto (con Ref) igual que Hospedaje
             getFechaHoraActual(),
             req.user.id,
             req.user.nombre,
