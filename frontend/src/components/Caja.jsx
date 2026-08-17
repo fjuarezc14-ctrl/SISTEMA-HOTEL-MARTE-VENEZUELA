@@ -106,13 +106,37 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   };
 
   // Calculate active shift cutoff time (Fase 2)
-  // IMPORTANT: Use the last turn delivered by THIS specific user, not any user.
-  // This prevents Admin Root from seeing pre-handoff movements when switching back.
+  // We check for the last 'Cierre' transaction of this user in Caja,
+  // which is how the shift is cut off now.
+  const myCierreTransactions = (caja || []).filter(t =>
+    t.tipo === 'Cierre' &&
+    currentUser && (t.usuarioId === currentUser.id || t.usuarioNombre === currentUser.nombre)
+  );
+  
+  const getCajaTimestamp = (id) => {
+    if (!id) return 0;
+    const match = id.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+  
+  const sortedCierres = [...myCierreTransactions].sort((a, b) => getCajaTimestamp(b.id) - getCajaTimestamp(a.id));
+  const lastCierreTx = sortedCierres[0];
+  const lastCierreDate = lastCierreTx ? parseCajaFecha(lastCierreTx.hora) : null;
+
+  // Fallback for legacy handover entries
   const myDeliveries = (entregaTurnos || []).filter(t =>
     currentUser && (t.usuarioId === currentUser.id || t.usuarioNombre === currentUser.nombre)
   );
-  const mostRecentDelivery = myDeliveries[0]; // entregaTurnos already sorted desc
+  const mostRecentDelivery = myDeliveries[0];
   const lastDeliveryDate = mostRecentDelivery ? new Date(mostRecentDelivery.fechaHoraEntrega) : null;
+
+  // Use the most recent of either lastCierreDate or lastDeliveryDate
+  let lastShiftResetDate = null;
+  if (lastCierreDate && lastDeliveryDate) {
+    lastShiftResetDate = lastCierreDate > lastDeliveryDate ? lastCierreDate : lastDeliveryDate;
+  } else {
+    lastShiftResetDate = lastCierreDate || lastDeliveryDate;
+  }
 
   // Fallback: inicio del turno operativo actual (8 AM a 8 AM del siguiente día)
   // Si son antes de las 8 AM, el turno activo empezó a las 8 AM de ayer
@@ -122,7 +146,7 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   }
   shiftStart8am.setHours(8, 0, 0, 0); // 08:00:00
 
-  const shiftCutoffTime = lastDeliveryDate ? lastDeliveryDate : shiftStart8am;
+  const shiftCutoffTime = lastShiftResetDate ? lastShiftResetDate : shiftStart8am;
 
   // Filter movements
   let displayedCaja = caja;
@@ -152,11 +176,7 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
     displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1);
   }
 
-  const getCajaTimestamp = (id) => {
-    if (!id) return 0;
-    const match = id.match(/\d+/);
-    return match ? parseInt(match[0], 10) : 0;
-  };
+
   displayedCaja = [...displayedCaja].sort((a, b) => getCajaTimestamp(b.id) - getCajaTimestamp(a.id));
 
   // Calculate totals for displayed movements ($ USD and Bs. VES)
@@ -180,52 +200,37 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
     return true;
   }) : caja;
   
+  /**
+   * Extrae el monto real de un método de pago específico dentro de una transacción.
+   * Para pagos simples: devuelve t.monto completo si el método coincide.
+   * Para pagos MIXTOS: parsea el string del campo 'metodo' y extrae solo la porción
+   * correspondiente al método buscado.
+   */
+  const extractMethodAmount = (t, targetKey) => {
+    const m = (t.metodo || '').toLowerCase();
+    const monto = parseFloat(t.monto) || 0;
+    if (!m.includes('pago mixto') && !m.includes('mixto')) {
+      return m.includes(targetKey) ? monto : 0;
+    }
+    const raw = t.metodo || '';
+    const patterns = [
+      new RegExp(targetKey + '[^+)]*:\\s*\\$([\\d.]+)', 'i'),
+      new RegExp(targetKey + '[^+)]*:\\s*Bs\\.?[\\s\\d.]+\\(\\$([\\d.]+)\\)', 'i'),
+    ];
+    for (const re of patterns) {
+      const match = raw.match(re);
+      if (match && match[1]) return parseFloat(match[1]) || 0;
+    }
+    return 0;
+  };
+
   // BUG 2 FIX: Desglose por método de pago (Efectivo, Tarjeta, Digital) y tipo de moneda (Local/Divisa)
   // Usa includes() para capturar métodos con referencias (ej: "Pago Móvil - Ref: 123") y desglosa pagos mixtos
   const getMethodTotal = (methodName) => {
+    const target = methodName.toLowerCase();
     return myMovements
-      .filter(t => {
-        if (t.tipo !== 'Ingreso') return false;
-        const m = (t.metodo || '').toLowerCase();
-        const target = methodName.toLowerCase();
-        // Pago Mixto: desglosar por canal dentro del string
-        if (m.includes('pago mixto')) {
-          if (target.includes('efectivo (bs)') || target === 'efectivo') {
-            return m.includes('efectivo (bs)');
-          }
-          if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) {
-            return m.includes('efectivo ($)');
-          }
-          if (target.includes('pago móvil') || target.includes('pago movil')) {
-            return m.includes('pago móvil') || m.includes('pago movil');
-          }
-          if (target.includes('punto')) {
-            return m.includes('punto');
-          }
-          if (target.includes('zelle')) {
-            return m.includes('zelle');
-          }
-          return false;
-        }
-        // Métodos normales con posible referencia
-        if (target.includes('efectivo (bs)') || target === 'efectivo') {
-          return m.includes('efectivo (bs)') || m === 'efectivo';
-        }
-        if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) {
-          return m.includes('efectivo ($)');
-        }
-        if (target.includes('pago móvil') || target.includes('pago movil')) {
-          return m.includes('pago móvil') || m.includes('pago movil');
-        }
-        if (target.includes('punto')) {
-          return m.includes('punto');
-        }
-        if (target.includes('zelle')) {
-          return m.includes('zelle');
-        }
-        return m.includes(target);
-      })
-      .reduce((sum, t) => sum + parseFloat(t.monto), 0);
+      .filter(t => t.tipo === 'Ingreso')
+      .reduce((sum, t) => sum + extractMethodAmount(t, target), 0);
   };
 
   const startCashUsd = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoUsd || 0) : 0;
@@ -458,25 +463,27 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* User scope selector */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setFilterMode('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filterMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <i className="fa-solid fa-list-check mr-1"></i> Todos los Movimientos
-            </button>
-            <button
-              onClick={() => setFilterMode('mine')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filterMode === 'mine' ? 'bg-[#ff331f] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <i className="fa-solid fa-user-clock mr-1"></i> Mi Turno Activo
-            </button>
-          </div>
+          {/* User scope selector - visible only for Admin/Supervisor */}
+          {isAdminOrSupervisor && (
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filterMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <i className="fa-solid fa-list-check mr-1"></i> Todos los Movimientos
+              </button>
+              <button
+                onClick={() => setFilterMode('mine')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filterMode === 'mine' ? 'bg-[#ff331f] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <i className="fa-solid fa-user-clock mr-1"></i> Mi Turno Activo
+              </button>
+            </div>
+          )}
 
           {/* Shift closure modal trigger */}
           <button
@@ -484,7 +491,7 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
             className="bg-amber-500 hover:bg-amber-600 text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
           >
             <i className="fa-solid fa-file-invoice-dollar text-sm"></i>
-            Planilla de Arqueo y Cierre
+            Cierre de Turno
           </button>
         </div>
       </div>
@@ -978,7 +985,7 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
           <div id="printable-planilla" className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 fade-in space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-calculator text-amber-500"></i> Planilla de Conciliación y Arqueo de Turno
+                <i className="fa-solid fa-calculator text-amber-500"></i> Planilla de Cierre de Turno
               </h3>
               <button onClick={() => setIsCierreModalOpen(false)} className="text-slate-400 hover:text-rose-500">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -1080,7 +1087,7 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
 
               <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex justify-between items-center mt-3 shadow-sm">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-amber-800 block">Total Arqueo Neto Turno</span>
+                  <span className="text-[10px] font-black uppercase text-amber-800 block">Total Neto del Turno</span>
                   <span className="text-[10px] text-amber-700 font-semibold">(Efectivo + Digitales - Egresos)</span>
                 </div>
                 <div className="text-right">

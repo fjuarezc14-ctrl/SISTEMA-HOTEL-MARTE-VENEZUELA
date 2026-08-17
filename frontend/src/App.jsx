@@ -76,11 +76,7 @@ export default function App() {
     configuracion: { tasa_usd: '50.00' }
   });
   const [activeTab, setActiveTab] = useState('dashboard');
-  const isBlockedByPendingHandover = 
-    (appState.entregaTurnos || []).some((t, idx) => idx === 0 && t.estado === 'Pendiente Confirmación' && t.usuarioSalienteId !== user?.id) && 
-    user?.rol !== 'Administrador' && 
-    user?.rol !== 'Super Admin' && 
-    user?.rol !== 'Superadmin';
+  const isBlockedByPendingHandover = false;
   const [loading, setLoading] = useState(true);
 
   // Modals Visibility
@@ -668,25 +664,7 @@ export default function App() {
             </button>
           )}
 
-          {canAccessTab('entregaTurnos') && (
-            <button 
-              onClick={() => setActiveTab('entregaTurnos')} 
-              className={`btn-entrega-turnos w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
-                activeTab === 'entregaTurnos'
-                  ? 'bg-[#ff331f] text-white shadow-md font-bold'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <i className="fa-solid fa-handshake w-5"></i> Entrega de Turno
-              </div>
-              {(appState.entregaTurnos || []).filter(t => t.estado === 'Pendiente Confirmación').length > 0 && (
-                <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full">
-                  {(appState.entregaTurnos || []).filter(t => t.estado === 'Pendiente Confirmación').length}
-                </span>
-              )}
-            </button>
-          )}
+          {/* Entrega de Turno removida por solicitud de cliente (Fase 2) */}
 
           {/* CATEGORÍA 2: FINANZAS Y VENTAS */}
           {['caja', 'tienda', 'reportes'].some(t => canAccessTab(t)) && (
