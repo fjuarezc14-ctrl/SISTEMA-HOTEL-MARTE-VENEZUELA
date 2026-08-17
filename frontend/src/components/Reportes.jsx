@@ -13,9 +13,16 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const [marteFondoBs, setMarteFondoBs] = useState('100.00');
 
   // State for date filters
-  const [dateFilter, setDateFilter] = useState('hoy'); // 'hoy', 'ayer', 'mes', 'personalizado'
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const getTodayDateStr = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const [customStart, setCustomStart] = useState(getTodayDateStr());
+  const [customEnd, setCustomEnd] = useState(getTodayDateStr());
 
   // State for receptionist daily sales report
   const [selectedRecepcionista, setSelectedRecepcionista] = useState(isAdmin ? 'TODOS' : (currentUser?.nombre || ''));
@@ -37,8 +44,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const [recepBusqueda, setRecepBusqueda] = useState('');
   const [recepSortKey, setRecepSortKey] = useState('hora'); // 'hora' | 'monto' | 'concepto' | 'usuarioNombre'
   const [recepSortDir, setRecepSortDir] = useState('asc');
-  const [recepFechaInicio, setRecepFechaInicio] = useState('');
-  const [recepFechaFin, setRecepFechaFin] = useState('');
+  const [recepFechaInicio, setRecepFechaInicio] = useState(getTodayDateStr());
+  const [recepFechaFin, setRecepFechaFin] = useState(getTodayDateStr());
 
   // State for report generation options
   const [showHospedaje, setShowHospedaje] = useState(true);
@@ -76,37 +83,22 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   const isDateInRange = (horaStr) => {
     const d = parseDate(horaStr);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-
     const dateToCheck = new Date(d);
     dateToCheck.setHours(0,0,0,0);
 
-    if (dateFilter === 'hoy') {
-      return dateToCheck.getTime() === today.getTime();
-    } else if (dateFilter === 'ayer') {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      yesterday.setHours(0,0,0,0);
-      return dateToCheck.getTime() === yesterday.getTime();
-    } else if (dateFilter === 'mes') {
-      return dateToCheck.getMonth() === today.getMonth() && dateToCheck.getFullYear() === today.getFullYear();
-    } else if (dateFilter === 'personalizado') {
-      if (!customStart && !customEnd) return true;
-      let valid = true;
-      if (customStart) {
-        const [y, m, dayNum] = customStart.split('-').map(Number);
-        const s = new Date(y, m - 1, dayNum, 0, 0, 0);
-        if (dateToCheck < s) valid = false;
-      }
-      if (customEnd) {
-        const [y, m, dayNum] = customEnd.split('-').map(Number);
-        const e = new Date(y, m - 1, dayNum, 23, 59, 59);
-        if (dateToCheck > e) valid = false;
-      }
-      return valid;
+    if (!customStart && !customEnd) return true;
+    let valid = true;
+    if (customStart) {
+      const [y, m, dayNum] = customStart.split('-').map(Number);
+      const s = new Date(y, m - 1, dayNum, 0, 0, 0);
+      if (dateToCheck < s) valid = false;
     }
-    return true;
+    if (customEnd) {
+      const [y, m, dayNum] = customEnd.split('-').map(Number);
+      const e = new Date(y, m - 1, dayNum, 23, 59, 59);
+      if (dateToCheck > e) valid = false;
+    }
+    return valid;
   };
 
   // Helper for safe numbers
@@ -165,7 +157,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const safeCaja = Array.isArray(caja) ? caja : [];
   const safeHistorial = Array.isArray(historial) ? historial : [];
 
-  const filteredCaja = safeCaja.filter(t => t && isDateInRange(t.hora));
+  const activeSel = (selectedRecepcionista || 'TODOS').toString().trim().toLowerCase();
+  const filteredCaja = safeCaja
+    .filter(t => t && isDateInRange(t.hora))
+    .filter(t => {
+      if (activeSel === 'todos') return true;
+      return (t.usuarioNombre || '').toString().trim().toLowerCase() === activeSel;
+    });
 
   // Helper to clean payment method display string
   const cleanPaymentMethodName = (metodoStr) => {
@@ -213,7 +211,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return dateToCheck.getTime() === today.getTime() && t.tipo === 'Ingreso';
   });
 
-  const activeSel = (selectedRecepcionista || 'TODOS').toString().trim().toLowerCase();
+
   const recepTodayTransactions = todayTransactions.filter(t => {
     if (!t) return false;
     if (activeSel === 'todos') return true;
@@ -421,15 +419,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   // Exportar CSV del reporte de recepcionista
   const handleExportRecepCSV = () => {
-    let csv = `REPORTE DE RECEPCIONISTAS POR TURNO - HOTEL MARTE\n`;
+    let csv = `REPORTE DE RECEPCIONISTAS - HOTEL MARTE\n`;
     csv += `FECHA GENERADO,${new Date().toLocaleString()},TASA USD,Bs. ${tasaUsd.toFixed(2)}\n`;
-    csv += `RECEPCIONISTA,${selectedRecepcionista || 'TODOS'},TURNO,${recepTurnoFilter}\n\n`;
-    csv += `TURNO,HORA,CONCEPTO,METODO,TIPO,MONTO USD,MONTO BS,RECEPCIONISTA,HAB,CLIENTE\n`;
+    csv += `RECEPCIONISTA,${selectedRecepcionista || 'TODOS'}\n\n`;
+    csv += `HORA,CONCEPTO,METODO,TIPO,MONTO USD,MONTO BS,RECEPCIONISTA,HAB,CLIENTE\n`;
 
-    recepPorTurno.forEach(g => {
-      g.txns.forEach(t => {
-        csv += `${g.turno},"${t.hora}","${t.concepto}","${t.metodo}","${t.tipoTransaccion}",${t.montoNum.toFixed(2)},${(t.montoNum * tasaUsd).toFixed(2)},"${t.usuarioNombre}","${t.numHab}","${t.clienteNombre}"\n`;
-      });
+    sortedRecepTransactions.forEach(t => {
+      csv += `"${t.hora}","${t.concepto}","${t.metodo}","${t.tipoTransaccion}",${t.montoNum.toFixed(2)},${(t.montoNum * tasaUsd).toFixed(2)},"${t.usuarioNombre}","${t.numHab}","${t.clienteNombre}"\n`;
     });
 
     const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -848,114 +844,102 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             </div>
           </div>
 
-          {/* Reporte agrupado por turno */}
-          {recepPorTurno.length === 0 ? (
+          {/* Reporte general unificado sin agrupamiento por turnos (Fase 3) */}
+          {sortedRecepTransactions.length === 0 ? (
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center">
               <i className="fa-solid fa-inbox text-4xl text-slate-300 mb-3"></i>
               <p className="text-sm font-bold text-slate-500">No hay transacciones que coincidan con los filtros seleccionados.</p>
             </div>
           ) : (
-            recepPorTurno.map(grupo => (
-              <div key={grupo.turno} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                {/* Encabezado del turno */}
-                <div className={`px-5 py-3 flex flex-wrap items-center justify-between gap-3 ${
-                  grupo.turno === 'Mañana' ? 'bg-amber-50 border-b border-amber-200' :
-                  grupo.turno === 'Tarde' ? 'bg-orange-50 border-b border-orange-200' :
-                  'bg-indigo-50 border-b border-indigo-200'
-                }`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black ${
-                      grupo.turno === 'Mañana' ? 'bg-amber-500' :
-                      grupo.turno === 'Tarde' ? 'bg-orange-500' :
-                      'bg-indigo-500'
-                    }`}>
-                      <i className={`fa-solid ${grupo.turno === 'Mañana' ? 'fa-sun' : grupo.turno === 'Tarde' ? 'fa-cloud-sun' : 'fa-moon'}`}></i>
-                    </span>
-                    <div>
-                      <h3 className="text-sm font-black text-slate-800 uppercase">Turno {grupo.turno}</h3>
-                      <p className="text-[10px] font-bold text-slate-500">{grupo.txns.length} transacciones</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-center">
-                    <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos</p>
-                      <p className="text-xs font-black text-emerald-600">${grupo.ingresos.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos</p>
-                      <p className="text-xs font-black text-rose-600">${grupo.egresos.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Check In</p>
-                      <p className="text-xs font-black text-blue-600">{grupo.checkIns}</p>
-                    </div>
-                    <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Check Out</p>
-                      <p className="text-xs font-black text-indigo-600">{grupo.checkOuts}</p>
-                    </div>
-                    <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Market</p>
-                      <p className="text-xs font-black text-amber-600">${grupo.market.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-slate-800 px-3 py-1.5 rounded-lg">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Total</p>
-                      <p className="text-xs font-black text-white">${grupo.total.toFixed(2)}</p>
-                    </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="px-5 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50 border-b border-slate-200">
+                <div className="flex items-center gap-3">
+                  <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-slate-800 text-white font-black">
+                    <i className="fa-solid fa-list-ul"></i>
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase">Listado General de Movimientos</h3>
+                    <p className="text-[10px] font-bold text-slate-500">{sortedRecepTransactions.length} transacciones en el período</p>
                   </div>
                 </div>
-
-                {/* Tabla de transacciones del turno */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200">
-                        <th className="p-2.5 cursor-pointer hover:text-slate-800" onClick={() => handleSort('hora')}>Hora {recepSortKey === 'hora' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
-                        <th className="p-2.5 cursor-pointer hover:text-slate-800" onClick={() => handleSort('concepto')}>Concepto {recepSortKey === 'concepto' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
-                        <th className="p-2.5">Método</th>
-                        <th className="p-2.5">Tipo</th>
-                        <th className="p-2.5 cursor-pointer hover:text-slate-800 text-right" onClick={() => handleSort('monto')}>Monto USD {recepSortKey === 'monto' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
-                        <th className="p-2.5 text-right">Monto Bs</th>
-                        <th className="p-2.5 cursor-pointer hover:text-slate-800" onClick={() => handleSort('usuarioNombre')}>Recepcionista {recepSortKey === 'usuarioNombre' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
-                        <th className="p-2.5">Hab</th>
-                        <th className="p-2.5">Cliente</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {grupo.txns.map(t => {
-                        const isVes = ['Efectivo (Bs)', 'Efectivo', 'Pago Móvil', 'Punto de Venta'].some(m => (t.metodo || '').toLowerCase().includes(m.toLowerCase()));
-                        return (
-                          <tr key={t.id} className="hover:bg-slate-50">
-                            <td className="p-2.5 font-mono text-[10px]">{t.hora}</td>
-                            <td className="p-2.5 font-semibold">{t.concepto}</td>
-                            <td className="p-2.5">
-                              <span className="font-bold text-slate-700">{t.metodo || 'N/A'}</span>
-                            </td>
-                            <td className="p-2.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                                t.tipoTransaccion === 'Check In' ? 'bg-emerald-100 text-emerald-700' :
-                                t.tipoTransaccion === 'Check Out' ? 'bg-indigo-100 text-indigo-700' :
-                                t.tipoTransaccion === 'Market' ? 'bg-amber-100 text-amber-700' :
-                                t.tipoTransaccion === 'Horas Extra' ? 'bg-sky-100 text-sky-700' :
-                                'bg-rose-100 text-rose-700'
-                              }`}>{t.tipoTransaccion}</span>
-                            </td>
-                            <td className={`p-2.5 text-right font-bold ${!isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
-                              ${t.montoNum.toFixed(2)}
-                            </td>
-                            <td className={`p-2.5 text-right font-bold ${isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
-                              Bs. {(t.montoNum * tasaUsd).toFixed(2)}
-                            </td>
-                            <td className="p-2.5">{t.usuarioNombre || 'N/A'}</td>
-                            <td className="p-2.5 font-bold">{t.numHab}</td>
-                            <td className="p-2.5">{t.clienteNombre}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="flex flex-wrap gap-3 text-center">
+                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos</p>
+                    <p className="text-xs font-black text-emerald-600">${totalIngresosRecep.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos</p>
+                    <p className="text-xs font-black text-rose-600">${totalEgresosRecep.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Check In</p>
+                    <p className="text-xs font-black text-blue-600">{totalCheckIns}</p>
+                  </div>
+                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Check Out</p>
+                    <p className="text-xs font-black text-indigo-600">{totalCheckOuts}</p>
+                  </div>
+                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Market</p>
+                    <p className="text-xs font-black text-amber-600">${totalMarketRecep.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-slate-800 px-3 py-1.5 rounded-lg">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Neto</p>
+                    <p className="text-xs font-black text-white">${(totalIngresosRecep - totalEgresosRecep).toFixed(2)}</p>
+                  </div>
                 </div>
               </div>
-            ))
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200">
+                      <th className="p-2.5 cursor-pointer hover:text-slate-800" onClick={() => handleSort('hora')}>Hora {recepSortKey === 'hora' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
+                      <th className="p-2.5 cursor-pointer hover:text-slate-800" onClick={() => handleSort('concepto')}>Concepto {recepSortKey === 'concepto' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
+                      <th className="p-2.5">Método</th>
+                      <th className="p-2.5">Tipo</th>
+                      <th className="p-2.5 cursor-pointer hover:text-slate-800 text-right" onClick={() => handleSort('monto')}>Monto USD {recepSortKey === 'monto' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
+                      <th className="p-2.5 text-right">Monto Bs</th>
+                      <th className="p-2.5 cursor-pointer hover:text-slate-800" onClick={() => handleSort('usuarioNombre')}>Recepcionista {recepSortKey === 'usuarioNombre' && (recepSortDir === 'asc' ? '↑' : '↓')}</th>
+                      <th className="p-2.5">Hab</th>
+                      <th className="p-2.5">Cliente</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedRecepTransactions.map(t => {
+                      const isVes = ['Efectivo (Bs)', 'Efectivo', 'Pago Móvil', 'Punto de Venta'].some(m => (t.metodo || '').toLowerCase().includes(m.toLowerCase()));
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-50">
+                          <td className="p-2.5 font-mono text-[10px]">{t.hora}</td>
+                          <td className="p-2.5 font-semibold">{t.concepto}</td>
+                          <td className="p-2.5">
+                            <span className="font-bold text-slate-700">{t.metodo || 'N/A'}</span>
+                          </td>
+                          <td className="p-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                              t.tipoTransaccion === 'Check In' ? 'bg-emerald-100 text-emerald-700' :
+                              t.tipoTransaccion === 'Check Out' ? 'bg-indigo-100 text-indigo-700' :
+                              t.tipoTransaccion === 'Market' ? 'bg-amber-100 text-amber-700' :
+                              t.tipoTransaccion === 'Horas Extra' ? 'bg-sky-100 text-sky-700' :
+                              'bg-rose-100 text-rose-700'
+                            }`}>{t.tipoTransaccion}</span>
+                          </td>
+                          <td className={`p-2.5 text-right font-bold ${!isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
+                            ${t.montoNum.toFixed(2)}
+                          </td>
+                          <td className={`p-2.5 text-right font-bold ${isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
+                            Bs. {(t.montoNum * tasaUsd).toFixed(2)}
+                          </td>
+                          <td className="p-2.5">{t.usuarioNombre || 'N/A'}</td>
+                          <td className="p-2.5 font-bold">{t.numHab}</td>
+                          <td className="p-2.5">{t.clienteNombre}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -971,27 +955,32 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           
           <div className="space-y-4">
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rango de Fechas</label>
-              <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500">
-                <option value="hoy">Hoy</option>
-                <option value="ayer">Ayer</option>
-                <option value="mes">Este Mes</option>
-                <option value="personalizado">Rango Personalizado</option>
-              </select>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Recepcionista</label>
+              {isAdmin ? (
+                <select value={selectedRecepcionista} onChange={e => setSelectedRecepcionista(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500">
+                  <option value="TODOS">Todos</option>
+                  {recepList.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={currentUser?.nombre || ''}
+                  readOnly
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none bg-slate-100 text-slate-700 cursor-not-allowed"
+                />
+              )}
             </div>
 
-            {dateFilter === 'personalizado' && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label>
-                  <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-[10px] font-bold" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label>
-                  <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-[10px] font-bold" />
-                </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label>
+                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-[10px] font-bold outline-none" />
               </div>
-            )}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label>
+                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-full px-2 py-1.5 rounded-xl border border-slate-300 text-[10px] font-bold outline-none" />
+              </div>
+            </div>
 
             <div className="border-t border-slate-100 pt-3">
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Secciones a Incluir (Print)</label>
@@ -1007,10 +996,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                 <input type="checkbox" checked={showEgresos} onChange={e => setShowEgresos(e.target.checked)} className="rounded text-rose-600 focus:ring-rose-500" />
                 Detalle de Egresos
               </label>
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={showMetodos} onChange={e => setShowMetodos(e.target.checked)} className="rounded text-emerald-600 focus:ring-emerald-500" />
-                Resumen de Métodos de Pago
-              </label>
+              {/* Resumen por método de pago removido de los filtros (Fase 3) */}
             </div>
           </div>
         </div>
@@ -1044,7 +1030,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 print:shadow-none print:border-none print:p-0">
         <div className="text-center mb-8 border-b-2 border-slate-800 pb-4">
           <h1 className="text-2xl font-black text-slate-800 uppercase tracking-widest">Reporte Ejecutivo - Sistema Hotel Marte</h1>
-          <p className="text-sm font-bold text-slate-500 mt-1">Período: {dateFilter.toUpperCase()} {dateFilter === 'personalizado' ? `(${customStart || '...'} a ${customEnd || '...'})` : ''}</p>
+          <p className="text-sm font-bold text-slate-500 mt-1">Período: {customStart || '...'} a {customEnd || '...'}</p>
           <p className="text-[10px] font-semibold text-slate-400 mt-2">Generado el: {new Date().toLocaleString()} | Tasa USD: Bs. {tasaUsd.toFixed(2)}</p>
         </div>
 
@@ -1071,21 +1057,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           </div>
         </div>
 
-        {showMetodos && (
-          <div className="mb-8">
-            <h4 className="text-sm font-black text-slate-800 uppercase bg-slate-100 p-2 rounded-t-xl print:bg-white print:border-b-2 border-slate-800">Resumen por Método de Pago (Ingresos)</h4>
-            <div className="border border-slate-200 rounded-b-xl p-4 flex flex-wrap gap-6">
-              {Object.keys(metodosSummary).length === 0 && <span className="text-xs text-slate-400">Sin movimientos.</span>}
-              {Object.entries(metodosSummary).map(([metodo, monto]) => (
-                <div key={metodo} className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 min-w-[140px]">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase">{metodo}</p>
-                  <p className="text-sm font-black text-slate-800">${monto.toFixed(2)} USD</p>
-                  <p className="text-[10px] font-bold text-indigo-700">~ Bs. {(monto * tasaUsd).toFixed(2)} VES</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Resumen por método de pago removido visualmente por solicitud del cliente (Fase 3) */}
 
         {showHospedaje && (
           <div className="mb-8">
