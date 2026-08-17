@@ -284,7 +284,11 @@ export function AsignarDirectoModal({
   }, 0);
 
   const marketTotalUSD = marketItemsCart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
-  const totalMontoUsd = basePrice + extraHoursCostUsd + companionSurcharges + marketTotalUSD;
+  // montoHospedajeUsd: solo habitación + horas extra + recargos (SIN market)
+  // El backend registra el market por separado en caja (origen: 'Market')
+  // Si se envía con market incluido, el monto de hospedaje queda inflado y duplicado
+  const montoHospedajeUsd = basePrice + extraHoursCostUsd + companionSurcharges;
+  const totalMontoUsd = montoHospedajeUsd + marketTotalUSD; // Solo para mostrar en pantalla
   const montoVes = (totalMontoUsd * tasaUsd).toFixed(2);
 
   // Handlers for companion dynamic list
@@ -485,7 +489,7 @@ export function AsignarDirectoModal({
       nomAcomp: acompNombres,
       ciAcomp: acompanantes.map(a => a.ci).join(', '),
       acompanantes,
-      monto: totalMontoUsd,
+      monto: montoHospedajeUsd,  // Solo hospedaje, el backend registra market por separado
       metodo: finalMetodoStr,
       codigoVerificacion: metodo === 'Pago Mixto' ? [pagosMixtosChannels.pagoMovilRef, pagosMixtosChannels.puntoRef, pagosMixtosChannels.zelleRef].filter(Boolean).join(' / ') : codigoVerificacion,
       fotoCi,
