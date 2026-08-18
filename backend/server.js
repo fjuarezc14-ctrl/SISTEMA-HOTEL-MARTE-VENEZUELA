@@ -829,24 +829,36 @@ app.post('/api/habitaciones/:num/cambiar-modalidad', requireAuth, async (req, re
   }
 });
 
-// Helper: Calcular hora de salida según modalidad (4 Horas + Horas Extra iniciales o Pernocta 11:00 AM)
+// Helper: Calcular hora de salida según modalidad (4 Horas + Horas Extra iniciales o Pernocta 11:00 AM en hora Venezuela)
 function calcularHoraSalida(modalidad, horasExtraUpfront = 0) {
-  const now = new Date();
-  let future;
-  if (modalidad === 'pernocta') {
-    future = new Date(now);
-    future.setDate(future.getDate() + 1);
-    future.setHours(11, 0, 0, 0);
-  } else {
-    const extraHrs = parseInt(horasExtraUpfront) || 0;
-    future = new Date(now.getTime() + (4 + extraHrs) * 60 * 60 * 1000);
-  }
-  
   const options = { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
-  const parts = new Intl.DateTimeFormat('es-VE', options).formatToParts(future);
+  const parts = new Intl.DateTimeFormat('es-VE', options).formatToParts(new Date());
   const map = {};
   parts.forEach(p => map[p.type] = p.value);
-  return `${map.day}/${map.month}/${map.year}, ${map.hour}:${map.minute}`;
+
+  if (modalidad === 'pernocta') {
+    const curYear = parseInt(map.year, 10);
+    const curMonth = parseInt(map.month, 10); // 1-12
+    const curDay = parseInt(map.day, 10);
+
+    // Avanzar 1 día en Venezuela
+    const d = new Date(Date.UTC(curYear, curMonth - 1, curDay, 12, 0, 0));
+    d.setUTCDate(d.getUTCDate() + 1);
+
+    const nextYear = d.getUTCFullYear();
+    const nextMonth = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const nextDay = String(d.getUTCDate()).padStart(2, '0');
+
+    // La hora de salida para pernocta en Venezuela es fija a las 11:00 AM
+    return `${nextDay}/${nextMonth}/${nextYear}, 11:00`;
+  } else {
+    const extraHrs = parseInt(horasExtraUpfront) || 0;
+    const future = new Date(Date.now() + (4 + extraHrs) * 60 * 60 * 1000);
+    const futureParts = new Intl.DateTimeFormat('es-VE', options).formatToParts(future);
+    const fMap = {};
+    futureParts.forEach(p => fMap[p.type] = p.value);
+    return `${fMap.day}/${fMap.month}/${fMap.year}, ${fMap.hour}:${fMap.minute}`;
+  }
 }
 
 function getDigitsOnly(str) {
