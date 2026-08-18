@@ -471,7 +471,7 @@ export function AsignarDirectoModal({
         const totalDigitalUsd = pmUsd + ptUsd + zlUsd;
 
         // Caso 1: Hospedaje coincide con Efectivo y Market con Digital (ej. Hospedaje $15 Efectivo, Market $4.50 Zelle)
-        if (Math.abs(totalCashUsd - montoHospedajeUsd) < 0.01 && Math.abs(totalDigitalUsd - totalMarketUsd) < 0.01) {
+        if (Math.abs(totalCashUsd - montoHospedajeUsd) < 0.01 && Math.abs(totalDigitalUsd - marketTotalUSD) < 0.01) {
           metodoHospedaje = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
           if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
             metodoMarket = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
@@ -482,7 +482,7 @@ export function AsignarDirectoModal({
           }
         }
         // Caso 2: Market coincide con Efectivo y Hospedaje con Digital
-        else if (Math.abs(totalCashUsd - totalMarketUsd) < 0.01 && Math.abs(totalDigitalUsd - montoHospedajeUsd) < 0.01) {
+        else if (Math.abs(totalCashUsd - marketTotalUSD) < 0.01 && Math.abs(totalDigitalUsd - montoHospedajeUsd) < 0.01) {
           metodoMarket = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
           if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
             metodoHospedaje = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
