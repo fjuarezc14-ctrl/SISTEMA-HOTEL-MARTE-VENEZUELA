@@ -242,15 +242,18 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al procesar check-in');
       
+      setIsAsignarDirectoOpen(false);
+      const updatedState = await fetchState();
+      const roomAssigned = (updatedState?.habitaciones || appState.habitaciones || []).find(h => h.num === formData.numHabitacion);
+      
       // Setup success modal details
       setCheckinSuccessDetails({
         nombre: formData.nombre,
         numHab: formData.numHabitacion,
-        tieneAcomp: formData.nomAcomp !== ''
+        tieneAcomp: formData.nomAcomp !== '',
+        salida: roomAssigned?.salida || (formData.modalidad === 'pernocta' ? '12:00 PM (Siguiente Día)' : '4 Horas')
       });
       
-      setIsAsignarDirectoOpen(false);
-      await fetchState();
       setIsCheckinExitosoOpen(true);
     } catch (error) {
       alert(`⚠️ Error: ${error.message}`);
@@ -1095,6 +1098,7 @@ export default function App() {
         huesped={checkinSuccessDetails.nombre}
         roomNum={checkinSuccessDetails.numHab}
         tieneAcomp={checkinSuccessDetails.tieneAcomp}
+        salida={checkinSuccessDetails.salida}
         onClose={() => setIsCheckinExitosoOpen(false)}
       />
 

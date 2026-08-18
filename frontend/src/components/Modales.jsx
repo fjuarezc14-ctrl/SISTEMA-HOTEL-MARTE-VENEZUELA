@@ -2660,6 +2660,7 @@ export function CheckinExitosoModal({
   huesped, 
   roomNum, 
   tieneAcomp, 
+  salida,
   onClose 
 }) {
   if (!isOpen) return null;
@@ -2686,7 +2687,10 @@ export function CheckinExitosoModal({
               </p>
             )}
           </div>
-          <div className="text-xs text-slate-500 font-mono">Hora Límite de Salida: 12:00 PM</div>
+          <div className="text-xs text-slate-600 font-bold bg-slate-100 py-1.5 px-3 rounded-lg border border-slate-200 inline-block">
+            <i className="fa-regular fa-clock text-slate-400 mr-1.5"></i>
+            {salida ? `Límite de Salida: ${salida}` : 'Límite de Salida: Según modalidad'}
+          </div>
           <div className="pt-4 border-t border-slate-100">
             <button 
               onClick={onClose} 

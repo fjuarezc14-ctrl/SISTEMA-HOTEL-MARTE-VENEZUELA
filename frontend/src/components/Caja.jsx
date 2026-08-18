@@ -375,35 +375,40 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   
   /**
    * Extrae el monto real de un método de pago específico dentro de una transacción.
-   * Para pagos simples: devuelve t.monto completo si el método coincide.
-   * Para pagos MIXTOS: parsea el string del campo 'metodo' y extrae solo la porción
-   * correspondiente al método buscado.
+   * Para pagos simples y MIXTOS: utiliza parsePaymentBreakdown para sumar con precisión
+   * la porción exacta de cada canal sin errores de regex.
    */
   const extractMethodAmount = (t, targetKey) => {
-    const m = (t.metodo || '').toLowerCase();
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
     const monto = parseFloat(t.monto) || 0;
-    if (!m.includes('pago mixto') && !m.includes('mixto')) {
-      return m.includes(targetKey) ? monto : 0;
+    const breakdown = parsePaymentBreakdown(t.metodo, monto, txTasa);
+    const target = targetKey.toLowerCase();
+
+    let sum = 0;
+    for (const ch of breakdown.channels) {
+      const chMethod = (ch.method || '').toLowerCase();
+      if (target === 'efectivo ($)' && (chMethod === 'efectivo ($)' || chMethod === 'efectivo ($ usd)' || chMethod.includes('($)'))) {
+        sum += ch.amountUsd;
+      } else if (target === 'efectivo (bs)' && (chMethod.includes('(bs)') || chMethod === 'efectivo (bs)' || chMethod === 'efectivo bolívares')) {
+        sum += ch.amountUsd;
+      } else if (target === 'pago móvil' && (chMethod.includes('pago móvil') || chMethod.includes('pago movil') || chMethod === 'pm')) {
+        sum += ch.amountUsd;
+      } else if (target === 'punto de venta' && (chMethod.includes('punto') || chMethod.includes('punto de venta') || chMethod.includes('pos'))) {
+        sum += ch.amountUsd;
+      } else if (target === 'zelle' && chMethod.includes('zelle')) {
+        sum += ch.amountUsd;
+      } else if (chMethod.includes(target)) {
+        sum += ch.amountUsd;
+      }
     }
-    const raw = t.metodo || '';
-    const patterns = [
-      new RegExp(targetKey + '[^+)]*:\\s*\\$([\\d.]+)', 'i'),
-      new RegExp(targetKey + '[^+)]*:\\s*Bs\\.?[\\s\\d.]+\\(\\$([\\d.]+)\\)', 'i'),
-    ];
-    for (const re of patterns) {
-      const match = raw.match(re);
-      if (match && match[1]) return parseFloat(match[1]) || 0;
-    }
-    return 0;
+    return sum;
   };
 
-  // BUG 2 FIX: Desglose por método de pago (Efectivo, Tarjeta, Digital) y tipo de moneda (Local/Divisa)
-  // Usa includes() para capturar métodos con referencias (ej: "Pago Móvil - Ref: 123") y desglosa pagos mixtos
+  // Desglose por método de pago (Efectivo, Tarjeta, Digital) y tipo de moneda (Local/Divisa)
   const getMethodTotal = (methodName) => {
-    const target = methodName.toLowerCase();
     return myMovements
       .filter(t => t.tipo === 'Ingreso')
-      .reduce((sum, t) => sum + extractMethodAmount(t, target), 0);
+      .reduce((sum, t) => sum + extractMethodAmount(t, methodName), 0);
   };
 
   const startCashUsd = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoUsd || 0) : 0;
@@ -415,10 +420,24 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const myDivisasUSD = startCashUsd + getMethodTotal('Efectivo ($)');
   const myZelle = getMethodTotal('Zelle');
 
-  // Validation breakdown for shift closure (BUG 2 FIX: usa isDigitalPayment para capturar métodos con referencias y mixtos)
-  const digitalMovements = myMovements.filter(t => t.tipo === 'Ingreso' && isDigitalPayment(t.metodo));
-  const digitalValidadosUsd = digitalMovements.filter(t => t.validado === 1).reduce((s, t) => s + parseFloat(t.monto), 0);
-  const digitalPendientesUsd = digitalMovements.filter(t => !t.validado || t.validado === 0).reduce((s, t) => s + parseFloat(t.monto), 0);
+  // Desglose de pagos digitales (validando porciones exactas en pagos mixtos)
+  const digitalValidadosUsd = myMovements
+    .filter(t => t.tipo === 'Ingreso' && t.validado === 1)
+    .reduce((s, t) => {
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
+      const digSum = breakdown.channels.filter(c => c.isDigital).reduce((cs, c) => cs + c.amountUsd, 0);
+      return s + digSum;
+    }, 0);
+
+  const digitalPendientesUsd = myMovements
+    .filter(t => t.tipo === 'Ingreso' && (!t.validado || t.validado === 0))
+    .reduce((s, t) => {
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
+      const digSum = breakdown.channels.filter(c => c.isDigital).reduce((cs, c) => cs + c.amountUsd, 0);
+      return s + digSum;
+    }, 0);
 
   const myEgresos = myMovements
     .filter(t => t.tipo === 'Egreso')
