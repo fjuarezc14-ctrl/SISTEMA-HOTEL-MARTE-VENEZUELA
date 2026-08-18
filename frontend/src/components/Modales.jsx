@@ -183,6 +183,7 @@ export function AsignarDirectoModal({
   const [fotoCi, setFotoCi] = useState('');
   const [isWebcamOpen, setIsWebcamOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Market products selection before Check-In
   const [selectedMarketProdId, setSelectedMarketProdId] = useState('');
@@ -241,6 +242,7 @@ export function AsignarDirectoModal({
       setTel('');
       setFechaNacimientoTitular('');
       setFotoCi('');
+      setFormError('');
       setAcompanantes([]);
       setMarketItemsCart([]);
       setModalidad('4h');
@@ -360,35 +362,31 @@ export function AsignarDirectoModal({
   };
 
   const handleFormSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (isSubmitting) return;
+    setFormError('');
     setIsSubmitting(true);
 
     try {
       if (!ci.trim()) {
-        alert('⚠️ Debe ingresar el Número de Cédula / Documento de Identidad del cliente.');
+        setFormError('⚠️ Debe ingresar el Número de Cédula / Documento de Identidad del cliente.');
         return;
       }
 
       if (!nombre.trim()) {
-        alert('⚠️ Debe ingresar el Nombre y Apellido completo del cliente.');
+        setFormError('⚠️ Debe ingresar el Nombre y Apellido completo del cliente.');
         return;
       }
 
       if (!tel.trim()) {
-        alert('⚠️ Debe ingresar el Número de Teléfono / Celular de contacto del cliente.');
-        return;
-      }
-
-      if (!fechaNacimientoTitular) {
-        alert('⚠️ Debe ingresar la Fecha de Nacimiento del titular.');
+        setFormError('⚠️ Debe ingresar el Número de Teléfono / Celular de contacto del cliente.');
         return;
       }
 
       // Digital verification code check
       const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
       if (isDigital && !codigoVerificacion.trim()) {
-        alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
+        setFormError('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
         return;
       }
 
@@ -401,20 +399,20 @@ export function AsignarDirectoModal({
           (parseFloat(pagosMixtosChannels.zelle) || 0);
 
         if (Math.abs(sumMixtoUSD - totalMontoUsd) > 0.05) {
-          alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${totalMontoUsd.toFixed(2)} USD).`);
+          setFormError(`⚠️ En Pago Mixto la suma ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total ($${totalMontoUsd.toFixed(2)} USD).`);
           return;
         }
 
         if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef.trim()) {
-          alert('⚠️ Debe ingresar el Código de Referencia para la parte de Pago Móvil.');
+          setFormError('⚠️ Debe ingresar el Código de Referencia para Pago Móvil.');
           return;
         }
         if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef.trim()) {
-          alert('⚠️ Debe ingresar el Código de Referencia / Baucher para la parte de Punto de Venta.');
+          setFormError('⚠️ Debe ingresar el Código de Referencia / Baucher para Punto de Venta.');
           return;
         }
         if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef.trim()) {
-          alert('⚠️ Debe ingresar la Referencia / Confirmación para la parte de Zelle.');
+          setFormError('⚠️ Debe ingresar la Referencia / Confirmación para Zelle.');
           return;
         }
       }
@@ -502,11 +500,11 @@ export function AsignarDirectoModal({
         dni: ci.trim(),
         nombre: nombre.trim(),
         tel: tel.trim(),
-        fechaNacimientoTitular,
+        fechaNacimientoTitular: fechaNacimientoTitular || '2000-01-01',
         nomAcomp: acompNombres,
         ciAcomp: acompanantes.map(a => a.ci).join(', '),
         acompanantes,
-        monto: montoHospedajeUsd,  // Solo hospedaje, el backend registra market por separado
+        monto: montoHospedajeUsd,
         metodo: finalMetodoStr,
         metodoHospedaje,
         metodoMarket,
@@ -518,6 +516,7 @@ export function AsignarDirectoModal({
       });
     } catch (err) {
       console.error('Error submitting check-in:', err);
+      setFormError(`⚠️ Error al procesar: ${err.message || 'Error de conexión'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1162,6 +1161,13 @@ export function AsignarDirectoModal({
                   })()}
                 </div>
 
+                {formError && (
+                  <div className="p-3 bg-rose-50 border-2 border-rose-300 text-rose-700 text-xs font-black rounded-xl text-center flex items-center justify-center gap-2 shadow-sm animate-pulse">
+                    <i className="fa-solid fa-triangle-exclamation text-rose-600"></i>
+                    <span>{formError}</span>
+                  </div>
+                )}
+
                 <div className="pt-2 flex gap-3">
                   <button 
                     type="button" 
@@ -1171,7 +1177,8 @@ export function AsignarDirectoModal({
                     Cancelar
                   </button>
                   <button 
-                    type="submit"
+                    type="button"
+                    onClick={handleFormSubmit}
                     disabled={isClientVetado || isTitularMenor || isSubmitting}
                     className={`flex-1 font-bold py-2.5 rounded-xl transition-colors text-xs text-white shadow-md ${
                       isClientVetado || isTitularMenor 
