@@ -1001,6 +1001,7 @@ export default function App() {
                 <Caja 
                   caja={appState.caja} 
                   entregaTurnos={appState.entregaTurnos || []}
+                  historialEstadias={appState.historialEstadias || []}
                   token={token}
                   currentUser={user}
                   tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Caja({ caja = [], entregaTurnos = [], token, currentUser, tasaUsd = 50.00, onCajaMovimiento, onStateChange }) {
+export default function Caja({ caja = [], entregaTurnos = [], historialEstadias = [], token, currentUser, tasaUsd = 50.00, onCajaMovimiento, onStateChange }) {
   const [tipo, setTipo] = useState('Ingreso');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
@@ -21,6 +21,19 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   const [tabMode, setTabMode] = useState('Todos');
   // Validation filter ('all', 'pending', 'validated')
   const [valFilter, setValFilter] = useState('all');
+
+  // States for Control de Huéspedes Policial (Fase 4)
+  const [isPoliceModalOpen, setIsPoliceModalOpen] = useState(false);
+  const getTodayDateStr = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+  const [policeStartDate, setPoliceStartDate] = useState(getTodayDateStr());
+  const [policeEndDate, setPoliceEndDate] = useState(getTodayDateStr());
+  const [policeRecepFilter, setPoliceRecepFilter] = useState('TODOS');
 
   // Super Admin Edit Payment Method state
   const [editingTxn, setEditingTxn] = useState(null);
@@ -147,6 +160,84 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
   shiftStart8am.setHours(8, 0, 0, 0); // 08:00:00
 
   const shiftCutoffTime = lastShiftResetDate ? lastShiftResetDate : shiftStart8am;
+
+  // Build unique receptionists list for Police Report dropdown (Fase 4)
+  const recepList = Array.from(new Set(
+    (historialEstadias || []).map(h => h.usuarioNombre).filter(Boolean)
+  ));
+
+  // Date range checker helper for guest records
+  const isEstadiaInPoliceRange = (ingresoStr, startStr, endStr) => {
+    if (!startStr && !endStr) return true;
+    const d = parseCajaFecha(ingresoStr);
+    const dateToCheck = new Date(d);
+    dateToCheck.setHours(0,0,0,0);
+    
+    if (startStr) {
+      const [y, m, dayNum] = startStr.split('-').map(Number);
+      const s = new Date(y, m - 1, dayNum, 0, 0, 0);
+      if (dateToCheck < s) return false;
+    }
+    if (endStr) {
+      const [y, m, dayNum] = endStr.split('-').map(Number);
+      const e = new Date(y, m - 1, dayNum, 23, 59, 59);
+      if (dateToCheck > e) return false;
+    }
+    return true;
+  };
+
+  // Helper to parse companions string
+  const parseCompanions = (acompStr) => {
+    if (!acompStr) return [];
+    return acompStr.split(',').map(c => {
+      const trimmed = c.trim();
+      if (!trimmed) return null;
+      const ciMatch = trimmed.match(/\(CI:\s*([\d.]+)\)/i);
+      const name = trimmed.replace(/\(CI:\s*[\d.]+\)/i, '').replace(/\(Menor de edad - Sin recargo\)/i, '').trim();
+      const ci = ciMatch ? ciMatch[1] : 'S/CI';
+      return { name, ci };
+    }).filter(Boolean);
+  };
+
+  // Filtered guest entries for Police Report
+  const filteredEstadias = (historialEstadias || []).filter(h => {
+    if (!h) return false;
+    if (isAdminOrSupervisor) {
+      // Admin/Supervisor can filter by date range and receptionist
+      if (!isEstadiaInPoliceRange(h.ingreso, policeStartDate, policeEndDate)) return false;
+      if (policeRecepFilter !== 'TODOS' && (h.usuarioNombre || '').trim().toLowerCase() !== policeRecepFilter.trim().toLowerCase()) return false;
+      return true;
+    } else {
+      // Receptionist: only their own turn
+      const matchesRecep = h.usuarioId === currentUser?.id || (h.usuarioNombre || '').trim().toLowerCase() === (currentUser?.nombre || '').trim().toLowerCase();
+      if (!matchesRecep) return false;
+      const tDate = parseCajaFecha(h.ingreso);
+      return tDate >= shiftCutoffTime;
+    }
+  });
+
+  // CSV Export for Police Report
+  const handleExportPoliceCSV = () => {
+    let csv = `CONTROL DE INGRESO DIARIO (REGISTRO POLICIAL) - HOTEL MARTE\n`;
+    csv += `FECHA,${policeStartDate} a ${policeEndDate},RECEPCIONISTA,${policeRecepFilter}\n\n`;
+    csv += `N°,NOMBRE Y APELLIDO (TITULAR),C.I. TITULAR,NOMBRE Y APELLIDO ACOMPAÑANTE,C.I. ACOMPAÑANTE,CHECK IN,CHECK OUT\n`;
+
+    filteredEstadias.forEach((h, idx) => {
+      const companions = parseCompanions(h.acomp);
+      const acompNames = companions.length > 0 ? companions.map(c => c.name).join(' / ') : 'S/A';
+      const acompCis = companions.length > 0 ? companions.map(c => c.ci).join(' / ') : 'S/CI';
+      csv += `${idx + 1},"${h.huesped || 'N/A'}","${h.clienteCi || 'S/CI'}","${acompNames}","${acompCis}","${h.ingreso || 'N/A'}","${h.salida || 'Activo'}"\n`;
+    });
+
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Registro_Policial_Huespedes_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Filter movements
   let displayedCaja = caja;
@@ -492,6 +583,15 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
           >
             <i className="fa-solid fa-file-invoice-dollar text-sm"></i>
             Cierre de Turno
+          </button>
+
+          {/* Police report modal trigger (Fase 4) */}
+          <button
+            onClick={() => setIsPoliceModalOpen(true)}
+            className="bg-slate-800 hover:bg-slate-900 text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+          >
+            <i className="fa-solid fa-user-shield text-sm"></i>
+            Planilla Policial
           </button>
         </div>
       </div>
@@ -1122,6 +1222,152 @@ export default function Caja({ caja = [], entregaTurnos = [], token, currentUser
                     <i className="fa-solid fa-check-double"></i> Guardar Cierre de Turno
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONTROL DE INGRESO (REGISTRO POLICIAL) MODAL (Fase 4) */}
+      {isPoliceModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-5xl p-6 shadow-2xl border border-slate-200 fade-in space-y-4 max-h-[95vh] overflow-y-auto printable-modal">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3 print:hidden">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i className="fa-solid fa-user-shield text-emerald-600"></i> Control de Ingreso (Registro Policial)
+              </h3>
+              <button onClick={() => setIsPoliceModalOpen(false)} className="text-slate-400 hover:text-rose-500">
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
+            </div>
+
+            {/* Filters panel inside modal - Hidden during printing */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-end gap-3 print:hidden">
+              {isAdminOrSupervisor ? (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Recepcionista</label>
+                    <select
+                      value={policeRecepFilter}
+                      onChange={e => setPoliceRecepFilter(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold outline-none"
+                    >
+                      <option value="TODOS">Todos</option>
+                      {recepList.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label>
+                    <input
+                      type="date"
+                      value={policeStartDate}
+                      onChange={e => setPoliceStartDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label>
+                    <input
+                      type="date"
+                      value={policeEndDate}
+                      onChange={e => setPoliceEndDate(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold outline-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs font-semibold text-slate-600 space-y-1">
+                  <p>• <strong>Recepcionista:</strong> {currentUser?.nombre || 'Usuario en Sesión'}</p>
+                  <p>• <strong>Turno Activo:</strong> Filtrando automáticamente ingresos desde el reinicio de caja ({shiftCutoffTime ? shiftCutoffTime.toLocaleString() : '8:00 AM'}).</p>
+                </div>
+              )}
+
+              <div className="flex-1"></div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleExportPoliceCSV}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-file-csv"></i> Descargar CSV
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-print"></i> Imprimir PDF
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Police Guest Ledger */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden print:border-black">
+              {/* Header inside printable area */}
+              <div className="bg-slate-900 text-white p-4 print:bg-white print:text-black print:border-b-2 print:border-black flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-black tracking-wider uppercase text-amber-400 print:text-black">Planilla de Control de Ingreso (Registro Policial)</h2>
+                  <p className="text-[10px] text-slate-400 font-bold print:text-slate-600 uppercase tracking-widest mt-0.5">Hotel Marte S.R.L.</p>
+                </div>
+                <div className="text-right text-xs">
+                  {isAdminOrSupervisor ? (
+                    <p className="font-bold">Período: {policeStartDate} a {policeEndDate}</p>
+                  ) : (
+                    <p className="font-bold">Turno Activo: {currentUser?.nombre || 'Recepcionista'}</p>
+                  )}
+                  <p className="text-[9px] text-slate-400 print:text-slate-500 font-semibold">Generado: {new Date().toLocaleString()}</p>
+                </div>
+              </div>
+
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 uppercase text-[9px] font-black border-b border-slate-200 print:bg-slate-200 print:text-black print:border-b">
+                    <th className="p-2.5 border-r border-slate-200 print:border-black text-center w-12">N°</th>
+                    <th className="p-2.5 border-r border-slate-200 print:border-black">Huésped Titular</th>
+                    <th className="p-2.5 border-r border-slate-200 print:border-black w-28">C.I. Titular</th>
+                    <th className="p-2.5 border-r border-slate-200 print:border-black">Acompañante(s)</th>
+                    <th className="p-2.5 border-r border-slate-200 print:border-black w-32">C.I. Acompañante(s)</th>
+                    <th className="p-2.5 border-r border-slate-200 print:border-black text-center w-36">Check In</th>
+                    <th className="p-2.5 text-center w-36">Check Out</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700 print:divide-black print:text-black">
+                  {filteredEstadias.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-8 text-slate-400 font-bold">
+                        No hay registros de ingreso que coincidan con los filtros.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEstadias.map((h, idx) => {
+                      const companions = parseCompanions(h.acomp);
+                      const acompNames = companions.length > 0 ? companions.map(c => c.name).join(' / ') : 'S/A';
+                      const acompCis = companions.length > 0 ? companions.map(c => c.ci).join(' / ') : 'S/CI';
+                      return (
+                        <tr key={h.id || idx} className="hover:bg-slate-50 print:hover:bg-transparent">
+                          <td className="p-2.5 border-r border-slate-100 print:border-black text-center font-bold">{idx + 1}</td>
+                          <td className="p-2.5 border-r border-slate-100 print:border-black font-black uppercase">{h.huesped || 'N/A'}</td>
+                          <td className="p-2.5 border-r border-slate-100 print:border-black font-bold">{h.clienteCi || 'S/CI'}</td>
+                          <td className="p-2.5 border-r border-slate-100 print:border-black font-bold uppercase">{acompNames}</td>
+                          <td className="p-2.5 border-r border-slate-100 print:border-black font-bold">{acompCis}</td>
+                          <td className="p-2.5 border-r border-slate-100 print:border-black text-center font-semibold text-slate-600 print:text-black">{h.ingreso || 'N/A'}</td>
+                          <td className={`p-2.5 text-center font-bold ${!h.salida ? 'text-emerald-600' : 'text-slate-600 print:text-black'}`}>
+                            {h.salida || 'Activo'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex justify-end print:hidden">
+              <button
+                type="button"
+                onClick={() => setIsPoliceModalOpen(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2 rounded-xl transition-colors text-xs border border-slate-200"
+              >
+                Cerrar
               </button>
             </div>
           </div>
