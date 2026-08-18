@@ -87,6 +87,39 @@ async function registrarAuditoria(usuarioId, usuarioNombre, rol, accion, detalle
   }
 }
 
+// Helper: Insertar movimiento en Caja congelando la tasa de cambio y el monto en VES al momento exacto de la operacion
+async function insertCajaTransaction(db, { id, tipo, concepto, monto, metodo, usuarioId, usuarioNombre, origen }) {
+  try {
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const activeTasa = config ? parseFloat(config.valor) : 50.00;
+    const finalMontoUsd = parseFloat(monto) || 0;
+    const finalMontoVes = finalMontoUsd * activeTasa;
+    const txId = id || ('t_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6));
+
+    await db.run(
+      `INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen, tasa_usd, monto_ves)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        txId,
+        tipo || 'Ingreso',
+        concepto,
+        finalMontoUsd,
+        metodo || 'Efectivo ($)',
+        getFechaHoraActual(),
+        usuarioId,
+        usuarioNombre,
+        origen || 'Hospedaje',
+        activeTasa,
+        finalMontoVes
+      ]
+    );
+    return txId;
+  } catch (err) {
+    console.error('Error in insertCajaTransaction:', err);
+    throw err;
+  }
+}
+
 // ====================================================
 // SEGURIDAD Y AUTH MIDDLEWARE (v2 - Fase 1 & v3 - Fase 3)
 // ====================================================
@@ -767,22 +800,16 @@ app.post('/api/habitaciones/:num/cambiar-modalidad', requireAuth, async (req, re
     // 3. Register transaction in Cash register if amount > 0
     const finalMonto = parseFloat(montoDiferencia) || 0;
     if (finalMonto > 0) {
-      const transactionId = 't_' + Date.now();
       const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId, 
-          'Ingreso', 
-          `Hospedaje Cambio de Modalidad a Pernocta Hab ${num} (${room.huesped || 'Huésped'}) - ${comprobante || 'Sin Comprobante'}`, 
-          finalMonto, 
-          metodoTexto || 'Efectivo Bolívares', 
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Hospedaje Cambio de Modalidad a Pernocta Hab ${num} (${room.huesped || 'Huésped'}) - ${comprobante || 'Sin Comprobante'}`,
+        monto: finalMonto,
+        metodo: metodoTexto || 'Efectivo Bolívares',
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     // 4. Log audit trail
@@ -985,21 +1012,15 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     const finalMetodoHospedaje = metodoHospedaje || metodoTexto;
     
     if (finalMonto > 0) {
-      const transactionId = 't_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId, 
-          'Ingreso', 
-          `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidad === 'pernocta' ? 'Pernocta' : '4 Horas'}] - ${comprobante || 'Sin Comprobante'}`, 
-          finalMonto, 
-          finalMetodoHospedaje || 'Efectivo Bolívares', 
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidad === 'pernocta' ? 'Pernocta' : '4 Horas'}] - ${comprobante || 'Sin Comprobante'}`,
+        monto: finalMonto,
+        metodo: finalMetodoHospedaje || 'Efectivo Bolívares',
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     // 4. Handle Market items attached to Check-In (Venta Inmediata de Market en Check-In)
@@ -1034,21 +1055,15 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       }
       if (totalMarketSale > 0) {
         const finalMetodoMkt = metodoMarket || metodoTexto;
-        const mTransId = 't_mkt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
-        await db.run(
-          'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [
-            mTransId,
-            'Ingreso',
-            `Venta Market Check-In Hab ${numHabitacion} (${conceptList.join(', ')}) [Cliente: ${nombre.trim()}]`,
-            totalMarketSale,
-            finalMetodoMkt || 'Efectivo Bolívares',
-            getFechaHoraActual(),
-            req.user.id,
-            req.user.nombre,
-            'Market'
-          ]
-        );
+        await insertCajaTransaction(db, {
+          tipo: 'Ingreso',
+          concepto: `Venta Market Check-In Hab ${numHabitacion} (${conceptList.join(', ')}) [Cliente: ${nombre.trim()}]`,
+          monto: totalMarketSale,
+          metodo: finalMetodoMkt || 'Efectivo Bolívares',
+          usuarioId: req.user.id,
+          usuarioNombre: req.user.nombre,
+          origen: 'Market'
+        });
       }
     }
 
@@ -1136,20 +1151,15 @@ app.post('/api/habitaciones/:num/acompanante', requireAuth, async (req, res) => 
         ? `${metodo} (Ref: ${codigoVerificacion})` 
         : metodo;
 
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Recargo 3er Huésped ($5 USD) Hab ${num} (${acompName})`,
-          finalMonto,
-          metodoTexto || 'Efectivo Bolívares',
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Recargo 3er Huésped ($5 USD) Hab ${num} (${acompName})`,
+        monto: finalMonto,
+        metodo: metodoTexto || 'Efectivo Bolívares',
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
 
       await db.run(
         'INSERT INTO consumos (numHabitacion, concepto, monto, fecha) VALUES (?, ?, ?, ?)',
@@ -1216,23 +1226,16 @@ app.post('/api/habitaciones/:num/extender-horas', requireAuth, async (req, res) 
 
     // Register income transaction in caja if amount > 0
     if (montoUSD > 0) {
-      const transId = 't_ext_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
       const cleanMetodoStr = codigoRef ? `${metodo} (Ref: ${codigoRef})` : metodo;
-      
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transId,
-          'Ingreso',
-          `Extensión Estadía Hab ${num} (+${numHrs} hr${numHrs > 1 ? 's' : ''}) [Huésped: ${room.huesped || 'General'}]`,
-          montoUSD,
-          cleanMetodoStr || 'Efectivo ($)',
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Extensión Estadía Hab ${num} (+${numHrs} hr${numHrs > 1 ? 's' : ''}) [Huésped: ${room.huesped || 'General'}]`,
+        monto: montoUSD,
+        metodo: cleanMetodoStr || 'Efectivo ($)',
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     await registrarAuditoria(
@@ -1378,21 +1381,15 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
     // 4. Register deposit payment in Caja if amount > 0
     const finalMonto = parseFloat(monto) || 0;
     if (finalMonto > 0) {
-      const transactionId = 't_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Cobro Adelanto Reserva Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante || 'Sin Comprobante'}`,
-          finalMonto,
-          metodo || 'Efectivo Bolívares',
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Cobro Adelanto Reserva Hab ${numHabitacion} (${nombre.trim()}) - ${comprobante || 'Sin Comprobante'}`,
+        monto: finalMonto,
+        metodo: metodo || 'Efectivo Bolívares',
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     res.json({ success: true, message: `Habitación ${numHabitacion} reservada para ${nombre}` });
@@ -1835,62 +1832,44 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
       // Register penalty in Caja if penalty paid > 0
       const finalPenalidad = parseFloat(penalidad) || 0;
       if (finalPenalidad > 0) {
-        const transactionId = 't_pen_' + Date.now();
-        await db.run(
-          'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [
-            transactionId,
-            'Ingreso',
-            `Penalidad Check-Out Hab ${numHabitacion} - ${detallePenalidad || 'Incumplimiento de checklist'}`,
-            finalPenalidad,
-            metodo,
-            getFechaHoraActual(),
-            req.user.id,
-            req.user.nombre,
-            'Hospedaje'
-          ]
-        );
+        await insertCajaTransaction(db, {
+          tipo: 'Ingreso',
+          concepto: `Penalidad Check-Out Hab ${numHabitacion} - ${detallePenalidad || 'Incumplimiento de checklist'}`,
+          monto: finalPenalidad,
+          metodo: metodo,
+          usuarioId: req.user.id,
+          usuarioNombre: req.user.nombre,
+          origen: 'Hospedaje'
+        });
       }
     }
 
     // 3. Register room balance payment in Caja if > 0
     const finalHab = parseFloat(montoHabitacion) || 0;
     if (finalHab > 0) {
-      const transactionId = 't_hab_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Cobro Saldo Pendiente Hab ${numHabitacion} (${huespedNombre})`,
-          finalHab,
-          metodo,
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Cobro Saldo Pendiente Hab ${numHabitacion} (${huespedNombre})`,
+        monto: finalHab,
+        metodo: metodo,
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     // 3b. Register extra hours payment in Caja if > 0
     const finalHorasExtras = parseFloat(montoHorasExtras) || 0;
     if (finalHorasExtras > 0) {
-      const transactionId = 't_hextra_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Cobro Horas Extras Hab ${numHabitacion} (${huespedNombre})`,
-          finalHorasExtras,
-          metodo,
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Cobro Horas Extras Hab ${numHabitacion} (${huespedNombre})`,
+        monto: finalHorasExtras,
+        metodo: metodo,
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     // 4. Register consumption consolidated payment in Caja if > 0
@@ -1900,21 +1879,15 @@ app.post('/api/checkout', requireAuth, async (req, res) => {
       const consumosDetails = roomConsumos.length > 0
         ? roomConsumos.map(c => `${c.concepto} x${c.cantidad}`).join(', ')
         : 'Consumos Varios';
-      const transactionId = 't_cns_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Cobro Consumos Extras Hab ${numHabitacion} (${consumosDetails}) [${huespedNombre}]`,
-          finalConsumos,
-          metodo,
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Market'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Cobro Consumos Extras Hab ${numHabitacion} (${consumosDetails}) [${huespedNombre}]`,
+        monto: finalConsumos,
+        metodo: metodo,
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Market'
+      });
     }
 
     // 5. Delete all consumptions of the room
@@ -1941,21 +1914,15 @@ app.post('/api/clientes/:id/pagar-deuda', requireAuth, async (req, res) => {
     const montoCobrado = parseFloat(monto) || client.monto_deuda_usd || 0;
     
     if (montoCobrado > 0) {
-      const transactionId = 't_deuda_' + Date.now();
-      await db.run(
-        'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          transactionId,
-          'Ingreso',
-          `Cobro Deuda Pendiente Veto - Cliente: ${client.nombre} (CI: ${client.ci || client.dni})`,
-          montoCobrado,
-          metodo || 'Efectivo Bolívares',
-          getFechaHoraActual(),
-          req.user.id,
-          req.user.nombre,
-          'Hospedaje'
-        ]
-      );
+      await insertCajaTransaction(db, {
+        tipo: 'Ingreso',
+        concepto: `Cobro Deuda Pendiente Veto - Cliente: ${client.nombre} (CI: ${client.ci || client.dni})`,
+        monto: montoCobrado,
+        metodo: metodo || 'Efectivo Bolívares',
+        usuarioId: req.user.id,
+        usuarioNombre: req.user.nombre,
+        origen: 'Hospedaje'
+      });
     }
 
     await db.run(
@@ -2040,11 +2007,15 @@ app.post('/api/caja', requireAuth, async (req, res) => {
   }
 
   try {
-    const transactionId = 't_' + Date.now();
-    await db.run(
-      'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [transactionId, tipo, concepto.trim(), parseFloat(monto), metodo, getFechaHoraActual(), req.user.id, req.user.nombre, origen || (tipo === 'Egreso' ? 'Egresos' : 'Hospedaje')]
-    );
+    await insertCajaTransaction(db, {
+      tipo,
+      concepto: concepto.trim(),
+      monto: parseFloat(monto),
+      metodo,
+      usuarioId: req.user.id,
+      usuarioNombre: req.user.nombre,
+      origen: origen || (tipo === 'Egreso' ? 'Egresos' : 'Hospedaje')
+    });
 
     res.json({ success: true, message: 'Movimiento de caja registrado' });
   } catch (error) {

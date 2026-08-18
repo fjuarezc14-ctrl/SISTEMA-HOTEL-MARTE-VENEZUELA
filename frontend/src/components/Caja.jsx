@@ -796,9 +796,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {displayedCaja.map(t => {
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                     const montoUsdVal = parseFloat(t.monto) || 0;
                     const isValidated = t.validado === 1;
-                    const breakdown = parsePaymentBreakdown(t.metodo, montoUsdVal, tasaUsd);
+                    const breakdown = parsePaymentBreakdown(t.metodo, montoUsdVal, txTasa);
                     const isDigital = breakdown.isMixto ? breakdown.hasDigital : breakdown.isDigital;
 
                     return (
@@ -930,7 +931,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                                     <span key={idx} className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
                                       {ch.method.includes('($)') || ch.method.includes('Zelle')
                                         ? `$${ch.amountUsd.toFixed(2)} ${ch.method}`
-                                        : `Bs. ${(ch.amountVes || (ch.amountUsd * tasaUsd)).toFixed(2)} ${ch.method}`}
+                                        : `Bs. ${(ch.amountVes || (ch.amountUsd * txTasa)).toFixed(2)} ${ch.method}`}
                                     </span>
                                   ))}
                                 </div>
@@ -941,7 +942,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                           const isVesPayment = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].some(m => breakdown.cleanMetodo.toLowerCase().includes(m.toLowerCase())) || (breakdown.cleanMetodo.toLowerCase().includes('efectivo') && !breakdown.cleanMetodo.toLowerCase().includes('($)'));
                           const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0)
                             ? parseFloat(t.monto_ves).toFixed(2)
-                            : (montoUsdVal * tasaUsd).toFixed(2);
+                            : (montoUsdVal * txTasa).toFixed(2);
 
                           if (isVesPayment) {
                             return (

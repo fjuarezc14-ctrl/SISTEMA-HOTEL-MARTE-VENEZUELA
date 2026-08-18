@@ -361,182 +361,166 @@ export function AsignarDirectoModal({
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
-    if (!ci.trim()) {
-      alert('⚠️ Debe ingresar el Número de Cédula / Documento de Identidad del cliente.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!nombre.trim()) {
-      alert('⚠️ Debe ingresar el Nombre y Apellido completo del cliente.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!tel.trim()) {
-      alert('⚠️ Debe ingresar el Número de Teléfono / Celular de contacto del cliente.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!fechaNacimientoTitular) {
-      alert('⚠️ Debe ingresar la Fecha de Nacimiento del titular.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Digital verification code check
-    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
-    if (isDigital && !codigoVerificacion.trim()) {
-      alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (metodo === 'Pago Mixto') {
-      const sumMixtoUSD = 
-        (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
-        ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
-        ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
-        ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
-        (parseFloat(pagosMixtosChannels.zelle) || 0);
-
-      if (Math.abs(sumMixtoUSD - totalMontoUsd) > 0.05) {
-        alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${totalMontoUsd.toFixed(2)} USD).`);
-        setIsSubmitting(false);
+    try {
+      if (!ci.trim()) {
+        alert('⚠️ Debe ingresar el Número de Cédula / Documento de Identidad del cliente.');
         return;
       }
 
-      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef.trim()) {
-        alert('⚠️ Debe ingresar el Código de Referencia para la parte de Pago Móvil.');
-        setIsSubmitting(false);
+      if (!nombre.trim()) {
+        alert('⚠️ Debe ingresar el Nombre y Apellido completo del cliente.');
         return;
       }
-      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef.trim()) {
-        alert('⚠️ Debe ingresar el Código de Referencia / Baucher para la parte de Punto de Venta.');
-        setIsSubmitting(false);
+
+      if (!tel.trim()) {
+        alert('⚠️ Debe ingresar el Número de Teléfono / Celular de contacto del cliente.');
         return;
       }
-      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef.trim()) {
-        alert('⚠️ Debe ingresar la Referencia / Confirmación para la parte de Zelle.');
-        setIsSubmitting(false);
+
+      if (!fechaNacimientoTitular) {
+        alert('⚠️ Debe ingresar la Fecha de Nacimiento del titular.');
         return;
       }
-    }
 
-    const acompNombres = acompanantes.map((a, i) => {
-      const age = calcularEdad(a.fechaNacimiento);
-      const isAdult = age >= 18;
-      const surchargeNote = (i + 2 >= 3 && isAdult) ? ' [18+ Adulto +50%]' : (age > 0 && age < 18 ? ' [Menor de Edad - $0]' : '');
-      return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
-    }).join(', ');
-
-    // Build dynamic payment summary for Pago Mixto
-    let finalMetodoStr = metodo;
-    if (metodo === 'Pago Mixto') {
-      const parts = [];
-      const refs = [];
-
-      if ((parseFloat(pagosMixtosChannels.efectivoUsd) || 0) > 0) {
-        parts.push(`Efectivo ($): $${parseFloat(pagosMixtosChannels.efectivoUsd).toFixed(2)}`);
-      }
-      if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
-        const valUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
-        parts.push(`Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes} ($${valUsd.toFixed(2)})`);
-      }
-      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
-        const valUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
-        parts.push(`Pago Móvil: Bs. ${pagosMixtosChannels.pagoMovil} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
-        refs.push(pagosMixtosChannels.pagoMovilRef.trim());
-      }
-      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
-        const valUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
-        parts.push(`Punto: Bs. ${pagosMixtosChannels.punto} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
-        refs.push(pagosMixtosChannels.puntoRef.trim());
-      }
-      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
-        parts.push(`Zelle: $${parseFloat(pagosMixtosChannels.zelle).toFixed(2)} (Ref: ${pagosMixtosChannels.zelleRef.trim()})`);
-        refs.push(pagosMixtosChannels.zelleRef.trim());
+      // Digital verification code check
+      const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
+      if (isDigital && !codigoVerificacion.trim()) {
+        alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
+        return;
       }
 
-      finalMetodoStr = `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ') || 'N/A'}`;
-    } else if (isDigital && codigoVerificacion.trim()) {
-      finalMetodoStr = `${metodo} - Ref: ${codigoVerificacion}`;
-    }
+      if (metodo === 'Pago Mixto') {
+        const sumMixtoUSD = 
+          (parseFloat(pagosMixtosChannels.efectivoUsd) || 0) +
+          ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
+          ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
+          ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
+          (parseFloat(pagosMixtosChannels.zelle) || 0);
 
-    // Segregación inteligente de métodos si hay venta de Market en Check-In
-    let metodoHospedaje = finalMetodoStr;
-    let metodoMarket = finalMetodoStr;
+        if (Math.abs(sumMixtoUSD - totalMontoUsd) > 0.05) {
+          alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${totalMontoUsd.toFixed(2)} USD).`);
+          return;
+        }
 
-    if (metodo === 'Pago Mixto' && marketItemsCart.length > 0) {
-      const efUsd = parseFloat(pagosMixtosChannels.efectivoUsd) || 0;
-      const efVesUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
-      const totalCashUsd = efUsd + efVesUsd;
-      const pmUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
-      const ptUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
-      const zlUsd = parseFloat(pagosMixtosChannels.zelle) || 0;
-      const totalDigitalUsd = pmUsd + ptUsd + zlUsd;
-
-      // Caso 1: Hospedaje coincide con Efectivo y Market con Digital (ej. Hospedaje $15 Efectivo, Market $4.50 Zelle)
-      if (Math.abs(totalCashUsd - montoHospedajeUsd) < 0.01 && Math.abs(totalDigitalUsd - totalMarketUsd) < 0.01) {
-        metodoHospedaje = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
-        if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
-          metodoMarket = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
-        } else if (pmUsd > 0 && zlUsd === 0 && ptUsd === 0) {
-          metodoMarket = `Pago Móvil - Ref: ${pagosMixtosChannels.pagoMovilRef.trim()}`;
-        } else if (ptUsd > 0 && zlUsd === 0 && pmUsd === 0) {
-          metodoMarket = `Punto de Venta - Ref: ${pagosMixtosChannels.puntoRef.trim()}`;
+        if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef.trim()) {
+          alert('⚠️ Debe ingresar el Código de Referencia para la parte de Pago Móvil.');
+          return;
+        }
+        if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef.trim()) {
+          alert('⚠️ Debe ingresar el Código de Referencia / Baucher para la parte de Punto de Venta.');
+          return;
+        }
+        if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef.trim()) {
+          alert('⚠️ Debe ingresar la Referencia / Confirmación para la parte de Zelle.');
+          return;
         }
       }
-      // Caso 2: Market coincide con Efectivo y Hospedaje con Digital
-      else if (Math.abs(totalCashUsd - totalMarketUsd) < 0.01 && Math.abs(totalDigitalUsd - montoHospedajeUsd) < 0.01) {
-        metodoMarket = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
-        if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
-          metodoHospedaje = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
-        } else if (pmUsd > 0 && zlUsd === 0 && ptUsd === 0) {
-          metodoHospedaje = `Pago Móvil - Ref: ${pagosMixtosChannels.pagoMovilRef.trim()}`;
-        } else if (ptUsd > 0 && zlUsd === 0 && pmUsd === 0) {
-          metodoHospedaje = `Punto de Venta - Ref: ${pagosMixtosChannels.puntoRef.trim()}`;
+
+      const acompNombres = acompanantes.map((a, i) => {
+        const age = calcularEdad(a.fechaNacimiento);
+        const isAdult = age >= 18;
+        const surchargeNote = (i + 2 >= 3 && isAdult) ? ' [18+ Adulto +50%]' : (age > 0 && age < 18 ? ' [Menor de Edad - $0]' : '');
+        return `${a.nombre || 'Acompañante'} (CI: ${a.ci || 'S/CI'})${surchargeNote}`;
+      }).join(', ');
+
+      // Build dynamic payment summary for Pago Mixto
+      let finalMetodoStr = metodo;
+      if (metodo === 'Pago Mixto') {
+        const parts = [];
+        const refs = [];
+
+        if ((parseFloat(pagosMixtosChannels.efectivoUsd) || 0) > 0) {
+          parts.push(`Efectivo ($): $${parseFloat(pagosMixtosChannels.efectivoUsd).toFixed(2)}`);
+        }
+        if ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) > 0) {
+          const valUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
+          parts.push(`Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes} ($${valUsd.toFixed(2)})`);
+        }
+        if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0) {
+          const valUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
+          parts.push(`Pago Móvil: Bs. ${pagosMixtosChannels.pagoMovil} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.pagoMovilRef.trim()})`);
+          refs.push(pagosMixtosChannels.pagoMovilRef.trim());
+        }
+        if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0) {
+          const valUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
+          parts.push(`Punto: Bs. ${pagosMixtosChannels.punto} ($${valUsd.toFixed(2)}) (Ref: ${pagosMixtosChannels.puntoRef.trim()})`);
+          refs.push(pagosMixtosChannels.puntoRef.trim());
+        }
+        if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
+          parts.push(`Zelle: $${parseFloat(pagosMixtosChannels.zelle).toFixed(2)} (Ref: ${pagosMixtosChannels.zelleRef.trim()})`);
+          refs.push(pagosMixtosChannels.zelleRef.trim());
+        }
+
+        finalMetodoStr = `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ') || 'N/A'}`;
+      } else if (isDigital && codigoVerificacion.trim()) {
+        finalMetodoStr = `${metodo} - Ref: ${codigoVerificacion}`;
+      }
+
+      // Segregación inteligente de métodos si hay venta de Market en Check-In
+      let metodoHospedaje = finalMetodoStr;
+      let metodoMarket = finalMetodoStr;
+
+      if (metodo === 'Pago Mixto' && marketItemsCart.length > 0) {
+        const efUsd = parseFloat(pagosMixtosChannels.efectivoUsd) || 0;
+        const efVesUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
+        const totalCashUsd = efUsd + efVesUsd;
+        const pmUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
+        const ptUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
+        const zlUsd = parseFloat(pagosMixtosChannels.zelle) || 0;
+        const totalDigitalUsd = pmUsd + ptUsd + zlUsd;
+
+        // Caso 1: Hospedaje coincide con Efectivo y Market con Digital (ej. Hospedaje $15 Efectivo, Market $4.50 Zelle)
+        if (Math.abs(totalCashUsd - montoHospedajeUsd) < 0.01 && Math.abs(totalDigitalUsd - totalMarketUsd) < 0.01) {
+          metodoHospedaje = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
+          if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
+            metodoMarket = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
+          } else if (pmUsd > 0 && zlUsd === 0 && ptUsd === 0) {
+            metodoMarket = `Pago Móvil - Ref: ${pagosMixtosChannels.pagoMovilRef.trim()}`;
+          } else if (ptUsd > 0 && zlUsd === 0 && pmUsd === 0) {
+            metodoMarket = `Punto de Venta - Ref: ${pagosMixtosChannels.puntoRef.trim()}`;
+          }
+        }
+        // Caso 2: Market coincide con Efectivo y Hospedaje con Digital
+        else if (Math.abs(totalCashUsd - totalMarketUsd) < 0.01 && Math.abs(totalDigitalUsd - montoHospedajeUsd) < 0.01) {
+          metodoMarket = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
+          if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
+            metodoHospedaje = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
+          } else if (pmUsd > 0 && zlUsd === 0 && ptUsd === 0) {
+            metodoHospedaje = `Pago Móvil - Ref: ${pagosMixtosChannels.pagoMovilRef.trim()}`;
+          } else if (ptUsd > 0 && zlUsd === 0 && pmUsd === 0) {
+            metodoHospedaje = `Punto de Venta - Ref: ${pagosMixtosChannels.puntoRef.trim()}`;
+          }
         }
       }
-    }
 
-    const confirmCheckin = window.confirm(
-      `¿Está seguro de procesar el Check-In del cliente?\n\n` +
-      `• Huésped Titular: ${nombre.trim()}\n` +
-      `• CI / Documento: ${ci.trim()}\n` +
-      `• Habitación: ${room.num} (${room.tipo})\n` +
-      `• Modalidad: ${modalidad === '4h' ? '4 Horas' : 'Pernocta'}\n` +
-      `• Monto Total: $${totalMontoUsd.toFixed(2)} USD (~ Bs. ${montoVes})`
-    );
-    if (!confirmCheckin) {
+      await onSubmit({
+        numHabitacion: room.num,
+        ci: ci.trim(),
+        dni: ci.trim(),
+        nombre: nombre.trim(),
+        tel: tel.trim(),
+        fechaNacimientoTitular,
+        nomAcomp: acompNombres,
+        ciAcomp: acompanantes.map(a => a.ci).join(', '),
+        acompanantes,
+        monto: montoHospedajeUsd,  // Solo hospedaje, el backend registra market por separado
+        metodo: finalMetodoStr,
+        metodoHospedaje,
+        metodoMarket,
+        codigoVerificacion: metodo === 'Pago Mixto' ? [pagosMixtosChannels.pagoMovilRef, pagosMixtosChannels.puntoRef, pagosMixtosChannels.zelleRef].filter(Boolean).join(' / ') : codigoVerificacion,
+        fotoCi,
+        modalidad,
+        horasExtraIniciales,
+        marketItems: marketItemsCart
+      });
+    } catch (err) {
+      console.error('Error submitting check-in:', err);
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    await onSubmit({
-      numHabitacion: room.num,
-      ci: ci.trim(),
-      dni: ci.trim(),
-      nombre: nombre.trim(),
-      tel: tel.trim(),
-      fechaNacimientoTitular,
-      nomAcomp: acompNombres,
-      ciAcomp: acompanantes.map(a => a.ci).join(', '),
-      acompanantes,
-      monto: montoHospedajeUsd,  // Solo hospedaje, el backend registra market por separado
-      metodo: finalMetodoStr,
-      metodoHospedaje,
-      metodoMarket,
-      codigoVerificacion: metodo === 'Pago Mixto' ? [pagosMixtosChannels.pagoMovilRef, pagosMixtosChannels.puntoRef, pagosMixtosChannels.zelleRef].filter(Boolean).join(' / ') : codigoVerificacion,
-      fotoCi,
-      modalidad,
-      horasExtraIniciales,
-      marketItems: marketItemsCart
-    });
-    setIsSubmitting(false);
   };
 
   const cleanInputCi = normalizeCi(ci);
