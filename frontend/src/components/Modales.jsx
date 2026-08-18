@@ -466,6 +466,43 @@ export function AsignarDirectoModal({
       finalMetodoStr = `${metodo} - Ref: ${codigoVerificacion}`;
     }
 
+    // Segregación inteligente de métodos si hay venta de Market en Check-In
+    let metodoHospedaje = finalMetodoStr;
+    let metodoMarket = finalMetodoStr;
+
+    if (metodo === 'Pago Mixto' && marketItemsCart.length > 0) {
+      const efUsd = parseFloat(pagosMixtosChannels.efectivoUsd) || 0;
+      const efVesUsd = (parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd;
+      const totalCashUsd = efUsd + efVesUsd;
+      const pmUsd = (parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd;
+      const ptUsd = (parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd;
+      const zlUsd = parseFloat(pagosMixtosChannels.zelle) || 0;
+      const totalDigitalUsd = pmUsd + ptUsd + zlUsd;
+
+      // Caso 1: Hospedaje coincide con Efectivo y Market con Digital (ej. Hospedaje $15 Efectivo, Market $4.50 Zelle)
+      if (Math.abs(totalCashUsd - montoHospedajeUsd) < 0.01 && Math.abs(totalDigitalUsd - totalMarketUsd) < 0.01) {
+        metodoHospedaje = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
+        if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
+          metodoMarket = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
+        } else if (pmUsd > 0 && zlUsd === 0 && ptUsd === 0) {
+          metodoMarket = `Pago Móvil - Ref: ${pagosMixtosChannels.pagoMovilRef.trim()}`;
+        } else if (ptUsd > 0 && zlUsd === 0 && pmUsd === 0) {
+          metodoMarket = `Punto de Venta - Ref: ${pagosMixtosChannels.puntoRef.trim()}`;
+        }
+      }
+      // Caso 2: Market coincide con Efectivo y Hospedaje con Digital
+      else if (Math.abs(totalCashUsd - totalMarketUsd) < 0.01 && Math.abs(totalDigitalUsd - montoHospedajeUsd) < 0.01) {
+        metodoMarket = efUsd > 0 && efVesUsd === 0 ? 'Efectivo ($)' : (efVesUsd > 0 && efUsd === 0 ? 'Efectivo (Bs)' : `Pago Mixto (Efectivo ($): $${efUsd.toFixed(2)} + Efectivo (Bs): Bs. ${pagosMixtosChannels.efectivoVes})`);
+        if (zlUsd > 0 && pmUsd === 0 && ptUsd === 0) {
+          metodoHospedaje = `Zelle - Ref: ${pagosMixtosChannels.zelleRef.trim()}`;
+        } else if (pmUsd > 0 && zlUsd === 0 && ptUsd === 0) {
+          metodoHospedaje = `Pago Móvil - Ref: ${pagosMixtosChannels.pagoMovilRef.trim()}`;
+        } else if (ptUsd > 0 && zlUsd === 0 && pmUsd === 0) {
+          metodoHospedaje = `Punto de Venta - Ref: ${pagosMixtosChannels.puntoRef.trim()}`;
+        }
+      }
+    }
+
     const confirmCheckin = window.confirm(
       `¿Está seguro de procesar el Check-In del cliente?\n\n` +
       `• Huésped Titular: ${nombre.trim()}\n` +
@@ -491,6 +528,8 @@ export function AsignarDirectoModal({
       acompanantes,
       monto: montoHospedajeUsd,  // Solo hospedaje, el backend registra market por separado
       metodo: finalMetodoStr,
+      metodoHospedaje,
+      metodoMarket,
       codigoVerificacion: metodo === 'Pago Mixto' ? [pagosMixtosChannels.pagoMovilRef, pagosMixtosChannels.puntoRef, pagosMixtosChannels.zelleRef].filter(Boolean).join(' / ') : codigoVerificacion,
       fotoCi,
       modalidad,
@@ -2758,9 +2797,12 @@ export function CheckoutModal({
       setDetallePenalidad('');
       
       const activeStay = (historialEstadias || []).find(h => h.numHabitacion === room.num && !h.salida);
-      const initialPending = activeStay 
-        ? Math.max(0, basePriceCheckout - (activeStay.monto_usd || 0))
+      const stayPaidUsd = activeStay 
+        ? ((parseFloat(activeStay.monto_usd) || 0) > 0 
+            ? parseFloat(activeStay.monto_usd) 
+            : ((parseFloat(activeStay.monto_ves) || 0) / tasaUsd))
         : 0;
+      const initialPending = Math.max(0, basePriceCheckout - stayPaidUsd);
       setMontoHabitacion(initialPending.toFixed(2));
       
       setMetodoPago('Efectivo (Bs)');
@@ -2777,7 +2819,7 @@ export function CheckoutModal({
       });
       setCodigoVerificacionCheckout('');
     }
-  }, [isOpen, room, tarifas, historialEstadias, basePriceCheckout]);
+  }, [isOpen, room?.num, room?.id]);
 
   if (!isOpen || !room) return null;
 

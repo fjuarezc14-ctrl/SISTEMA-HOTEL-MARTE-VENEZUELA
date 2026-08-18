@@ -45,7 +45,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const isDigitalPayment = (m) => {
     if (!m) return false;
     const str = m.toLowerCase();
-    // Only digital channels (Pago Móvil, Punto, Zelle, or explicit reference code) require bank validation
+    // Pure physical cash is never digital
+    if ((str === 'efectivo ($)' || str === 'efectivo (bs)' || str === 'efectivo bolívares') && !str.includes('ref:')) {
+      return false;
+    }
     return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('ref:');
   };
 
@@ -86,6 +89,85 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     return {
       cleanMetodo: str.trim(),
       refCode: '-'
+    };
+  };
+
+  // Helper to parse detailed channels from any payment string (standard or Pago Mixto)
+  const parsePaymentBreakdown = (metodoStr, montoUsd, tasa) => {
+    const raw = (metodoStr || '').trim();
+    if (!raw) {
+      return { isMixto: false, cleanMetodo: 'Efectivo ($)', refCode: '-', isDigital: false, channels: [{ method: 'Efectivo ($)', label: 'Efectivo ($)', amountUsd: montoUsd, isDigital: false, ref: null }] };
+    }
+
+    const isMixto = raw.toLowerCase().includes('pago mixto') || raw.toLowerCase().includes('mixto');
+    if (!isMixto) {
+      const isDigital = isDigitalPayment(raw);
+      const { cleanMetodo, refCode } = parseMetodoAndRef(raw);
+      return {
+        isMixto: false,
+        cleanMetodo,
+        refCode,
+        isDigital,
+        channels: [{ method: cleanMetodo, label: cleanMetodo, amountUsd: montoUsd, isDigital, ref: refCode !== '-' ? refCode : null }]
+      };
+    }
+
+    // It is a Pago Mixto
+    const channels = [];
+    const refsList = [];
+
+    // Extract Efectivo ($)
+    const efUsdMatch = raw.match(/efectivo \(\$\):\s*\$([\d.]+)/i);
+    if (efUsdMatch) {
+      const amt = parseFloat(efUsdMatch[1]) || 0;
+      if (amt > 0) channels.push({ type: 'cash_usd', method: 'Efectivo ($)', label: `$${amt.toFixed(2)} Efectivo ($)`, amountUsd: amt, isDigital: false, ref: null });
+    }
+
+    // Extract Efectivo (Bs)
+    const efVesMatch = raw.match(/efectivo \(bs\):\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
+    if (efVesMatch) {
+      const vesAmt = parseFloat(efVesMatch[1]) || 0;
+      const usdAmt = efVesMatch[2] ? parseFloat(efVesMatch[2]) : (vesAmt / tasa);
+      if (vesAmt > 0) channels.push({ type: 'cash_ves', method: 'Efectivo (Bs)', label: `Bs. ${vesAmt.toFixed(2)} Efectivo (Bs)`, amountUsd: usdAmt, amountVes: vesAmt, isDigital: false, ref: null });
+    }
+
+    // Extract Pago Móvil
+    const pmMatch = raw.match(/pago m[óo]vil:\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?(?:\s*\(Ref:\s*([^)]+)\))?/i);
+    if (pmMatch) {
+      const vesAmt = parseFloat(pmMatch[1]) || 0;
+      const usdAmt = pmMatch[2] ? parseFloat(pmMatch[2]) : (vesAmt / tasa);
+      const ref = pmMatch[3] ? pmMatch[3].trim() : null;
+      if (ref) refsList.push({ method: 'PM', code: ref });
+      if (vesAmt > 0) channels.push({ type: 'pago_movil', method: 'Pago Móvil', label: `Bs. ${vesAmt.toFixed(2)} Pago Móvil`, amountUsd: usdAmt, amountVes: vesAmt, isDigital: true, ref });
+    }
+
+    // Extract Punto de Venta
+    const ptMatch = raw.match(/punto:\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?(?:\s*\(Ref:\s*([^)]+)\))?/i);
+    if (ptMatch) {
+      const vesAmt = parseFloat(ptMatch[1]) || 0;
+      const usdAmt = ptMatch[2] ? parseFloat(ptMatch[2]) : (vesAmt / tasa);
+      const ref = ptMatch[3] ? ptMatch[3].trim() : null;
+      if (ref) refsList.push({ method: 'Punto', code: ref });
+      if (vesAmt > 0) channels.push({ type: 'punto', method: 'Punto de Venta', label: `Bs. ${vesAmt.toFixed(2)} Punto`, amountUsd: usdAmt, amountVes: vesAmt, isDigital: true, ref });
+    }
+
+    // Extract Zelle
+    const zlMatch = raw.match(/zelle:\s*\$([\d.]+)(?:\s*\(Ref:\s*([^)]+)\))?/i);
+    if (zlMatch) {
+      const usdAmt = parseFloat(zlMatch[1]) || 0;
+      const ref = zlMatch[2] ? zlMatch[2].trim() : null;
+      if (ref) refsList.push({ method: 'Zelle', code: ref });
+      if (usdAmt > 0) channels.push({ type: 'zelle', method: 'Zelle', label: `$${usdAmt.toFixed(2)} Zelle`, amountUsd: usdAmt, isDigital: true, ref });
+    }
+
+    const hasDigital = channels.some(c => c.isDigital);
+
+    return {
+      isMixto: true,
+      cleanMetodo: 'Pago Mixto',
+      channels,
+      refsList,
+      hasDigital
     };
   };
 
@@ -715,10 +797,9 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {displayedCaja.map(t => {
                     const montoUsdVal = parseFloat(t.monto) || 0;
-                    const montoVesVal = (montoUsdVal * tasaUsd).toFixed(2);
-                    const isDigital = isDigitalPayment(t.metodo);
                     const isValidated = t.validado === 1;
-                    const { cleanMetodo, refCode } = parseMetodoAndRef(t.metodo);
+                    const breakdown = parsePaymentBreakdown(t.metodo, montoUsdVal, tasaUsd);
+                    const isDigital = breakdown.isMixto ? breakdown.hasDigital : breakdown.isDigital;
 
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/50">
@@ -730,30 +811,64 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                             {t.usuarioNombre || 'Sistema'}
                           </span>
                         </td>
+                        
+                        {/* Método de Pago estructurado */}
                         <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold inline-block">
-                              {cleanMetodo}
-                            </span>
+                          <div className="flex flex-col items-center justify-center gap-1">
+                            {breakdown.isMixto ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="bg-purple-100 text-purple-900 border border-purple-300 px-2.5 py-0.5 rounded-full text-xs font-black flex items-center gap-1 shadow-2xs">
+                                  <i className="fa-solid fa-arrows-split-up-and-left text-[10px] text-purple-600"></i> Pago Mixto
+                                </span>
+                                <div className="flex flex-wrap justify-center gap-1 max-w-[260px]">
+                                  {breakdown.channels.map((ch, idx) => (
+                                    <span key={idx} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                      {ch.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold inline-block">
+                                {breakdown.cleanMetodo}
+                              </span>
+                            )}
                             {(currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin') && (
                               <button
                                 onClick={() => handleOpenEditMetodo(t)}
                                 title="Editar método de pago (Super Admin)"
-                                className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black px-1.5 py-1 rounded border border-amber-300 transition-all"
+                                className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-300 transition-all mt-0.5"
                               >
-                                <i className="fa-solid fa-[#c5920c] fa-pen"></i>
+                                <i className="fa-solid fa-pen text-[9px] mr-1"></i> Editar
                               </button>
                             )}
                           </div>
                         </td>
+
+                        {/* Código de Referencia estructurado */}
                         <td className="p-4 text-center font-mono">
-                          {refCode !== '-' ? (
-                            <span className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-xs px-2.5 py-1 rounded-lg inline-block shadow-2xs">
-                              <i className="fa-solid fa-[#c5920c] fa-hashtag text-[10px] text-amber-600 mr-1"></i>
-                              {refCode}
-                            </span>
+                          {breakdown.isMixto ? (
+                            breakdown.refsList.length > 0 ? (
+                              <div className="flex flex-wrap justify-center gap-1 max-w-[180px]">
+                                {breakdown.refsList.map((r, idx) => (
+                                  <span key={idx} className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-[11px] px-2 py-0.5 rounded-md inline-block shadow-2xs">
+                                    <i className="fa-solid fa-hashtag text-[9px] text-amber-600 mr-0.5"></i>
+                                    {r.code} <span className="text-[9px] font-sans font-normal text-amber-700">({r.method})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-medium">-</span>
+                            )
                           ) : (
-                            <span className="text-slate-400 text-xs font-medium">-</span>
+                            breakdown.refCode && breakdown.refCode !== '-' ? (
+                              <span className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-xs px-2.5 py-1 rounded-lg inline-block shadow-2xs">
+                                <i className="fa-solid fa-hashtag text-[10px] text-amber-600 mr-1"></i>
+                                {breakdown.refCode}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-medium">-</span>
+                            )
                           )}
                         </td>
                         
@@ -799,27 +914,45 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                           )}
                         </td>
 
+                        {/* Monto ($ USD / Bs) con desglose multimoneda exacto */}
                         {(() => {
-                          const isVesPayment = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].some(m => cleanMetodo.toLowerCase().includes(m.toLowerCase())) || (cleanMetodo.toLowerCase().includes('efectivo') && !cleanMetodo.toLowerCase().includes('($)'));
+                          const sign = t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : '';
+                          const colorClass = t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600';
+
+                          if (breakdown.isMixto) {
+                            return (
+                              <td className="p-4 text-right">
+                                <span className={`text-base font-black ${colorClass} block`}>
+                                  {sign} ${montoUsdVal.toFixed(2)} USD
+                                </span>
+                                <div className="flex flex-col items-end gap-0.5 mt-1">
+                                  {breakdown.channels.map((ch, idx) => (
+                                    <span key={idx} className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                      {ch.method.includes('($)') || ch.method.includes('Zelle')
+                                        ? `$${ch.amountUsd.toFixed(2)} ${ch.method}`
+                                        : `Bs. ${(ch.amountVes || (ch.amountUsd * tasaUsd)).toFixed(2)} ${ch.method}`}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          const isVesPayment = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].some(m => breakdown.cleanMetodo.toLowerCase().includes(m.toLowerCase())) || (breakdown.cleanMetodo.toLowerCase().includes('efectivo') && !breakdown.cleanMetodo.toLowerCase().includes('($)'));
                           const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0)
                             ? parseFloat(t.monto_ves).toFixed(2)
                             : (montoUsdVal * tasaUsd).toFixed(2);
-                          const sign = t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : '';
 
                           if (isVesPayment) {
                             return (
-                              <td className={`p-4 text-right font-black ${
-                                t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
-                              }`}>
+                              <td className={`p-4 text-right font-black ${colorClass}`}>
                                 {sign} Bs. {displayVes}
                                 <span className="text-[10px] text-slate-400 font-medium block">~ ${montoUsdVal.toFixed(2)} USD</span>
                               </td>
                             );
                           } else {
                             return (
-                              <td className={`p-4 text-right font-black ${
-                                t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600'
-                              }`}>
+                              <td className={`p-4 text-right font-black ${colorClass}`}>
                                 {sign} ${montoUsdVal.toFixed(2)} USD
                                 <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {displayVes}</span>
                               </td>

@@ -950,32 +950,8 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     const estadiaId = 'est_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const finalMonto = parseFloat(monto) || 0;
     
-    let usdAmount = 0;
-    let vesAmount = 0;
-    const cleanMetodo = (metodo || '').toLowerCase();
-    if (cleanMetodo.includes('pago mixto')) {
-      const usdMatch = cleanMetodo.match(/efectivo \(\$\):\s*\$(\d+(\.\d+)?)/);
-      const zelleMatch = cleanMetodo.match(/zelle:\s*\$(\d+(\.\d+)?)/);
-      const vesCashMatch = cleanMetodo.match(/efectivo \(bs\):\s*bs\.\s*(\d+(\.\d+)?)/);
-      const pmMatch = cleanMetodo.match(/pago m[óo]vil:\s*bs\.\s*(\d+(\.\d+)?)/);
-      const puntoMatch = cleanMetodo.match(/punto:\s*bs\.\s*(\d+(\.\d+)?)/);
-      
-      const valUsdCash = usdMatch ? parseFloat(usdMatch[1]) : 0;
-      const valZelle = zelleMatch ? parseFloat(zelleMatch[1]) : 0;
-      const valVesCash = vesCashMatch ? parseFloat(vesCashMatch[1]) : 0;
-      const valPm = pmMatch ? parseFloat(pmMatch[1]) : 0;
-      const valPunto = puntoMatch ? parseFloat(puntoMatch[1]) : 0;
-      
-      usdAmount = valUsdCash + valZelle;
-      vesAmount = valVesCash + valPm + valPunto;
-    } else {
-      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.includes(m)) && !cleanMetodo.includes('($)');
-      if (isVes) {
-        vesAmount = finalMonto * tasaUsd;
-      } else {
-        usdAmount = finalMonto;
-      }
-    }
+    let usdAmount = finalMonto;
+    let vesAmount = finalMonto * tasaUsd;
 
     const cantHuespedes = (nomAcomp ? nomAcomp.split(',').length : 0) + 1;
 
@@ -1004,7 +980,9 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     );
 
     // 3. Register transaction in Cash register if amount > 0
+    const { marketItems, metodoHospedaje, metodoMarket } = req.body;
     const metodoTexto = codigoVerificacion ? `${metodo} - Ref: ${codigoVerificacion}` : metodo;
+    const finalMetodoHospedaje = metodoHospedaje || metodoTexto;
     
     if (finalMonto > 0) {
       const transactionId = 't_' + Date.now();
@@ -1015,7 +993,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
           'Ingreso', 
           `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidad === 'pernocta' ? 'Pernocta' : '4 Horas'}] - ${comprobante || 'Sin Comprobante'}`, 
           finalMonto, 
-          metodoTexto || 'Efectivo Bolívares', 
+          finalMetodoHospedaje || 'Efectivo Bolívares', 
           getFechaHoraActual(),
           req.user.id,
           req.user.nombre,
@@ -1025,7 +1003,6 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     }
 
     // 4. Handle Market items attached to Check-In (Venta Inmediata de Market en Check-In)
-    const { marketItems } = req.body;
     if (marketItems && Array.isArray(marketItems) && marketItems.length > 0) {
       let totalMarketSale = 0;
       let conceptList = [];
@@ -1056,6 +1033,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
         );
       }
       if (totalMarketSale > 0) {
+        const finalMetodoMkt = metodoMarket || metodoTexto;
         const mTransId = 't_mkt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5);
         await db.run(
           'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1064,7 +1042,7 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
             'Ingreso',
             `Venta Market Check-In Hab ${numHabitacion} (${conceptList.join(', ')}) [Cliente: ${nombre.trim()}]`,
             totalMarketSale,
-            metodoTexto || 'Efectivo Bolívares',  // ← usar metodoTexto (con Ref) igual que Hospedaje
+            finalMetodoMkt || 'Efectivo Bolívares',
             getFechaHoraActual(),
             req.user.id,
             req.user.nombre,
@@ -1560,9 +1538,9 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
 
     const cantHuespedes = (acompText ? acompText.split(',').length : 0) + 1;
 
-    // Consolidate payments
-    const totalUsdPaid = usdAmount + balUsd;
-    const totalVesPaid = vesAmount + balVes;
+    // Consolidate payments: valor total de la habitacion en USD
+    const totalUsdPaid = (parseFloat(reserva.monto) || 0) + finalBalance;
+    const totalVesPaid = totalUsdPaid * tasaUsd;
     const consolidatedMetodo = finalBalance > 0 ? `${metodoPago} / ${balanceMetodo}` : metodoPago;
     const consolidatedRef = finalBalance > 0 ? `${referencia} / ${balanceReferencia || '-'}` : referencia;
 
