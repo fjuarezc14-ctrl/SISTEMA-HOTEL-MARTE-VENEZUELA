@@ -703,7 +703,7 @@ export function AsignarDirectoModal({
               )}
             </div>
 
-            <form onSubmit={handleFormSubmit} className="space-y-3">
+            <form onSubmit={handleFormSubmit} noValidate className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI (Cédula de Identidad)</label>
@@ -1831,7 +1831,7 @@ export function NuevaReservaModal({
               )}
             </div>
 
-            <form onSubmit={handleFormSubmit} className="space-y-3">
+            <form onSubmit={handleFormSubmit} noValidate className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CI (Cédula de Identidad)</label>
@@ -2383,7 +2383,7 @@ export function ConfirmarCheckinReservaModal({
           </div>
         </div>
 
-        <form onSubmit={handleFormSubmit} className="space-y-4">
+        <form onSubmit={handleFormSubmit} noValidate className="space-y-4">
           
           {advance > 0 && (
             <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-4 space-y-3">
@@ -2993,7 +2993,7 @@ export function CheckoutModal({
           </div>
         )}
 
-        <form onSubmit={handleFormSubmit} className="space-y-4 flex-1">
+        <form onSubmit={handleFormSubmit} noValidate className="space-y-4 flex-1">
           {/* Billing breakdown */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
