@@ -2790,8 +2790,11 @@ app.get('/api/reportes/minibar-semanal', requireAuth, async (req, res) => {
         }
       });
 
+      const dayOfWeekNames = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+      const realDayName = dayOfWeekNames[current.getDay()];
+
       result.push({
-        dia: dayNames[i],
+        dia: realDayName,
         fecha: `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`,
         snacks,
         cervezas,

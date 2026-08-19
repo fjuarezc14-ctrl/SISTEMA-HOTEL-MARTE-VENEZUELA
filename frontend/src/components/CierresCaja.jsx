@@ -1,4 +1,21 @@
-import React, { useState, useEffect } from 'react';
+// Date formatting and week helpers (Timezone-safe)
+const formatDateLocal = (d) => {
+  if (!d) return '';
+  const date = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const getMondayOfWeek = (baseDate = new Date()) => {
+  const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+  const day = d.getDay(); // 0 = Sunday, 1 = Monday, ... 6 = Saturday
+  const diff = day === 0 ? -6 : 1 - day; // Go back to Monday
+  d.setDate(d.getDate() + diff);
+  return d;
+};
 
 export default function CierresCaja() {
   const [activeTab, setActiveTab] = useState('diario');
@@ -6,10 +23,7 @@ export default function CierresCaja() {
   const [error, setError] = useState('');
 
   // Daily Closure States
-  const [diarioFecha, setDiarioFecha] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  });
+  const [diarioFecha, setDiarioFecha] = useState(() => formatDateLocal(new Date()));
   const [diarioData, setDiarioData] = useState(null);
 
   // Consolidated Closure States
@@ -18,12 +32,7 @@ export default function CierresCaja() {
   const [consolidadoData, setConsolidadoData] = useState(null);
 
   // Minibar States
-  const [minibarMonday, setMinibarMonday] = useState(() => {
-    const today = new Date();
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    return new Date(today.setDate(diff)).toISOString().split('T')[0];
-  });
+  const [minibarMonday, setMinibarMonday] = useState(() => formatDateLocal(getMondayOfWeek(new Date())));
   const [minibarData, setMinibarData] = useState(null);
 
   // Fetch Daily Closure
@@ -112,30 +121,20 @@ export default function CierresCaja() {
 
   // Set ranges for quick consolidate range buttons
   const setQuickRange = (type) => {
-    const today = new Date();
-    const day = today.getDay();
+    const mon = getMondayOfWeek(new Date());
     
     if (type === 'lunjue') {
-      const monDiff = today.getDate() - day + (day === 0 ? -6 : 1);
-      const mon = new Date(today.setDate(monDiff));
-      const thu = new Date(mon);
-      thu.setDate(mon.getDate() + 3);
-      
-      const monStr = mon.toISOString().split('T')[0];
-      const thuStr = thu.toISOString().split('T')[0];
+      const thu = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 3);
+      const monStr = formatDateLocal(mon);
+      const thuStr = formatDateLocal(thu);
       setConsolidadoStart(monStr);
       setConsolidadoEnd(thuStr);
       fetchConsolidado(monStr, thuStr);
     } else if (type === 'viedom') {
-      const monDiff = today.getDate() - day + (day === 0 ? -6 : 1);
-      const mon = new Date(today.setDate(monDiff));
-      const fri = new Date(mon);
-      fri.setDate(mon.getDate() + 4);
-      const sun = new Date(mon);
-      sun.setDate(mon.getDate() + 6);
-      
-      const friStr = fri.toISOString().split('T')[0];
-      const sunStr = sun.toISOString().split('T')[0];
+      const fri = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 4);
+      const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+      const friStr = formatDateLocal(fri);
+      const sunStr = formatDateLocal(sun);
       setConsolidadoStart(friStr);
       setConsolidadoEnd(sunStr);
       fetchConsolidado(friStr, sunStr);
@@ -656,7 +655,7 @@ export default function CierresCaja() {
           {/* Controls */}
           <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-50 p-4 rounded-xl mb-6 border print:hidden">
             <div className="flex items-center space-x-3">
-              <label className="text-sm font-semibold text-gray-700">Seleccionar Lunes de Inicio:</label>
+              <label className="text-sm font-semibold text-gray-700">Seleccionar Fecha de Inicio:</label>
               <input
                 type="date"
                 value={minibarMonday}
@@ -695,14 +694,16 @@ export default function CierresCaja() {
             <div className="bg-white p-6 rounded-2xl border shadow-sm printable-modal max-w-2xl mx-auto space-y-8">
               <div className="border-b pb-4 text-center">
                 <h2 className="text-xl font-black text-gray-800">AUDITORÍA DE VENTAS MINIBAR X SEMANA</h2>
-                <p className="text-xs text-gray-400">Semana del Lunes {minibarMonday} al Domingo</p>
+                <p className="text-xs text-gray-500 font-semibold mt-1">
+                  Período: {minibarMonday ? minibarMonday.split('-').reverse().join('/') : ''} al {minibarData.dias && minibarData.dias.length > 0 ? minibarData.dias[minibarData.dias.length - 1].fecha.split('-').reverse().join('/') : ''}
+                </p>
               </div>
 
               <div>
                 <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left font-bold text-gray-500 border-b">Día de la Semana</th>
+                      <th className="px-4 py-2 text-left font-bold text-gray-500 border-b">Fecha / Día</th>
                       <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Snacks y Otros ($ / Bs)</th>
                       <th className="px-4 py-2 text-right font-bold text-gray-500 border-b">Cervezas ($ / Bs)</th>
                       <th className="px-4 py-2 text-right font-black text-indigo-950 bg-indigo-50/30 border-b">Total Diario ($ / Bs)</th>
@@ -711,7 +712,7 @@ export default function CierresCaja() {
                   <tbody className="divide-y divide-gray-100">
                     {minibarData.dias && minibarData.dias.map((d, index) => (
                       <tr key={index}>
-                        <td className="px-4 py-2.5 font-bold text-gray-700">{d.dia} <span className="text-[10px] text-gray-400 font-normal">({d.fecha.split('-').slice(1).join('/')})</span></td>
+                        <td className="px-4 py-2.5 font-bold text-gray-700">{d.fecha ? d.fecha.split('-').reverse().join('/') : ''} <span className="text-[11px] text-gray-400 font-normal uppercase">({d.dia})</span></td>
                         <td className="px-4 py-2.5 text-right text-gray-800">
                           <div className="font-bold text-sm text-gray-800">${d.snacks.usd.toFixed(2)}</div>
                           <div className="font-bold text-sm text-gray-800">Bs. {d.snacks.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
