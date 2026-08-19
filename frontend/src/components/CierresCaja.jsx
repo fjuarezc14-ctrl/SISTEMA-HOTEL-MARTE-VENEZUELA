@@ -1,3 +1,5 @@
+import React, { useState, useEffect } from 'react';
+
 // Date formatting and week helpers (Timezone-safe)
 const formatDateLocal = (d) => {
   if (!d) return '';
