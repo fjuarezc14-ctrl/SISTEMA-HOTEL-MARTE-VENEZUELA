@@ -112,53 +112,35 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
    * Para pagos simples: devuelve t.monto completo si el método coincide.
    * Para pagos MIXTOS: parsea el string del campo 'metodo' y extrae solo la porción
    * correspondiente al método buscado (evita inflar totales con el monto total del pago).
+   * Ejemplo: metodo = "Pago Mixto (Zelle: $10.00 + Efectivo ($): $5.00)"
+   *   extractMethodAmount(t, 'zelle') → 10.00 (no 15.00)
+   */
   const extractMethodAmount = (t, targetKey) => {
-    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-    const monto = safeNum(t.monto);
     const m = (t.metodo || '').toLowerCase();
-    const target = targetKey.toLowerCase();
-
+    const monto = safeNum(t.monto);
     if (!m.includes('pago mixto') && !m.includes('mixto')) {
-      if (target === 'efectivo ($)' && (m.includes('efectivo ($)') || m === 'efectivo' || m === 'dólares' || m === 'dolares')) return monto;
-      if (target === 'efectivo (bs)' && (m.includes('efectivo (bs)') || m === 'efectivo bolívares' || m === 'efectivo bolivares')) return monto;
-      if (target.includes('pago móvil') || target.includes('pago movil')) return (m.includes('pago móvil') || m.includes('pago movil') || m.includes('móvil') || m.includes('movil')) ? monto : 0;
-      if (target.includes('punto')) return m.includes('punto') ? monto : 0;
-      if (target.includes('zelle')) return m.includes('zelle') ? monto : 0;
-      return m.includes(target) ? monto : 0;
+      // Pago simple: devolver monto completo si coincide
+      return m.includes(targetKey) ? monto : 0;
     }
-
-    // Desglose de Pago Mixto
-    let sum = 0;
-    if (target.includes('efectivo ($)') || target === 'divisas') {
-      const match = t.metodo.match(/Efectivo\s*\(\$\):\s*\$?([\d.]+)/i);
-      if (match) sum += parseFloat(match[1]) || 0;
+    // Pago mixto: buscar el valor numérico junto al nombre del método
+    // Formatos comunes en el sistema:
+    // "Pago Mixto (Punto: Bs. 1780 ($2.00) + Zelle: $10.00)"
+    // "Pago Mixto - Efectivo ($): $10 + Pago Móvil: Bs. 2670 ($3.00)"
+    // "Pago Mixto (Efectivo ($): $10.00 + Pago Móvil: Bs. 2670 ($3.00) (Ref: 5998))"
+    const raw = t.metodo || '';
+    // Buscar patrón: "<Método>: $<monto>" o "<Método>: Bs. XXXX ($<monto>)"
+    // Regex: captura el monto en USD junto al nombre del método buscado
+    const patterns = [
+      // "Zelle: $10.00" o "Zelle: $10"
+      new RegExp(targetKey + '[^+)]*:\\s*\\$([\\d.]+)', 'i'),
+      // "Zelle: Bs. 8900 ($10.00)" → captura el ($ parte)
+      new RegExp(targetKey + '[^+)]*:\\s*Bs\.?[\\s\\d.]+\\(\\$([\\d.]+)\\)', 'i'),
+    ];
+    for (const re of patterns) {
+      const match = raw.match(re);
+      if (match && match[1]) return parseFloat(match[1]) || 0;
     }
-    if (target.includes('zelle')) {
-      const match = t.metodo.match(/Zelle:\s*\$?([\d.]+)/i);
-      if (match) sum += parseFloat(match[1]) || 0;
-    }
-    if (target.includes('efectivo (bs)')) {
-      const match = t.metodo.match(/Efectivo\s*\(Bs\):\s*Bs\.\s*([\d.]+)\s*\(\$([\d.]+)\)/i) || t.metodo.match(/Efectivo\s*\(Bs\):\s*Bs\.\s*([\d.]+)/i);
-      if (match) {
-        if (match[2]) sum += parseFloat(match[2]) || 0;
-        else sum += (parseFloat(match[1]) || 0) / txTasa;
-      }
-    }
-    if (target.includes('pago móvil') || target.includes('pago movil') || target.includes('movil')) {
-      const match = t.metodo.match(/Pago\s*Móvil:\s*Bs\.\s*([\d.]+)\s*\(\$([\d.]+)\)/i) || t.metodo.match(/Pago\s*Móvil:\s*Bs\.\s*([\d.]+)/i);
-      if (match) {
-        if (match[2]) sum += parseFloat(match[2]) || 0;
-        else sum += (parseFloat(match[1]) || 0) / txTasa;
-      }
-    }
-    if (target.includes('punto')) {
-      const match = t.metodo.match(/Punto:\s*Bs\.\s*([\d.]+)\s*\(\$([\d.]+)\)/i) || t.metodo.match(/Punto:\s*Bs\.\s*([\d.]+)/i);
-      if (match) {
-        if (match[2]) sum += parseFloat(match[2]) || 0;
-        else sum += (parseFloat(match[1]) || 0) / txTasa;
-      }
-    }
-    return sum;
+    return 0; // No encontrado en el mixto
   };
 
   // Helper for safe strings (prevents Object as React Child crash)
@@ -438,14 +420,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   // Exportar CSV del reporte de recepcionista
   const handleExportRecepCSV = () => {
     let csv = `REPORTE DE RECEPCIONISTAS - HOTEL MARTE\n`;
-    csv += `FECHA GENERADO,${new Date().toLocaleString()},TASA ACTUAL,Bs. ${tasaUsd.toFixed(2)}\n`;
+    csv += `FECHA GENERADO,${new Date().toLocaleString()},TASA USD,Bs. ${tasaUsd.toFixed(2)}\n`;
     csv += `RECEPCIONISTA,${selectedRecepcionista || 'TODOS'}\n\n`;
     csv += `HORA,CONCEPTO,METODO,TIPO,MONTO USD,MONTO BS,RECEPCIONISTA,HAB,CLIENTE\n`;
 
     sortedRecepTransactions.forEach(t => {
-      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-      const montoBs = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (t.montoNum * txTasa);
-      csv += `"${t.hora}","${t.concepto}","${t.metodo}","${t.tipoTransaccion}",${t.montoNum.toFixed(2)},${montoBs.toFixed(2)},"${t.usuarioNombre}","${t.numHab}","${t.clienteNombre}"\n`;
+      const displayBs = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves).toFixed(2) : (t.montoNum * ((t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd)).toFixed(2);
+      csv += `"${t.hora}","${t.concepto}","${t.metodo}","${t.tipoTransaccion}",${t.montoNum.toFixed(2)},${displayBs},"${t.usuarioNombre}","${t.numHab}","${t.clienteNombre}"\n`;
     });
 
     const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -480,8 +461,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                    + marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago movil'), 0);
   const ptovTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'punto'), 0);
   const zelleTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'zelle'), 0);
-  const divisasTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'efectivo ($)'), 0);
-  const bsEfectivoTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'efectivo (bs)'), 0);
+  const divisasTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase() === 'efectivo ($)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
+  const bsEfectivoTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase() === 'efectivo (bs)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
 
   const marteRows = marteDayMovements.map((t, idx) => {
     const conc = t.concepto || '';
@@ -512,8 +493,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     }
 
     const montoUsd = parseFloat(t.monto) || 0;
-    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-    const montoBs = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (montoUsd * txTasa);
+    const montoBs = montoUsd * tasaUsd;
 
     return {
       id: t.id || idx,
@@ -781,7 +761,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                             ${t.montoNum.toFixed(2)}
                           </td>
                           <td className={`p-2.5 text-right font-bold ${isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
-                            Bs. {(t.montoNum * tasaUsd).toFixed(2)}
+                            Bs. {((t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (t.montoNum * ((t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd))).toFixed(2)}
                           </td>
                           <td className="p-2.5">{t.usuarioNombre || 'N/A'}</td>
                           <td className="p-2.5 font-bold">{t.numHab}</td>
@@ -799,7 +779,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
       {/* VIEW 1: GENERAL EXECUTIVE REPORT */}
       {reportTab === 'general' && (
-        <div className="space-y-6 fade-in">
+        <>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:hidden">
         {/* Filters Panel */}
@@ -1008,7 +988,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           </div>
         )}
       </div>
-    )}
-  </div>
-);
+    </>
+  )}
+</div>
+  );
 }
