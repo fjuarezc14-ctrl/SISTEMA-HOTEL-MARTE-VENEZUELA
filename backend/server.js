@@ -2269,6 +2269,7 @@ function parseDBDate(horaStr) {
 // Helper: Parse normal and mixed payments in a caja transaction to get USD and VES breakdown
 function getPaymentBreakdown(t, tasaUsd) {
   const montoUsd = parseFloat(t.monto) || 0;
+  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
   const breakdown = {
     usdCash: 0,
     zelle: 0,
@@ -2288,11 +2289,11 @@ function getPaymentBreakdown(t, tasaUsd) {
     } else if (cleanMetodo.includes('zelle')) {
       breakdown.zelle = montoUsd;
     } else if (cleanMetodo.includes('efectivo (bs)') || cleanMetodo === 'efectivo bolívares' || cleanMetodo === 'efectivo bolivares') {
-      breakdown.vesCash = montoUsd * tasaUsd;
+      breakdown.vesCash = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (montoUsd * txTasa);
     } else if (cleanMetodo.includes('pago móvil') || cleanMetodo.includes('pago movil') || cleanMetodo.includes('móvil') || cleanMetodo.includes('movil')) {
-      breakdown.pagoMovil = montoUsd * tasaUsd;
+      breakdown.pagoMovil = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (montoUsd * txTasa);
     } else if (cleanMetodo.includes('punto')) {
-      breakdown.punto = montoUsd * tasaUsd;
+      breakdown.punto = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (montoUsd * txTasa);
     } else {
       breakdown.usdCash = montoUsd;
     }
