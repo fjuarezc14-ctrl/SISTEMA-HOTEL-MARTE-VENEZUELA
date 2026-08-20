@@ -2423,6 +2423,44 @@ app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
       }
     });
 
+    // Query stays in the daily range (8:00 AM to 7:59 AM)
+    const allEstadias = await db.all(`
+      SELECT h.*, hab.tipo as habTipo 
+      FROM historial_estadias h
+      LEFT JOIN habitaciones hab ON h.numHabitacion = hab.num
+    `);
+
+    const dailyEstadias = allEstadias.filter(h => {
+      const hDate = parseDBDate(h.ingreso);
+      return hDate >= startRange && hDate <= endRange;
+    });
+
+    let mat4h = 0;
+    let matPernocta = 0;
+    let mini4h = 0;
+    let miniPernocta = 0;
+
+    dailyEstadias.forEach(h => {
+      const isMini = (h.habTipo === 'Mini Suite') || (h.tipo === 'Mini Suite');
+      const isPernocta = (h.modalidad || '').toLowerCase() === 'pernocta';
+
+      if (isMini) {
+        if (isPernocta) {
+          miniPernocta++;
+        } else {
+          mini4h++;
+        }
+      } else {
+        if (isPernocta) {
+          matPernocta++;
+        } else {
+          mat4h++;
+        }
+      }
+    });
+
+    const totalHabitacionesAlquiladas = mat4h + matPernocta + mini4h + miniPernocta;
+
     res.json({
       fecha,
       tasaUsd,
@@ -2435,6 +2473,17 @@ app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
           usd: ventasHabitacionesUsd + ingresoAcompananteUsd + ventasMinibarUsd + danosOtrosUsd,
           ves: ventasHabitacionesVes + ingresoAcompananteVes + ventasMinibarVes + danosOtrosVes
         }
+      },
+      ocupacion: {
+        matrimonial4h: mat4h,
+        matrimonialPernocta: matPernocta,
+        minisuite4h: mini4h,
+        minisuitePernocta: miniPernocta,
+        totalMatrimonial: mat4h + matPernocta,
+        totalMinisuite: mini4h + miniPernocta,
+        total4h: mat4h + mini4h,
+        totalPernocta: matPernocta + miniPernocta,
+        totalHabitaciones: totalHabitacionesAlquiladas
       },
       declarado: {
         divisas: declaredUsdCash,

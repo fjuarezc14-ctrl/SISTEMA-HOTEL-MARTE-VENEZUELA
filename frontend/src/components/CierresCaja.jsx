@@ -246,9 +246,49 @@ export default function CierresCaja() {
 
               {/* Table section */}
               <div className="space-y-6">
-                {/* 1. VENTAS (INGRESO TEÓRICO) */}
+                {/* 1. CANTIDAD DE HABITACIONES Y PERNOCTAS ALQUILADAS */}
                 <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">1. Ventas Registradas (Ingresos Teóricos)</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">1. Cantidad de Habitaciones y Pernoctas Alquiladas</h3>
+                  <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 border-b">Tipo de Habitación</th>
+                        <th className="px-4 py-2 text-center text-xs font-bold text-gray-500 border-b">Modalidad</th>
+                        <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Cantidad Alquilada</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      <tr>
+                        <td className="px-4 py-2 text-gray-700 font-medium">Matrimonial</td>
+                        <td className="px-4 py-2 text-center text-gray-600">Por Horas (4h)</td>
+                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.matrimonial4h || 0}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-gray-700 font-medium">Matrimonial</td>
+                        <td className="px-4 py-2 text-center text-emerald-700 font-semibold">Pernocta</td>
+                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.matrimonialPernocta || 0}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-gray-700 font-medium">Mini Suite</td>
+                        <td className="px-4 py-2 text-center text-gray-600">Por Horas (4h)</td>
+                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.minisuite4h || 0}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-gray-700 font-medium">Mini Suite</td>
+                        <td className="px-4 py-2 text-center text-emerald-700 font-semibold">Pernocta</td>
+                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.minisuitePernocta || 0}</td>
+                      </tr>
+                      <tr className="bg-indigo-50/50 font-bold">
+                        <td className="px-4 py-2.5 text-indigo-900" colSpan="2">TOTAL HABITACIONES ALQUILADAS</td>
+                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">{diarioData.ocupacion?.totalHabitaciones || 0}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 2. VENTAS (INGRESO TEÓRICO) */}
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">2. Ventas Registradas (Ingresos Teóricos)</h3>
                   <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
                     <thead className="bg-gray-50">
                       <tr>
@@ -287,9 +327,9 @@ export default function CierresCaja() {
                   </table>
                 </div>
 
-                {/* 2. DISPONIBLE (CONTEO DE CAJA) */}
+                {/* 3. DISPONIBLE (CONTEO DE CAJA) */}
                 <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">2. Desglose Disponible (Conteo Físico Real)</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">3. Desglose Disponible (Conteo Físico Real)</h3>
                   <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
                     <thead className="bg-gray-50">
                       <tr>
@@ -356,9 +396,9 @@ export default function CierresCaja() {
                   </table>
                 </div>
 
-                {/* 3. EGRESOS */}
+                {/* 4. EGRESOS */}
                 <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">3. Egresos Declarados del Día</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">4. Egresos Declarados del Día</h3>
                   <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
                     <thead className="bg-gray-50">
                       <tr>
@@ -377,10 +417,10 @@ export default function CierresCaja() {
                   </table>
                 </div>
 
-                {/* 4. TOTAL NETO A ENTREGAR */}
+                {/* 5. TOTAL NETO A ENTREGAR */}
                 <div className="bg-gray-950 text-white p-4 rounded-xl flex justify-between items-center flex-wrap gap-4">
                   <div>
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">4. EFECTIVO NETO A ENTREGAR PARA RESGUARDO</h4>
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">5. EFECTIVO NETO A ENTREGAR PARA RESGUARDO</h4>
                     <p className="text-xs text-gray-400 mt-1">Efectivo real en caja física restando egresos.</p>
                   </div>
                   <div className="flex space-x-6">
