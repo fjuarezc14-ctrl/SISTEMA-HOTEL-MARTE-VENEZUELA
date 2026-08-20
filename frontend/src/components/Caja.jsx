@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function Caja({ caja = [], entregaTurnos = [], historialEstadias = [], token, currentUser, tasaUsd = 50.00, onCajaMovimiento, onStateChange }) {
   const [tipo, setTipo] = useState('Ingreso');
@@ -15,12 +15,24 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const [codigoRefParteB, setCodigoRefParteB] = useState('');
   const [codigoVerificacion, setCodigoVerificacion] = useState('');
 
-  // Filter state ('mine' = Mi Turno Activo por defecto, vs 'all' = Todos los movimientos)
-  const [filterMode, setFilterMode] = useState('mine');
+  // Check if current user is admin
+  const isAdmin = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin');
+
+  // Filter state ('all' = Todos los movimientos por defecto para Admin, vs 'mine' = Mi Turno Activo para recepcionistas)
+  const [filterMode, setFilterMode] = useState(() => (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) ? 'all' : 'mine');
+  
+  useEffect(() => {
+    if (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) {
+      setFilterMode('all');
+    }
+  }, [currentUser]);
+
   // Origen filter ('Todos', 'Hospedaje', 'Market', 'Egresos')
   const [tabMode, setTabMode] = useState('Todos');
   // Validation filter ('all', 'pending', 'validated')
   const [valFilter, setValFilter] = useState('all');
+  // Filter pending validation transactions by receptionist
+  const [valRecepFilter, setValRecepFilter] = useState('TODOS');
 
   // States for Control de Huéspedes Policial (Fase 4)
   const [isPoliceModalOpen, setIsPoliceModalOpen] = useState(false);
@@ -345,8 +357,14 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
 
   if (valFilter === 'pending') {
     displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0));
+    if (valRecepFilter !== 'TODOS') {
+      displayedCaja = displayedCaja.filter(t => (t.usuarioNombre || '').trim().toLowerCase() === valRecepFilter.trim().toLowerCase());
+    }
   } else if (valFilter === 'validated') {
     displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1);
+    if (valRecepFilter !== 'TODOS') {
+      displayedCaja = displayedCaja.filter(t => (t.usuarioNombre || '').trim().toLowerCase() === valRecepFilter.trim().toLowerCase());
+    }
   }
 
 
@@ -722,7 +740,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
         <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px] mr-2">Filtro de Validación Bancaria:</span>
         <button
-          onClick={() => setValFilter('all')}
+          onClick={() => { setValFilter('all'); setValRecepFilter('TODOS'); }}
           className={`px-3 py-1 rounded-lg font-bold transition-all ${
             valFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
           }`}
@@ -747,6 +765,35 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           <i className="fa-solid fa-circle-check text-[10px] mr-1"></i>
           Validados por Superadmin ({caja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1).length})
         </button>
+
+        {/* Dropdown to filter pending validations by receptionist */}
+        {valFilter === 'pending' && (
+          <div className="flex items-center gap-1.5 ml-auto bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm">
+            <label className="text-[10px] font-black uppercase text-amber-800 flex items-center gap-1">
+              <i className="fa-solid fa-user-tag text-amber-500"></i> Filtrar por Recepcionista:
+            </label>
+            <select
+              value={valRecepFilter}
+              onChange={(e) => setValRecepFilter(e.target.value)}
+              className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+            >
+              <option value="TODOS">Todos ({caja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0)).length})</option>
+              {Array.from(new Set(
+                (caja || [])
+                  .filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0))
+                  .map(t => t.usuarioNombre)
+                  .filter(Boolean)
+              )).map(r => {
+                const count = caja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0) && (t.usuarioNombre || '').trim().toLowerCase() === r.trim().toLowerCase()).length;
+                return (
+                  <option key={r} value={r}>
+                    {r} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Financial KPIs Overview */}
