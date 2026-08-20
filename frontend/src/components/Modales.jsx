@@ -2108,15 +2108,38 @@ export function AccionesReservaModal({
 }) {
   if (!isOpen || !room || !reserva) return null;
 
-  // Calculate if renting for 4 hours is permitted
-  const [rh, rm] = (reserva.hora || '12:00').split(':').map(Number);
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const reservaMinutes = rh * 60 + rm;
-  const diffMinutes = reservaMinutes - currentMinutes;
+  // Helper to parse reservation date and arrival time
+  const getReservaDateObj = (r) => {
+    const [rh, rm] = (r.hora || '12:00').split(':').map(Number);
+    const dateStr = r.fechaIngreso || r.fecha_ingreso || r.fecha;
+    if (dateStr) {
+      if (dateStr.includes('-')) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        return new Date(y, m - 1, d, rh || 0, rm || 0, 0);
+      }
+      if (dateStr.includes('/')) {
+        const [d, m, y] = dateStr.split('/').map(Number);
+        return new Date(y, m - 1, d, rh || 0, rm || 0, 0);
+      }
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), rh || 0, rm || 0, 0);
+  };
 
-  const canRent = diffMinutes >= 300; // 5 hours margin (4h check-in + 1h buffer)
+  const now = new Date();
+  const targetDate = getReservaDateObj(reserva);
+  const diffMs = targetDate.getTime() - now.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = (diffMinutes / 60).toFixed(1);
+
+  // Requirement: Margin is 4.0 hours (240 minutes)
+  const canRent = diffMinutes >= 240;
+
+  const isToday = now.getFullYear() === targetDate.getFullYear() &&
+                  now.getMonth() === targetDate.getMonth() &&
+                  now.getDate() === targetDate.getDate();
+
+  const fechaFormatted = targetDate.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -2131,10 +2154,13 @@ export function AccionesReservaModal({
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
-          <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Reserva Activa Hoy</p>
+          <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">
+            {isToday ? 'Reserva Activa Hoy' : `Reserva Programada (${fechaFormatted})`}
+          </p>
           <h4 className="text-sm font-black text-slate-800">{reserva.cliente?.nombre || 'Huésped'}</h4>
           <div className="text-xs text-slate-600 font-semibold space-y-1">
             <div><span className="text-slate-400">CI / Documento:</span> {reserva.cliente?.ci || reserva.cliente?.dni || 'N/A'}</div>
+            <div><span className="text-slate-400">Fecha Llegada:</span> {fechaFormatted}</div>
             <div><span className="text-slate-400">Hora de Llegada:</span> {reserva.hora}</div>
           </div>
         </div>
@@ -2162,13 +2188,13 @@ export function AccionesReservaModal({
               }}
               className="w-full bg-[#c5920c] hover:bg-[#b08107] text-white font-bold py-2.5 rounded-xl transition-all text-xs shadow-md flex items-center justify-center gap-2"
             >
-              <i className="fa-solid fa-clock"></i> Registrar Alquiler 4 Horas
+              <i className="fa-solid fa-person-walking"></i> Registrar Walk-In / Alquiler 4 Horas
             </button>
           ) : (
             <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-center">
               <span className="text-[10px] font-black uppercase text-rose-800 block">Alquiler Temporal Bloqueado</span>
               <span className="text-[10px] text-rose-700 font-semibold leading-tight block mt-0.5">
-                Margen insuficiente ({diffHours}h restantes). Se requiere al menos 5.0h para margen de limpieza.
+                Margen insuficiente ({diffHours > 0 ? `${diffHours}h restantes` : 'Hora de llegada superada'}). Se requiere al menos 4.0h de margen.
               </span>
             </div>
           )}
