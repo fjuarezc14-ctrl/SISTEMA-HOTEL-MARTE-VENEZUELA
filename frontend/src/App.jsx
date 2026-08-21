@@ -1105,6 +1105,7 @@ export default function App() {
       <DetalleHabitacionOcupadaModal 
         isOpen={isDetalleOcupadaOpen}
         room={selectedRoom}
+        reservas={appState.reservas}
         consumos={appState.consumos}
         productos={appState.productos}
         tasaUsd={parseFloat(appState.configuracion?.tasa_usd || '50.00')}

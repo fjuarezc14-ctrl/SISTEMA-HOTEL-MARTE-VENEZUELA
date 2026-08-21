@@ -290,6 +290,18 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                   </span>
                 )}
 
+                {h.estado === 'Ocupada' && (() => {
+                  const r = (reservas || []).find(resv => resv.numHabitacion === h.num);
+                  if (!r) return null;
+                  const dateFormatted = r.fechaIngreso ? new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }) : '';
+                  return (
+                    <span className="block text-[9px] font-black text-blue-700 bg-blue-50 py-0.5 px-1.5 rounded-lg mt-1 border border-blue-200" title={`Reserva programada para ${r.cliente?.nombre || 'Huésped'}`}>
+                      <i className="fa-solid fa-calendar-check mr-1 text-blue-500"></i>
+                      Reserva: {dateFormatted ? `${dateFormatted} ` : ''}{r.hora}
+                    </span>
+                  );
+                })()}
+
                 {/* Expiration Banner */}
                 {expStatus && expStatus.isExpired && (
                   <span className="block text-[9px] font-black bg-rose-600 text-white py-0.5 px-1 rounded-md mt-2 uppercase tracking-tight">

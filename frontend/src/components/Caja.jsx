@@ -766,8 +766,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           Validados por Superadmin ({caja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1).length})
         </button>
 
-        {/* Dropdown to filter pending validations by receptionist */}
-        {valFilter === 'pending' && (
+        {/* Dropdown to filter pending validations by receptionist (Admin/Superadmin only) */}
+        {valFilter === 'pending' && isAdmin && (
           <div className="flex items-center gap-1.5 ml-auto bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm">
             <label className="text-[10px] font-black uppercase text-amber-800 flex items-center gap-1">
               <i className="fa-solid fa-user-tag text-amber-500"></i> Filtrar por Recepcionista:

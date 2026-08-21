@@ -3564,6 +3564,7 @@ export function CheckoutModal({
 export function DetalleHabitacionOcupadaModal({
   isOpen,
   room,
+  reservas = [],
   consumos = [],
   productos = [],
   tasaUsd = 50.00,
@@ -3598,6 +3599,30 @@ export function DetalleHabitacionOcupadaModal({
         </div>
 
         <div className="overflow-y-auto pr-2 flex-1 space-y-5">
+          {/* Active / Future Reservation Alert for this Room */}
+          {(() => {
+            const pendingRes = (reservas || []).find(r => r.numHabitacion === room.num);
+            if (!pendingRes) return null;
+            const dateFormatted = pendingRes.fechaIngreso ? new Date(pendingRes.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+            return (
+              <div className="bg-blue-50 border-2 border-blue-400 p-3.5 rounded-xl text-blue-900 shadow-sm flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                  <i className="fa-solid fa-calendar-check text-sm"></i>
+                </div>
+                <div className="text-xs">
+                  <span className="font-black text-blue-900 uppercase block text-[11px] tracking-wide">
+                    📌 Reserva Programada Asociada a esta Habitación
+                  </span>
+                  <div className="mt-1 space-y-0.5 text-blue-800 font-semibold">
+                    <div><strong>Huésped:</strong> {pendingRes.cliente?.nombre || 'Huésped'} {pendingRes.cliente?.tel ? `(Tel: ${pendingRes.cliente.tel})` : ''}</div>
+                    <div><strong>Llegada Programada:</strong> {dateFormatted ? `${dateFormatted} a las ` : ''}{pendingRes.hora}</div>
+                    <div><strong>Modalidad:</strong> <span className="uppercase">{pendingRes.modalidad === 'pernocta' ? 'Pernocta' : 'Por Horas (4h)'}</span></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Guest Card Info */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Huésped Titular</p>
