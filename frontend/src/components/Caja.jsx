@@ -333,28 +333,34 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     document.body.removeChild(link);
   };
 
-  // Filter movements
-  let displayedCaja = caja;
-
+  // Filter caja list by Filter Mode
+  let displayedCaja = [...caja];
   if (filterMode === 'mine' && currentUser) {
-    displayedCaja = caja.filter(t => {
-      if (t.usuarioId && t.usuarioId !== currentUser.id) return false;
+    displayedCaja = displayedCaja.filter(t => {
+      if (t.tipo === 'Cierre') return false; // Hide system closure markers from list
+      const matchesUser = (t.usuarioId === currentUser.id) || (t.usuarioNombre && currentUser.nombre && t.usuarioNombre.trim().toLowerCase() === currentUser.nombre.trim().toLowerCase());
+      if (!matchesUser) return false;
       if (t.hora) {
         const tDate = parseCajaFecha(t.hora);
         return tDate >= shiftCutoffTime;
       }
       return true;
     });
+  } else {
+    // 'all' mode: hide internal closure markers
+    displayedCaja = displayedCaja.filter(t => t.tipo !== 'Cierre');
   }
 
+  // Filter by Tab: Origen / Type ('Todos', 'Hospedaje', 'Market', 'Egresos')
   if (tabMode !== 'Todos') {
     if (tabMode === 'Egresos') {
       displayedCaja = displayedCaja.filter(t => t.tipo === 'Egreso');
     } else {
-      displayedCaja = displayedCaja.filter(t => t.origen === tabMode && t.tipo === 'Ingreso');
+      displayedCaja = displayedCaja.filter(t => t.tipo === 'Ingreso' && t.origen === tabMode);
     }
   }
 
+  // Secondary subfilter for digital payments validation
   if (valFilter === 'pending') {
     displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0));
     if (valRecepFilter !== 'TODOS') {
@@ -366,7 +372,6 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       displayedCaja = displayedCaja.filter(t => (t.usuarioNombre || '').trim().toLowerCase() === valRecepFilter.trim().toLowerCase());
     }
   }
-
 
   displayedCaja = [...displayedCaja].sort((a, b) => getCajaTimestamp(b.id) - getCajaTimestamp(a.id));
 
@@ -383,7 +388,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
 
   // Shift calculation for current logged in user (by official 5 payment methods)
   const myMovements = currentUser ? caja.filter(t => {
-    if (t.usuarioId !== currentUser.id) return false;
+    const matchesUser = (t.usuarioId === currentUser.id) || (t.usuarioNombre && currentUser.nombre && t.usuarioNombre.trim().toLowerCase() === currentUser.nombre.trim().toLowerCase());
+    if (!matchesUser) return false;
     if (t.hora) {
       const tDate = parseCajaFecha(t.hora);
       return tDate >= shiftCutoffTime;
