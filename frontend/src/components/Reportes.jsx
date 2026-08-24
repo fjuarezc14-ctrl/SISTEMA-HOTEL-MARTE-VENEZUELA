@@ -203,6 +203,36 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return { usd: sumUsd, ves: sumVes };
   };
 
+  /**
+   * Helper para obtener los montos reales desglosados en USD y VES de cualquier transacción
+   * Rellena únicamente la moneda real cobrada y '-' en la otra (o ambas si fue Pago Mixto multimoneda)
+   */
+  const getTransactionAmounts = (t) => {
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const montoNum = safeNum(t.monto || t.montoNum);
+    const breakdown = parsePaymentBreakdown(t.metodo, montoNum, txTasa);
+
+    let realUsd = 0;
+    let realVes = 0;
+
+    for (const ch of breakdown.channels) {
+      const chM = (ch.method || '').toLowerCase();
+      const isUsdChannel = chM.includes('($)') || chM.includes('zelle');
+      if (isUsdChannel) {
+        realUsd += ch.amountUsd;
+      } else {
+        realVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+      }
+    }
+
+    return {
+      usd: realUsd,
+      ves: realVes,
+      usdStr: realUsd > 0 ? `$${realUsd.toFixed(2)} USD` : '-',
+      vesStr: realVes > 0 ? `Bs. ${realVes.toFixed(2)} VES` : '-'
+    };
+  };
+
   // Helper for safe strings (prevents Object as React Child crash)
   const safeStr = (val, fallback = '') => {
     if (val === null || val === undefined) return fallback;
@@ -470,8 +500,8 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     csv += `HORA,CONCEPTO,METODO,TIPO,MONTO USD,MONTO BS,RECEPCIONISTA,HAB,CLIENTE\n`;
 
     sortedRecepTransactions.forEach(t => {
-      const displayBs = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves).toFixed(2) : (t.montoNum * ((t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd)).toFixed(2);
-      csv += `"${t.hora}","${t.concepto}","${t.metodo}","${t.tipoTransaccion}",${t.montoNum.toFixed(2)},${displayBs},"${t.usuarioNombre}","${t.numHab}","${t.clienteNombre}"\n`;
+      const amounts = getTransactionAmounts(t);
+      csv += `"${t.hora}","${t.concepto}","${t.metodo}","${t.tipoTransaccion}",${amounts.usd > 0 ? amounts.usd.toFixed(2) : ''},${amounts.ves > 0 ? amounts.ves.toFixed(2) : ''},"${t.usuarioNombre}","${t.numHab}","${t.clienteNombre}"\n`;
     });
 
     const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -502,10 +532,10 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return t.tipo === 'Ingreso';
   });
 
-  const pmTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago móvil'), 0)
-                   + marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago movil'), 0);
-  const ptovTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'punto'), 0);
-  const zelleTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'zelle'), 0);
+  const pmTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago móvil').usd, 0)
+                   + marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'pago movil').usd, 0);
+  const ptovTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'punto').usd, 0);
+  const zelleTotalUsd = marteDayMovements.reduce((s, t) => s + extractMethodAmount(t, 'zelle').usd, 0);
   const divisasTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase() === 'efectivo ($)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
   const bsEfectivoTotalUsd = marteDayMovements.filter(t => (t.metodo || '').toLowerCase() === 'efectivo (bs)').reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
 
@@ -537,8 +567,9 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
       ref = String(t.referenciaBancaria).trim() || 'N/A';
     }
 
-    const montoUsd = parseFloat(t.monto) || 0;
-    const montoBs = montoUsd * tasaUsd;
+    const valUsd = parseFloat(t.monto || 0);
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const valBs = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (valUsd * txTasa);
 
     return {
       id: t.id || idx,
@@ -548,10 +579,10 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
       checkIn,
       checkOut,
       numHuesped: 2,
-      montoBsFormatted: `Bs. ${montoBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`,
-      montoUsdFormatted: `$${montoUsd.toFixed(2)}`,
-      montoBsVal: montoBs,
-      montoUsdVal: montoUsd,
+      montoBsFormatted: `Bs. ${valBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`,
+      montoUsdFormatted: `$${valUsd.toFixed(2)}`,
+      montoBsVal: valBs,
+      montoUsdVal: valUsd,
       formaPago: t.metodo || 'EFECTIVO',
       numHab,
       ref
@@ -785,7 +816,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {sortedRecepTransactions.map(t => {
-                      const isVes = ['Efectivo (Bs)', 'Efectivo', 'Pago Móvil', 'Punto de Venta'].some(m => (t.metodo || '').toLowerCase().includes(m.toLowerCase()));
+                      const amounts = getTransactionAmounts(t);
                       return (
                         <tr key={t.id} className="hover:bg-slate-50">
                           <td className="p-2.5 font-mono text-[10px]">{t.hora}</td>
@@ -802,11 +833,11 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                               'bg-rose-100 text-rose-700'
                             }`}>{t.tipoTransaccion}</span>
                           </td>
-                          <td className={`p-2.5 text-right font-bold ${!isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
-                            ${t.montoNum.toFixed(2)}
+                          <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
+                            {amounts.usdStr}
                           </td>
-                          <td className={`p-2.5 text-right font-bold ${isVes ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
-                            Bs. {((t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (t.montoNum * ((t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd))).toFixed(2)}
+                          <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-emerald-600 font-black' : 'text-slate-400'}`}>
+                            {amounts.vesStr}
                           </td>
                           <td className="p-2.5">{t.usuarioNombre || 'N/A'}</td>
                           <td className="p-2.5 font-bold">{t.numHab}</td>
@@ -946,35 +977,23 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Método</th>
-                  <th className="p-2 border-b text-right">Monto ($ USD / Bs)</th>
+                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
+                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market')))).map(t => {
-                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
-                  const montoUsdVal = parseFloat(t.monto || 0);
-                  const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00))
-                    ? parseFloat(t.monto_ves).toFixed(2)
-                    : (montoUsdVal * txTasa).toFixed(2);
-                  const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto'].some(m => (t.metodo || '').toLowerCase().includes(m)) && !(t.metodo || '').toLowerCase().includes('($)');
-
+                  const amounts = getTransactionAmounts(t);
                   return (
                     <tr key={t.id} className="border-b hover:bg-slate-50/50">
                       <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
                       <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
                       <td className="p-2 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
-                      <td className="p-2 text-right">
-                        {isVes ? (
-                          <>
-                            <span className="font-bold text-emerald-700 block">Bs. {displayVes}</span>
-                            <span className="text-[10px] text-slate-400 font-medium block">~ ${montoUsdVal.toFixed(2)} USD</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="font-bold text-emerald-700 block">${montoUsdVal.toFixed(2)} USD</span>
-                            <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {displayVes}</span>
-                          </>
-                        )}
+                      <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
+                        {amounts.usdStr}
+                      </td>
+                      <td className={`p-2 text-right font-bold ${amounts.ves > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
+                        {amounts.vesStr}
                       </td>
                     </tr>
                   );
@@ -993,35 +1012,23 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Método</th>
-                  <th className="p-2 border-b text-right">Monto ($ USD / Bs)</th>
+                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
+                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))).map(t => {
-                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
-                  const montoUsdVal = parseFloat(t.monto || 0);
-                  const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00))
-                    ? parseFloat(t.monto_ves).toFixed(2)
-                    : (montoUsdVal * txTasa).toFixed(2);
-                  const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto'].some(m => (t.metodo || '').toLowerCase().includes(m)) && !(t.metodo || '').toLowerCase().includes('($)');
-
+                  const amounts = getTransactionAmounts(t);
                   return (
                     <tr key={t.id} className="border-b hover:bg-slate-50/50">
                       <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
                       <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
                       <td className="p-2 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
-                      <td className="p-2 text-right">
-                        {isVes ? (
-                          <>
-                            <span className="font-bold text-amber-600 block">Bs. {displayVes}</span>
-                            <span className="text-[10px] text-slate-400 font-medium block">~ ${montoUsdVal.toFixed(2)} USD</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="font-bold text-amber-600 block">${montoUsdVal.toFixed(2)} USD</span>
-                            <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {displayVes}</span>
-                          </>
-                        )}
+                      <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
+                        {amounts.usdStr}
+                      </td>
+                      <td className={`p-2 text-right font-bold ${amounts.ves > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
+                        {amounts.vesStr}
                       </td>
                     </tr>
                   );
@@ -1040,25 +1047,23 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Responsable</th>
-                  <th className="p-2 border-b text-right">Monto ($ USD / Bs)</th>
+                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
+                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCaja.filter(t => t.tipo === 'Egreso').map(t => {
-                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
-                  const montoUsdVal = parseFloat(t.monto || 0);
-                  const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00))
-                    ? parseFloat(t.monto_ves).toFixed(2)
-                    : (montoUsdVal * txTasa).toFixed(2);
-
+                  const amounts = getTransactionAmounts(t);
                   return (
                     <tr key={t.id} className="border-b hover:bg-slate-50/50">
                       <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
                       <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
                       <td className="p-2">{t.usuarioNombre || 'Desconocido'}</td>
-                      <td className="p-2 text-right">
-                        <span className="font-bold text-rose-600 block">- ${montoUsdVal.toFixed(2)} USD</span>
-                        <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {displayVes}</span>
+                      <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
+                        {amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}
+                      </td>
+                      <td className={`p-2 text-right font-bold ${amounts.ves > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
+                        {amounts.ves > 0 ? `-Bs. ${amounts.ves.toFixed(2)} VES` : '-'}
                       </td>
                     </tr>
                   );
