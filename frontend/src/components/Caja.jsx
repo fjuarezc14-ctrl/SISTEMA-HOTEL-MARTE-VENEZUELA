@@ -902,8 +902,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
 
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/50">
-                        <td className="p-4 pl-6 text-slate-400 font-semibold">{t.hora}</td>
-                        <td className="p-4 font-bold text-slate-800 max-w-xs truncate" title={t.concepto}>{t.concepto}</td>
+                        <td className="p-4 pl-6 text-slate-400 font-semibold whitespace-nowrap">{t.hora}</td>
+                        <td className="p-4 font-bold text-slate-800 min-w-[220px] max-w-sm leading-snug" title={t.concepto}>{t.concepto}</td>
                         <td className="p-4 text-xs font-semibold text-slate-600">
                           <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-md border border-slate-200">
                             <i className="fa-solid fa-user-check text-[10px] text-slate-400 mr-1"></i>
