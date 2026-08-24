@@ -372,6 +372,11 @@ export async function initDb() {
   const tasaConfig = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
   if (!tasaConfig) {
     await db.run("INSERT INTO configuracion (clave, valor) VALUES ('tasa_usd', '50.00')");
+  } else if (parseFloat(tasaConfig.valor) > 0 && parseFloat(tasaConfig.valor) !== 50.00) {
+    try {
+      const activeRate = parseFloat(tasaConfig.valor);
+      await db.run("UPDATE caja SET tasa_usd = ?, monto_ves = monto * ? WHERE tasa_usd = 50.00 OR tasa_usd IS NULL OR tasa_usd = 0", [activeRate, activeRate]);
+    } catch (e) {}
   }
 
   // Migraciones y Upsert para Tarifas Oficiales (v3 - Fase 1)

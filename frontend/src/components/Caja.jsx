@@ -884,7 +884,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {displayedCaja.map(t => {
-                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
                     const montoUsdVal = parseFloat(t.monto) || 0;
                     const isValidated = t.validado === 1;
                     const breakdown = parsePaymentBreakdown(t.metodo, montoUsdVal, txTasa);
@@ -1028,7 +1028,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                           }
 
                           const isVesPayment = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].some(m => breakdown.cleanMetodo.toLowerCase().includes(m.toLowerCase())) || (breakdown.cleanMetodo.toLowerCase().includes('efectivo') && !breakdown.cleanMetodo.toLowerCase().includes('($)'));
-                          const displayVes = (t.monto_ves && parseFloat(t.monto_ves) > 0)
+                          const hasValidMontoVes = t.monto_ves && parseFloat(t.monto_ves) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00);
+                          const displayVes = hasValidMontoVes
                             ? parseFloat(t.monto_ves).toFixed(2)
                             : (montoUsdVal * txTasa).toFixed(2);
 

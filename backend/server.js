@@ -3503,20 +3503,16 @@ app.post('/api/tienda/venta-directa', requireAuth, async (req, res) => {
               finalMetodo = `${finalMetodo} - Ref: ${pago.codigoRef.trim()}`;
             }
 
-            await db.run(
-              'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [
-                transId,
-                'Ingreso',
-                conceptoCaja,
-                montoPago,
-                finalMetodo,
-                getFechaHoraActual(),
-                req.user.id,
-                req.user.nombre,
-                'Market'
-              ]
-            );
+            await insertCajaTransaction(db, {
+              id: transId,
+              tipo: 'Ingreso',
+              concepto: conceptoCaja,
+              monto: montoPago,
+              metodo: finalMetodo,
+              usuarioId: req.user.id,
+              usuarioNombre: req.user.nombre,
+              origen: 'Market'
+            });
           }
         }
       }
