@@ -107,40 +107,100 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return isNaN(n) ? 0 : n;
   };
 
+  // Helper to parse detailed channels from any payment string (standard or Pago Mixto)
+  const parsePaymentBreakdown = (metodoStr, montoUsd, tasa) => {
+    const raw = (metodoStr || '').trim();
+    if (!raw) {
+      return { isMixto: false, cleanMetodo: 'Efectivo ($)', refCode: '-', isDigital: false, channels: [{ method: 'Efectivo ($)', label: 'Efectivo ($)', amountUsd: montoUsd, amountVes: montoUsd * (tasa || 1), isDigital: false, ref: null }] };
+    }
+
+    const isMixto = raw.toLowerCase().includes('pago mixto') || raw.toLowerCase().includes('mixto');
+    if (!isMixto) {
+      const cleanM = raw.replace(/\s*-\s*Ref:.*$/i, '').trim();
+      const isDig = raw.toLowerCase().includes('pago móvil') || raw.toLowerCase().includes('pago movil') || raw.toLowerCase().includes('punto') || raw.toLowerCase().includes('zelle');
+      return {
+        isMixto: false,
+        cleanMetodo: cleanM,
+        refCode: '-',
+        isDigital: isDig,
+        channels: [{
+          method: cleanM,
+          label: cleanM,
+          amountUsd: montoUsd,
+          amountVes: montoUsd * (tasa || 1),
+          isDigital: isDig,
+          ref: null
+        }]
+      };
+    }
+
+    // It is a Pago Mixto
+    const channels = [];
+    const efUsdMatch = raw.match(/efectivo \(\$\):\s*\$([\d.]+)/i);
+    if (efUsdMatch) {
+      const amt = parseFloat(efUsdMatch[1]) || 0;
+      if (amt > 0) channels.push({ method: 'Efectivo ($)', amountUsd: amt, amountVes: amt * (tasa || 1), isDigital: false });
+    }
+
+    const efVesMatch = raw.match(/efectivo \(bs\):\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
+    if (efVesMatch) {
+      const vesAmt = parseFloat(efVesMatch[1]) || 0;
+      const usdAmt = efVesMatch[2] ? parseFloat(efVesMatch[2]) : (vesAmt / (tasa || 1));
+      if (vesAmt > 0) channels.push({ method: 'Efectivo (Bs)', amountUsd: usdAmt, amountVes: vesAmt, isDigital: false });
+    }
+
+    const pmMatch = raw.match(/pago m[óo]vil:\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
+    if (pmMatch) {
+      const vesAmt = parseFloat(pmMatch[1]) || 0;
+      const usdAmt = pmMatch[2] ? parseFloat(pmMatch[2]) : (vesAmt / (tasa || 1));
+      if (vesAmt > 0) channels.push({ method: 'Pago Móvil', amountUsd: usdAmt, amountVes: vesAmt, isDigital: true });
+    }
+
+    const ptMatch = raw.match(/punto:\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
+    if (ptMatch) {
+      const vesAmt = parseFloat(ptMatch[1]) || 0;
+      const usdAmt = ptMatch[2] ? parseFloat(ptMatch[2]) : (vesAmt / (tasa || 1));
+      if (vesAmt > 0) channels.push({ method: 'Punto de Venta', amountUsd: usdAmt, amountVes: vesAmt, isDigital: true });
+    }
+
+    const zlMatch = raw.match(/zelle:\s*\$([\d.]+)/i);
+    if (zlMatch) {
+      const usdAmt = parseFloat(zlMatch[1]) || 0;
+      if (usdAmt > 0) channels.push({ method: 'Zelle', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isDigital: true });
+    }
+
+    return {
+      isMixto: true,
+      cleanMetodo: 'Pago Mixto',
+      channels
+    };
+  };
+
   /**
-   * Extrae el monto real de un método de pago específico dentro de una transacción.
-   * Para pagos simples: devuelve t.monto completo si el método coincide.
-   * Para pagos MIXTOS: parsea el string del campo 'metodo' y extrae solo la porción
-   * correspondiente al método buscado (evita inflar totales con el monto total del pago).
-   * Ejemplo: metodo = "Pago Mixto (Zelle: $10.00 + Efectivo ($): $5.00)"
-   *   extractMethodAmount(t, 'zelle') → 10.00 (no 15.00)
+   * Extrae el monto real (USD y VES) de un método de pago específico dentro de una transacción.
    */
   const extractMethodAmount = (t, targetKey) => {
-    const m = (t.metodo || '').toLowerCase();
-    const monto = safeNum(t.monto);
-    if (!m.includes('pago mixto') && !m.includes('mixto')) {
-      // Pago simple: devolver monto completo si coincide
-      return m.includes(targetKey) ? monto : 0;
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const monto = safeNum(t.monto || t.montoNum);
+    const breakdown = parsePaymentBreakdown(t.metodo, monto, txTasa);
+    const target = (targetKey || '').toLowerCase();
+
+    let sumUsd = 0;
+    let sumVes = 0;
+    for (const ch of breakdown.channels) {
+      const chMethod = (ch.method || '').toLowerCase();
+      const isEfectivoUsd = (target === 'efectivo ($)' || target.includes('($)')) && (chMethod === 'efectivo ($)' || chMethod === 'efectivo ($ usd)' || chMethod.includes('($)'));
+      const isEfectivoVes = (target === 'efectivo (bs)' || target === 'efectivo bolívares' || target === 'efectivo') && (chMethod.includes('(bs)') || chMethod === 'efectivo (bs)' || chMethod === 'efectivo bolívares');
+      const isPagoMovil = (target === 'pago móvil' || target === 'pago movil' || target === 'pm') && (chMethod.includes('pago móvil') || chMethod.includes('pago movil') || chMethod === 'pm');
+      const isPunto = (target === 'punto' || target === 'punto de venta' || target === 'pos') && (chMethod.includes('punto') || chMethod.includes('pos'));
+      const isZelle = target === 'zelle' && chMethod.includes('zelle');
+
+      if (isEfectivoUsd || isEfectivoVes || isPagoMovil || isPunto || isZelle || chMethod.includes(target)) {
+        sumUsd += ch.amountUsd;
+        sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+      }
     }
-    // Pago mixto: buscar el valor numérico junto al nombre del método
-    // Formatos comunes en el sistema:
-    // "Pago Mixto (Punto: Bs. 1780 ($2.00) + Zelle: $10.00)"
-    // "Pago Mixto - Efectivo ($): $10 + Pago Móvil: Bs. 2670 ($3.00)"
-    // "Pago Mixto (Efectivo ($): $10.00 + Pago Móvil: Bs. 2670 ($3.00) (Ref: 5998))"
-    const raw = t.metodo || '';
-    // Buscar patrón: "<Método>: $<monto>" o "<Método>: Bs. XXXX ($<monto>)"
-    // Regex: captura el monto en USD junto al nombre del método buscado
-    const patterns = [
-      // "Zelle: $10.00" o "Zelle: $10"
-      new RegExp(targetKey + '[^+)]*:\\s*\\$([\\d.]+)', 'i'),
-      // "Zelle: Bs. 8900 ($10.00)" → captura el ($ parte)
-      new RegExp(targetKey + '[^+)]*:\\s*Bs\.?[\\s\\d.]+\\(\\$([\\d.]+)\\)', 'i'),
-    ];
-    for (const re of patterns) {
-      const match = raw.match(re);
-      if (match && match[1]) return parseFloat(match[1]) || 0;
-    }
-    return 0; // No encontrado en el mixto
+    return { usd: sumUsd, ves: sumVes };
   };
 
   // Helper for safe strings (prevents Object as React Child crash)
@@ -389,29 +449,14 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   const getMethodTotalRecep = (methodName) => {
     return recepTransactions
-      .filter(t => {
-        if (t.tipo !== 'Ingreso') return false;
-        const m = (t.metodo || '').toLowerCase();
-        const target = methodName.toLowerCase();
-        if (m.includes('pago mixto')) {
-          if (target.includes('efectivo (bs)') || target === 'efectivo') return m.includes('efectivo (bs)');
-          if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) return m.includes('efectivo ($)');
-          if (target.includes('pago móvil') || target.includes('pago movil')) return m.includes('pago móvil') || m.includes('pago movil');
-          if (target.includes('punto')) return m.includes('punto');
-          if (target.includes('zelle')) return m.includes('zelle');
-          return false;
-        }
-        if (target.includes('efectivo (bs)') || target === 'efectivo') return m.includes('efectivo (bs)') || m === 'efectivo';
-        if (target.includes('efectivo ($)') || target.includes('efectivo ($ usd)')) return m.includes('efectivo ($)');
-        if (target.includes('pago móvil') || target.includes('pago movil')) return m.includes('pago móvil') || m.includes('pago movil');
-        if (target.includes('punto')) return m.includes('punto');
-        if (target.includes('zelle')) return m.includes('zelle');
-        return m.includes(target);
-      })
-      .reduce((sum, t) => {
-        const target = methodName.toLowerCase();
-        return sum + extractMethodAmount(t, target);
-      }, 0);
+      .filter(t => t.tipo === 'Ingreso')
+      .reduce((acc, t) => {
+        const res = extractMethodAmount(t, methodName);
+        return {
+          usd: acc.usd + res.usd,
+          ves: acc.ves + res.ves
+        };
+      }, { usd: 0, ves: 0 });
   };
 
   // Lista de métodos de pago únicos para el filtro
@@ -643,36 +688,36 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
               <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-money-bill-wave text-emerald-600 mr-1"></i> Efectivo (Bs)</span>
               <div>
-                <span className="font-black text-slate-800 text-sm block">Bs. {(getMethodTotalRecep('Efectivo (Bs)') * tasaUsd).toFixed(2)}</span>
-                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Efectivo (Bs)').toFixed(2)} USD</span>
+                <span className="font-black text-slate-800 text-sm block">Bs. {getMethodTotalRecep('Efectivo (Bs)').ves.toFixed(2)}</span>
+                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Efectivo (Bs)').usd.toFixed(2)} USD</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
               <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-dollar-sign text-amber-600 mr-1"></i> Efectivo ($)</span>
               <div>
-                <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Efectivo ($)').toFixed(2)} USD</span>
-                <span className="text-[9px] text-slate-400 block">~ Bs. {(getMethodTotalRecep('Efectivo ($)') * tasaUsd).toFixed(2)}</span>
+                <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Efectivo ($)').usd.toFixed(2)} USD</span>
+                <span className="text-[9px] text-slate-400 block">~ Bs. {getMethodTotalRecep('Efectivo ($)').ves.toFixed(2)}</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
               <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-mobile-screen-button text-purple-600 mr-1"></i> Pago Móvil</span>
               <div>
-                <span className="font-black text-slate-800 text-sm block">Bs. {(getMethodTotalRecep('Pago Móvil') * tasaUsd).toFixed(2)}</span>
-                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Pago Móvil').toFixed(2)} USD</span>
+                <span className="font-black text-slate-800 text-sm block">Bs. {getMethodTotalRecep('Pago Móvil').ves.toFixed(2)}</span>
+                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Pago Móvil').usd.toFixed(2)} USD</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
               <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-credit-card text-blue-600 mr-1"></i> Punto de Venta</span>
               <div>
-                <span className="font-black text-slate-800 text-sm block">Bs. {(getMethodTotalRecep('Punto de Venta') * tasaUsd).toFixed(2)}</span>
-                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Punto de Venta').toFixed(2)} USD</span>
+                <span className="font-black text-slate-800 text-sm block">Bs. {getMethodTotalRecep('Punto de Venta').ves.toFixed(2)}</span>
+                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Punto de Venta').usd.toFixed(2)} USD</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
               <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-coins text-amber-500 mr-1"></i> Zelle</span>
               <div>
-                <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Zelle').toFixed(2)} USD</span>
-                <span className="text-[9px] text-slate-400 block">~ Bs. {(getMethodTotalRecep('Zelle') * tasaUsd).toFixed(2)}</span>
+                <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Zelle').usd.toFixed(2)} USD</span>
+                <span className="text-[9px] text-slate-400 block">~ Bs. {getMethodTotalRecep('Zelle').ves.toFixed(2)}</span>
               </div>
             </div>
           </div>

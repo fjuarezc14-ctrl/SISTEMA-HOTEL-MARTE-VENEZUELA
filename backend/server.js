@@ -998,8 +998,8 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
       `INSERT INTO historial_estadias (
         id, numHabitacion, huesped, clienteCi, acomp, ingreso, 
         cantidad_huespedes, monto_usd, monto_ves, metodo_pago, referencia, 
-        usuarioId, usuarioNombre, modalidad
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        usuarioId, usuarioNombre, modalidad, horas_extra
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         estadiaId,
         numHabitacion,
@@ -1014,7 +1014,8 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
         codigoVerificacion || '-',
         req.user.id,
         req.user.nombre,
-        modalidad || '4h'
+        modalidad || '4h',
+        parseInt(horasExtraIniciales) || 0
       ]
     );
 
@@ -1024,9 +1025,14 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
     const finalMetodoHospedaje = metodoHospedaje || metodoTexto;
     
     if (finalMonto > 0) {
+      const extraHrsNum = parseInt(horasExtraIniciales) || 0;
+      const modalidadLabel = modalidad === 'pernocta' 
+        ? 'Pernocta' 
+        : (extraHrsNum > 0 ? `4h + ${extraHrsNum}h extras` : '4 Horas');
+
       await insertCajaTransaction(db, {
         tipo: 'Ingreso',
-        concepto: `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidad === 'pernocta' ? 'Pernocta' : '4 Horas'}] - ${comprobante || 'Sin Comprobante'}`,
+        concepto: `Hospedaje Check-In Hab ${numHabitacion} (${nombre.trim()}) [${modalidadLabel}] - ${comprobante || 'Sin Comprobante'}`,
         monto: finalMonto,
         metodo: finalMetodoHospedaje || 'Efectivo Bolívares',
         usuarioId: req.user.id,

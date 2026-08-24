@@ -129,7 +129,14 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
         cleanMetodo,
         refCode,
         isDigital,
-        channels: [{ method: cleanMetodo, label: cleanMetodo, amountUsd: montoUsd, isDigital, ref: refCode !== '-' ? refCode : null }]
+        channels: [{
+          method: cleanMetodo,
+          label: cleanMetodo,
+          amountUsd: montoUsd,
+          amountVes: montoUsd * (tasa || 1),
+          isDigital,
+          ref: refCode !== '-' ? refCode : null
+        }]
       };
     }
 
@@ -414,57 +421,58 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   }) : caja;
   
   /**
-   * Extrae el monto real de un método de pago específico dentro de una transacción.
+   * Extrae el monto real (en USD y en VES) de un método de pago específico dentro de una transacción.
    * Para pagos simples y MIXTOS: utiliza parsePaymentBreakdown para sumar con precisión
    * la porción exacta de cada canal sin errores de regex.
    */
   const extractMethodAmount = (t, targetKey) => {
-    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
     const monto = parseFloat(t.monto) || 0;
     const breakdown = parsePaymentBreakdown(t.metodo, monto, txTasa);
     const target = targetKey.toLowerCase();
 
-    let sum = 0;
+    let sumUsd = 0;
+    let sumVes = 0;
     for (const ch of breakdown.channels) {
       const chMethod = (ch.method || '').toLowerCase();
-      if (target === 'efectivo ($)' && (chMethod === 'efectivo ($)' || chMethod === 'efectivo ($ usd)' || chMethod.includes('($)'))) {
-        sum += ch.amountUsd;
-      } else if (target === 'efectivo (bs)' && (chMethod.includes('(bs)') || chMethod === 'efectivo (bs)' || chMethod === 'efectivo bolívares')) {
-        sum += ch.amountUsd;
-      } else if (target === 'pago móvil' && (chMethod.includes('pago móvil') || chMethod.includes('pago movil') || chMethod === 'pm')) {
-        sum += ch.amountUsd;
-      } else if (target === 'punto de venta' && (chMethod.includes('punto') || chMethod.includes('punto de venta') || chMethod.includes('pos'))) {
-        sum += ch.amountUsd;
-      } else if (target === 'zelle' && chMethod.includes('zelle')) {
-        sum += ch.amountUsd;
-      } else if (chMethod.includes(target)) {
-        sum += ch.amountUsd;
+      const isEfectivoUsd = (target === 'efectivo ($)' || target.includes('($)')) && (chMethod === 'efectivo ($)' || chMethod === 'efectivo ($ usd)' || chMethod.includes('($)'));
+      const isEfectivoVes = (target === 'efectivo (bs)' || target === 'efectivo bolívares' || target === 'efectivo') && (chMethod.includes('(bs)') || chMethod === 'efectivo (bs)' || chMethod === 'efectivo bolívares');
+      const isPagoMovil = (target === 'pago móvil' || target === 'pago movil' || target === 'pm') && (chMethod.includes('pago móvil') || chMethod.includes('pago movil') || chMethod === 'pm');
+      const isPunto = (target === 'punto' || target === 'punto de venta' || target === 'pos') && (chMethod.includes('punto') || chMethod.includes('pos'));
+      const isZelle = target === 'zelle' && chMethod.includes('zelle');
+
+      if (isEfectivoUsd || isEfectivoVes || isPagoMovil || isPunto || isZelle || chMethod.includes(target)) {
+        sumUsd += ch.amountUsd;
+        sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
       }
     }
-    return sum;
+    return { usd: sumUsd, ves: sumVes };
   };
 
-  // Desglose por método de pago (Efectivo, Tarjeta, Digital) y tipo de moneda (Local/Divisa)
+  // Desglose por método de pago (Efectivo, Tarjeta, Digital) retornando { usd, ves }
   const getMethodTotal = (methodName) => {
     return myMovements
       .filter(t => t.tipo === 'Ingreso')
-      .reduce((sum, t) => sum + extractMethodAmount(t, methodName), 0);
+      .reduce((acc, t) => {
+        const res = extractMethodAmount(t, methodName);
+        return {
+          usd: acc.usd + res.usd,
+          ves: acc.ves + res.ves
+        };
+      }, { usd: 0, ves: 0 });
   };
 
-  const startCashUsd = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoUsd || 0) : 0;
-  const startCashVes = mostRecentDelivery ? parseFloat(mostRecentDelivery.saldoEfectivoVes || 0) : 0;
-
-  const myEfectivoVES = (startCashVes / tasaUsd) + getMethodTotal('Efectivo (Bs)');
+  const myEfectivoVES = getMethodTotal('Efectivo (Bs)');
   const myPagoMovil = getMethodTotal('Pago Móvil');
   const myPuntoVenta = getMethodTotal('Punto de Venta');
-  const myDivisasUSD = startCashUsd + getMethodTotal('Efectivo ($)');
+  const myDivisasUSD = getMethodTotal('Efectivo ($)');
   const myZelle = getMethodTotal('Zelle');
 
   // Desglose de pagos digitales (validando porciones exactas en pagos mixtos)
   const digitalValidadosUsd = myMovements
     .filter(t => t.tipo === 'Ingreso' && t.validado === 1)
     .reduce((s, t) => {
-      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
       const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
       const digSum = breakdown.channels.filter(c => c.isDigital).reduce((cs, c) => cs + c.amountUsd, 0);
       return s + digSum;
@@ -473,7 +481,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const digitalPendientesUsd = myMovements
     .filter(t => t.tipo === 'Ingreso' && (!t.validado || t.validado === 0))
     .reduce((s, t) => {
-      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
       const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
       const digSum = breakdown.channels.filter(c => c.isDigital).reduce((cs, c) => cs + c.amountUsd, 0);
       return s + digSum;
@@ -483,8 +491,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     .filter(t => t.tipo === 'Egreso')
     .reduce((sum, t) => sum + parseFloat(t.monto), 0);
 
-  const myTotalIngresos = myEfectivoVES + myPagoMovil + myPuntoVenta + myDivisasUSD + myZelle;
+  const myTotalIngresos = myEfectivoVES.usd + myPagoMovil.usd + myPuntoVenta.usd + myDivisasUSD.usd + myZelle.usd;
+  const myTotalIngresosVes = myEfectivoVES.ves + myPagoMovil.ves + myPuntoVenta.ves + myDivisasUSD.ves + myZelle.ves;
   const mySaldoNeto = myTotalIngresos - myEgresos;
+  const mySaldoNetoVes = myTotalIngresosVes - (myEgresos * tasaUsd);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -647,9 +657,9 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          totalEfectivo: myEfectivoVES,
-          totalTarjeta: myPuntoVenta,
-          totalOtros: myPagoMovil + myDivisasUSD + myZelle,
+          totalEfectivo: myEfectivoVES.usd,
+          totalTarjeta: myPuntoVenta.usd,
+          totalOtros: myPagoMovil.usd + myDivisasUSD.usd + myZelle.usd,
           totalEgresos: myEgresos,
           saldoNeto: mySaldoNeto
         })
@@ -1340,8 +1350,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-money-bill-wave text-emerald-600"></i> Efectivo (Bs):
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">Bs. {(myEfectivoVES * tasaUsd).toFixed(2)}</span>
-                  <span className="text-[9px] text-slate-400 block">~ ${myEfectivoVES.toFixed(2)} USD</span>
+                  <span className="font-black text-slate-800 block">Bs. {myEfectivoVES.ves.toFixed(2)}</span>
+                  <span className="text-[9px] text-slate-400 block">~ ${myEfectivoVES.usd.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -1350,8 +1360,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-dollar-sign text-amber-600"></i> Efectivo ($):
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myDivisasUSD.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myDivisasUSD * tasaUsd).toFixed(2)}</span>
+                  <span className="font-black text-slate-800 block">${myDivisasUSD.usd.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {myDivisasUSD.ves.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1364,8 +1374,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-mobile-screen-button text-purple-600"></i> Pago Móvil:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">Bs. {(myPagoMovil * tasaUsd).toFixed(2)}</span>
-                  <span className="text-[9px] text-slate-400 block">~ ${myPagoMovil.toFixed(2)} USD</span>
+                  <span className="font-black text-slate-800 block">Bs. {myPagoMovil.ves.toFixed(2)}</span>
+                  <span className="text-[9px] text-slate-400 block">~ ${myPagoMovil.usd.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -1374,8 +1384,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-credit-card text-blue-600"></i> Punto de Venta:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">Bs. {(myPuntoVenta * tasaUsd).toFixed(2)}</span>
-                  <span className="text-[9px] text-slate-400 block">~ ${myPuntoVenta.toFixed(2)} USD</span>
+                  <span className="font-black text-slate-800 block">Bs. {myPuntoVenta.ves.toFixed(2)}</span>
+                  <span className="text-[9px] text-slate-400 block">~ ${myPuntoVenta.usd.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -1384,8 +1394,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-coins text-amber-500"></i> Zelle:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myZelle.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {(myZelle * tasaUsd).toFixed(2)}</span>
+                  <span className="font-black text-slate-800 block">${myZelle.usd.toFixed(2)} USD</span>
+                  <span className="text-[9px] text-slate-400 block">~ Bs. {myZelle.ves.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1418,7 +1428,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                     ${mySaldoNeto.toFixed(2)} USD
                   </span>
                   <span className="text-xs font-bold text-amber-700 block">
-                    ~ Bs. {(mySaldoNeto * tasaUsd).toFixed(2)}
+                    ~ Bs. {mySaldoNetoVes.toFixed(2)}
                   </span>
                 </div>
               </div>
