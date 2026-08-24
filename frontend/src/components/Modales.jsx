@@ -452,7 +452,9 @@ export function AsignarDirectoModal({
           refs.push(pagosMixtosChannels.zelleRef.trim());
         }
 
-        finalMetodoStr = `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ') || 'N/A'}`;
+        finalMetodoStr = refs.length > 0 
+          ? `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ')}`
+          : `Pago Mixto (${parts.join(' + ')})`;
       } else if (isDigital && codigoVerificacion.trim()) {
         finalMetodoStr = `${metodo} - Ref: ${codigoVerificacion}`;
       }
@@ -2958,7 +2960,9 @@ export function CheckoutModal({
         refs.push(pagosMixtosChannels.zelleRef.trim());
       }
 
-      finalMetodoPago = `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ') || 'N/A'}`;
+      finalMetodoPago = refs.length > 0 
+        ? `Pago Mixto (${parts.join(' + ')}) - Ref: ${refs.join(' / ')}`
+        : `Pago Mixto (${parts.join(' + ')})`;
     } else if (isDigital && codigoVerificacionCheckout.trim()) {
       finalMetodoPago = `${metodoPago} - Ref: ${codigoVerificacionCheckout}`;
     }

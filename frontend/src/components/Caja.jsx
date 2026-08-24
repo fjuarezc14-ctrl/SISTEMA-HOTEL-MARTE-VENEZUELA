@@ -57,11 +57,20 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const isDigitalPayment = (m) => {
     if (!m) return false;
     const str = m.toLowerCase();
+
+    // Pago Mixto check: is digital only if it contains digital channels (pago móvil, punto, zelle)
+    if (str.includes('pago mixto') || str.includes('mixto')) {
+      return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle');
+    }
+
     // Pure physical cash is never digital
-    if ((str === 'efectivo ($)' || str === 'efectivo (bs)' || str === 'efectivo bolívares') && !str.includes('ref:')) {
+    if (str === 'efectivo ($)' || str === 'efectivo (bs)' || str === 'efectivo bolívares' || str === 'efectivo') {
       return false;
     }
-    return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('ref:');
+
+    const hasDigitalMethod = str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle');
+    const hasRealRef = str.includes('ref:') && !str.includes('ref: n/a') && !str.includes('ref: -') && !str.includes('ref: none');
+    return hasDigitalMethod || hasRealRef;
   };
 
   // Helper function to separate method name from reference code (handles all formats: dash, parens, colons)
@@ -181,6 +190,13 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       refsList,
       hasDigital
     };
+  };
+
+  // Helper to determine if a full transaction is digital (handles both single and mixed methods)
+  const isTransactionDigital = (t) => {
+    if (!t || !t.metodo) return false;
+    const b = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, tasaUsd);
+    return b.isMixto ? b.hasDigital : b.isDigital;
   };
 
   // Shift closure modal state
@@ -362,12 +378,12 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
 
   // Secondary subfilter for digital payments validation
   if (valFilter === 'pending') {
-    displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0));
+    displayedCaja = displayedCaja.filter(t => isTransactionDigital(t) && (!t.validado || t.validado === 0));
     if (valRecepFilter !== 'TODOS') {
       displayedCaja = displayedCaja.filter(t => (t.usuarioNombre || '').trim().toLowerCase() === valRecepFilter.trim().toLowerCase());
     }
   } else if (valFilter === 'validated') {
-    displayedCaja = displayedCaja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1);
+    displayedCaja = displayedCaja.filter(t => isTransactionDigital(t) && t.validado === 1);
     if (valRecepFilter !== 'TODOS') {
       displayedCaja = displayedCaja.filter(t => (t.usuarioNombre || '').trim().toLowerCase() === valRecepFilter.trim().toLowerCase());
     }
@@ -760,7 +776,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           }`}
         >
           <i className="fa-solid fa-clock text-[10px] mr-1"></i>
-          Pendientes de Validación Superadmin ({caja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0)).length})
+          Pendientes de Validación Superadmin ({caja.filter(t => isTransactionDigital(t) && (!t.validado || t.validado === 0)).length})
         </button>
         <button
           onClick={() => setValFilter('validated')}
@@ -769,7 +785,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           }`}
         >
           <i className="fa-solid fa-circle-check text-[10px] mr-1"></i>
-          Validados por Superadmin ({caja.filter(t => isDigitalPayment(t.metodo) && t.validado === 1).length})
+          Validados por Superadmin ({caja.filter(t => isTransactionDigital(t) && t.validado === 1).length})
         </button>
 
         {/* Dropdown to filter pending validations by receptionist (Admin/Superadmin only) */}
@@ -783,14 +799,14 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               onChange={(e) => setValRecepFilter(e.target.value)}
               className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
             >
-              <option value="TODOS">Todos ({caja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0)).length})</option>
+              <option value="TODOS">Todos ({caja.filter(t => isTransactionDigital(t) && (!t.validado || t.validado === 0)).length})</option>
               {Array.from(new Set(
                 (caja || [])
-                  .filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0))
+                  .filter(t => isTransactionDigital(t) && (!t.validado || t.validado === 0))
                   .map(t => t.usuarioNombre)
                   .filter(Boolean)
               )).map(r => {
-                const count = caja.filter(t => isDigitalPayment(t.metodo) && (!t.validado || t.validado === 0) && (t.usuarioNombre || '').trim().toLowerCase() === r.trim().toLowerCase()).length;
+                const count = caja.filter(t => isTransactionDigital(t) && (!t.validado || t.validado === 0) && (t.usuarioNombre || '').trim().toLowerCase() === r.trim().toLowerCase()).length;
                 return (
                   <option key={r} value={r}>
                     {r} ({count})
