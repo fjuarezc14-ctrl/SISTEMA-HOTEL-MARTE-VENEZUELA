@@ -18,14 +18,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   // Check if current user is admin
   const isAdmin = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin');
 
-  // Filter state ('today' = Operaciones de hoy por defecto para Admin, 'mine' = Mi Turno Activo para recepcionistas, 'all' = Histórico General)
-  const [filterMode, setFilterMode] = useState(() => (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) ? 'today' : 'mine');
-  
-  useEffect(() => {
-    if (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) {
-      setFilterMode('today');
-    }
-  }, [currentUser]);
+  // Filter mode state ('shift' = Turno Activo 8am-8am por defecto, vs 'all' = Histórico General)
+  const [filterMode, setFilterMode] = useState('shift');
+  // Admin audit selector for specific receptionist ('TODOS' | name)
+  const [selectedRecepAudit, setSelectedRecepAudit] = useState('TODOS');
 
   // Origen filter ('Todos', 'Hospedaje', 'Market', 'Egresos')
   const [tabMode, setTabMode] = useState('Todos');
@@ -394,26 +390,25 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     document.body.removeChild(link);
   };
 
-  // Filter caja list by Filter Mode (strictly force 'mine' for non-admin/supervisor)
+  // Filter caja list by Filter Mode (strictly force 'shift' for non-admin/supervisor)
   const isStrictReceptionist = !isAdminOrSupervisor;
-  const activeFilterMode = isStrictReceptionist ? 'mine' : filterMode;
-
-  const nowDate = new Date();
-  const startOfToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), 0, 0, 0);
+  const activeFilterMode = isStrictReceptionist ? 'shift' : filterMode;
 
   let displayedCaja = [...caja];
-  if (activeFilterMode === 'today') {
+  if (activeFilterMode === 'shift') {
     displayedCaja = displayedCaja.filter(t => {
       if (t.tipo === 'Cierre') return false; // Hide system closure markers
-      if (!t.hora) return true;
-      const tDate = parseCajaFecha(t.hora);
-      return tDate >= startOfToday;
-    });
-  } else if (activeFilterMode === 'mine' && currentUser) {
-    displayedCaja = displayedCaja.filter(t => {
-      if (t.tipo === 'Cierre') return false; // Hide system closure markers from list
-      const matchesUser = (t.usuarioId === currentUser.id) || (t.usuarioNombre && currentUser.nombre && t.usuarioNombre.trim().toLowerCase() === currentUser.nombre.trim().toLowerCase());
-      if (!matchesUser) return false;
+      
+      // Receptionist strict scoping
+      if (isStrictReceptionist && currentUser) {
+        const matchesUser = (t.usuarioId === currentUser.id) || (t.usuarioNombre && currentUser.nombre && t.usuarioNombre.trim().toLowerCase() === currentUser.nombre.trim().toLowerCase());
+        if (!matchesUser) return false;
+      } else if (selectedRecepAudit !== 'TODOS') {
+        // Admin auditing specific receptionist
+        const matchesRecep = t.usuarioNombre && t.usuarioNombre.trim().toLowerCase() === selectedRecepAudit.trim().toLowerCase();
+        if (!matchesRecep) return false;
+      }
+
       if (t.hora) {
         const tDate = parseCajaFecha(t.hora);
         return tDate >= shiftCutoffTime;
@@ -421,8 +416,14 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       return true;
     });
   } else {
-    // 'all' mode: hide internal closure markers
-    displayedCaja = displayedCaja.filter(t => t.tipo !== 'Cierre');
+    // 'all' mode (Histórico General): hide internal closure markers
+    displayedCaja = displayedCaja.filter(t => {
+      if (t.tipo === 'Cierre') return false;
+      if (selectedRecepAudit !== 'TODOS') {
+        return t.usuarioNombre && t.usuarioNombre.trim().toLowerCase() === selectedRecepAudit.trim().toLowerCase();
+      }
+      return true;
+    });
   }
 
   // Filter by Tab: Origen / Type ('Todos', 'Hospedaje', 'Market', 'Egresos')
@@ -810,31 +811,40 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
         <div className="flex flex-wrap items-center gap-3">
           {/* User scope selector - visible only for Admin/Supervisor */}
           {isAdminOrSupervisor && (
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-              <button
-                onClick={() => setFilterMode('today')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filterMode === 'today' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <i className="fa-solid fa-calendar-day mr-1"></i> Operaciones de Hoy
-              </button>
-              <button
-                onClick={() => setFilterMode('mine')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filterMode === 'mine' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <i className="fa-solid fa-user-clock mr-1"></i> Mi Turno Activo
-              </button>
-              <button
-                onClick={() => setFilterMode('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filterMode === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <i className="fa-solid fa-layer-group mr-1"></i> Histórico General
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  onClick={() => setFilterMode('shift')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    filterMode === 'shift' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <i className="fa-solid fa-clock mr-1"></i> Turno Activo (8am - 8am)
+                </button>
+                <button
+                  onClick={() => setFilterMode('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    filterMode === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <i className="fa-solid fa-layer-group mr-1"></i> Histórico General
+                </button>
+              </div>
+
+              {/* Receptionist Audit Dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
+                <i className="fa-solid fa-user-check text-slate-400 text-xs"></i>
+                <select
+                  value={selectedRecepAudit}
+                  onChange={(e) => setSelectedRecepAudit(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="TODOS">Todos los Recepcionistas</option>
+                  {Array.from(new Set((caja || []).map(t => t.usuarioNombre).filter(Boolean))).map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
@@ -948,7 +958,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Resumen Operativo en Divisas ($ USD)
             </h4>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-              {activeFilterMode === 'today' ? 'Hoy' : activeFilterMode === 'mine' ? 'Mi Turno' : 'Histórico General'}
+              {activeFilterMode === 'shift' ? (selectedRecepAudit !== 'TODOS' ? `Turno Activo (${selectedRecepAudit})` : 'Turno Activo') : 'Histórico General'}
             </span>
           </div>
 
@@ -975,7 +985,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Resumen Operativo en Bolívares (Bs. VES)
             </h4>
             <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
-              {activeFilterMode === 'today' ? 'Hoy' : activeFilterMode === 'mine' ? 'Mi Turno' : 'Histórico General'}
+              {activeFilterMode === 'shift' ? (selectedRecepAudit !== 'TODOS' ? `Turno Activo (${selectedRecepAudit})` : 'Turno Activo') : 'Histórico General'}
             </span>
           </div>
 
