@@ -488,16 +488,20 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return 0;
   });
 
-  // Agrupar por turno
+  // Agrupar por turno con desglose bimonetario nativo
   const turnosOrden = ['Mañana', 'Tarde', 'Noche'];
   const recepPorTurno = turnosOrden.map(turno => {
     const txns = sortedRecepTransactions.filter(t => t.turno === turno);
-    const ingresos = txns.filter(t => t.tipo === 'Ingreso').reduce((s, t) => s + t.montoNum, 0);
-    const egresos = txns.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + t.montoNum, 0);
+    const ingresos = sumAmounts(txns.filter(t => t.tipo === 'Ingreso'));
+    const egresos = sumAmounts(txns.filter(t => t.tipo === 'Egreso'));
     const checkIns = txns.filter(t => t.tipoTransaccion === 'Check In').length;
     const checkOuts = txns.filter(t => t.tipoTransaccion === 'Check Out').length;
-    const market = txns.filter(t => t.tipoTransaccion === 'Market').reduce((s, t) => s + t.montoNum, 0);
-    return { turno, txns, ingresos, egresos, checkIns, checkOuts, market, total: ingresos - egresos };
+    const market = sumAmounts(txns.filter(t => t.tipoTransaccion === 'Market'));
+    const total = {
+      usd: ingresos.usd - egresos.usd,
+      ves: ingresos.ves - egresos.ves
+    };
+    return { turno, txns, ingresos, egresos, checkIns, checkOuts, market, total };
   }).filter(g => g.txns.length > 0);
 
   const totalIngresosRecepBimoneda = sumAmounts(recepTransactions.filter(t => t.tipo === 'Ingreso'));
