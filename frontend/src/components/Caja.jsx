@@ -18,12 +18,12 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   // Check if current user is admin
   const isAdmin = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin');
 
-  // Filter state ('all' = Todos los movimientos por defecto para Admin, vs 'mine' = Mi Turno Activo para recepcionistas)
-  const [filterMode, setFilterMode] = useState(() => (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) ? 'all' : 'mine');
+  // Filter state ('today' = Operaciones de hoy por defecto para Admin, 'mine' = Mi Turno Activo para recepcionistas, 'all' = Histórico General)
+  const [filterMode, setFilterMode] = useState(() => (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) ? 'today' : 'mine');
   
   useEffect(() => {
     if (currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Super Admin' || currentUser.rol === 'Superadmin')) {
-      setFilterMode('all');
+      setFilterMode('today');
     }
   }, [currentUser]);
 
@@ -394,8 +394,18 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const isStrictReceptionist = !isAdminOrSupervisor;
   const activeFilterMode = isStrictReceptionist ? 'mine' : filterMode;
 
+  const nowDate = new Date();
+  const startOfToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), 0, 0, 0);
+
   let displayedCaja = [...caja];
-  if (activeFilterMode === 'mine' && currentUser) {
+  if (activeFilterMode === 'today') {
+    displayedCaja = displayedCaja.filter(t => {
+      if (t.tipo === 'Cierre') return false; // Hide system closure markers
+      if (!t.hora) return true;
+      const tDate = parseCajaFecha(t.hora);
+      return tDate >= startOfToday;
+    });
+  } else if (activeFilterMode === 'mine' && currentUser) {
     displayedCaja = displayedCaja.filter(t => {
       if (t.tipo === 'Cierre') return false; // Hide system closure markers from list
       const matchesUser = (t.usuarioId === currentUser.id) || (t.usuarioNombre && currentUser.nombre && t.usuarioNombre.trim().toLowerCase() === currentUser.nombre.trim().toLowerCase());
@@ -798,20 +808,28 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           {isAdminOrSupervisor && (
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
-                onClick={() => setFilterMode('all')}
+                onClick={() => setFilterMode('today')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filterMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  filterMode === 'today' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <i className="fa-solid fa-list-check mr-1"></i> Todos los Movimientos
+                <i className="fa-solid fa-calendar-day mr-1"></i> Operaciones de Hoy
               </button>
               <button
                 onClick={() => setFilterMode('mine')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  filterMode === 'mine' ? 'bg-[#ff331f] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  filterMode === 'mine' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <i className="fa-solid fa-user-clock mr-1"></i> Mi Turno Activo
+              </button>
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  filterMode === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <i className="fa-solid fa-layer-group mr-1"></i> Histórico General
               </button>
             </div>
           )}
@@ -926,7 +944,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Resumen Operativo en Divisas ($ USD)
             </h4>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-              {filterMode === 'mine' ? 'Mi Turno' : 'General'}
+              {activeFilterMode === 'today' ? 'Hoy' : activeFilterMode === 'mine' ? 'Mi Turno' : 'Histórico General'}
             </span>
           </div>
 
@@ -953,7 +971,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Resumen Operativo en Bolívares (Bs. VES)
             </h4>
             <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
-              {filterMode === 'mine' ? 'Mi Turno' : 'General'}
+              {activeFilterMode === 'today' ? 'Hoy' : activeFilterMode === 'mine' ? 'Mi Turno' : 'Histórico General'}
             </span>
           </div>
 
