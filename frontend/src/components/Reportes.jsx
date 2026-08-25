@@ -738,71 +738,89 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
             </div>
           </div>
 
-          {/* KPIs generales */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-emerald-200 border-l-4 border-l-emerald-500">
-              <p className="text-[10px] font-bold text-emerald-600 uppercase">Total Ingresos</p>
-              <div className="space-y-0.5 mt-1">
-                <p className="text-xl font-black text-slate-800">${totalIngresosRecepBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
-                <p className="text-xs font-bold text-emerald-700">Bs. {totalIngresosRecepBimoneda.ves.toFixed(2)} <span className="text-[10px] text-emerald-600 font-semibold">VES</span></p>
+          {/* Financial KPIs Overview - Estándar Bimonetario Nativo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4">
+            {/* Bloque DIVISAS ($ USD) */}
+            <div className="bg-emerald-50/70 p-4 rounded-2xl border-2 border-emerald-300 shadow-sm">
+              <h4 className="text-xs font-black text-emerald-800 uppercase flex items-center gap-1.5 mb-3 border-b border-emerald-200 pb-2">
+                <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Operaciones en Divisas ($ USD)
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos USD</p>
+                  <p className="text-base font-black text-emerald-700 mt-0.5">${totalIngresosRecepBimoneda.usd.toFixed(2)}</p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos USD</p>
+                  <p className="text-base font-black text-rose-600 mt-0.5">-${totalEgresosRecepBimoneda.usd.toFixed(2)}</p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-emerald-100 shadow-2xs">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Market USD</p>
+                  <p className="text-base font-black text-amber-600 mt-0.5">${totalMarketRecepBimoneda.usd.toFixed(2)}</p>
+                </div>
+                <div className="bg-emerald-700 p-2.5 rounded-xl text-white shadow-2xs">
+                  <p className="text-[9px] font-bold text-emerald-200 uppercase">Neto USD</p>
+                  <p className="text-base font-black text-white mt-0.5">${(totalIngresosRecepBimoneda.usd - totalEgresosRecepBimoneda.usd).toFixed(2)}</p>
+                </div>
               </div>
             </div>
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-rose-200 border-l-4 border-l-rose-500">
-              <p className="text-[10px] font-bold text-rose-600 uppercase">Total Egresos</p>
-              <div className="space-y-0.5 mt-1">
-                <p className="text-xl font-black text-slate-800">-${totalEgresosRecepBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
-                <p className="text-xs font-bold text-rose-600">-Bs. {totalEgresosRecepBimoneda.ves.toFixed(2)} <span className="text-[10px] text-rose-500 font-semibold">VES</span></p>
-              </div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-blue-200 border-l-4 border-l-blue-500">
-              <p className="text-[10px] font-bold text-blue-600 uppercase">Check In / Check Out</p>
-              <p className="text-xl font-black text-slate-800 mt-1">{totalCheckIns} / {totalCheckOuts}</p>
-              <p className="text-[10px] text-slate-400 font-bold">Ingresos / Egresos de huéspedes</p>
-            </div>
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-amber-200 border-l-4 border-l-amber-500">
-              <p className="text-[10px] font-bold text-amber-600 uppercase">Total Market</p>
-              <div className="space-y-0.5 mt-1">
-                <p className="text-xl font-black text-slate-800">${totalMarketRecepBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
-                <p className="text-xs font-bold text-amber-600">Bs. {totalMarketRecepBimoneda.ves.toFixed(2)} <span className="text-[10px] text-amber-500 font-semibold">VES</span></p>
+
+            {/* Bloque BOLÍVARES (Bs. VES) */}
+            <div className="bg-blue-50/70 p-4 rounded-2xl border-2 border-blue-300 shadow-sm">
+              <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-1.5 mb-3 border-b border-blue-200 pb-2">
+                <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Operaciones en Bolívares (Bs. VES)
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos VES</p>
+                  <p className="text-base font-black text-blue-700 mt-0.5">Bs. {totalIngresosRecepBimoneda.ves.toFixed(2)}</p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos VES</p>
+                  <p className="text-base font-black text-rose-600 mt-0.5">-Bs. {totalEgresosRecepBimoneda.ves.toFixed(2)}</p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">Market VES</p>
+                  <p className="text-base font-black text-amber-600 mt-0.5">Bs. {totalMarketRecepBimoneda.ves.toFixed(2)}</p>
+                </div>
+                <div className="bg-blue-700 p-2.5 rounded-xl text-white shadow-2xs">
+                  <p className="text-[9px] font-bold text-blue-200 uppercase">Neto VES</p>
+                  <p className="text-base font-black text-white mt-0.5">Bs. {(totalIngresosRecepBimoneda.ves - totalEgresosRecepBimoneda.ves).toFixed(2)}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Desglose por Método de Pago en el Reporte */}
+          {/* Desglose por Método de Pago en el Reporte (Sin etiquetas de conversión secundarias) */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 my-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-money-bill-wave text-emerald-600 mr-1"></i> Efectivo (Bs)</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1"><i className="fa-solid fa-money-bill-wave text-emerald-600 mr-1"></i> Efectivo (Bs)</span>
               <div>
                 <span className="font-black text-slate-800 text-sm block">Bs. {getMethodTotalRecep('Efectivo (Bs)').ves.toFixed(2)}</span>
-                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Efectivo (Bs)').usd.toFixed(2)} USD</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-dollar-sign text-amber-600 mr-1"></i> Efectivo ($)</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1"><i className="fa-solid fa-dollar-sign text-amber-600 mr-1"></i> Efectivo ($)</span>
               <div>
                 <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Efectivo ($)').usd.toFixed(2)} USD</span>
-                <span className="text-[9px] text-slate-400 block">~ Bs. {getMethodTotalRecep('Efectivo ($)').ves.toFixed(2)}</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-mobile-screen-button text-purple-600 mr-1"></i> Pago Móvil</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1"><i className="fa-solid fa-mobile-screen-button text-purple-600 mr-1"></i> Pago Móvil</span>
               <div>
                 <span className="font-black text-slate-800 text-sm block">Bs. {getMethodTotalRecep('Pago Móvil').ves.toFixed(2)}</span>
-                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Pago Móvil').usd.toFixed(2)} USD</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-credit-card text-blue-600 mr-1"></i> Punto de Venta</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1"><i className="fa-solid fa-credit-card text-blue-600 mr-1"></i> Punto de Venta</span>
               <div>
                 <span className="font-black text-slate-800 text-sm block">Bs. {getMethodTotalRecep('Punto de Venta').ves.toFixed(2)}</span>
-                <span className="text-[9px] text-slate-400 block">~ ${getMethodTotalRecep('Punto de Venta').usd.toFixed(2)} USD</span>
               </div>
             </div>
             <div className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col justify-between shadow-2xs">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block"><i className="fa-solid fa-coins text-amber-500 mr-1"></i> Zelle</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1"><i className="fa-solid fa-coins text-amber-500 mr-1"></i> Zelle</span>
               <div>
                 <span className="font-black text-slate-800 text-sm block">${getMethodTotalRecep('Zelle').usd.toFixed(2)} USD</span>
-                <span className="text-[9px] text-slate-400 block">~ Bs. {getMethodTotalRecep('Zelle').ves.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -825,30 +843,22 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                     <p className="text-[10px] font-bold text-slate-500">{sortedRecepTransactions.length} transacciones en el período</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-3 text-center">
-                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos</p>
-                    <p className="text-xs font-black text-emerald-600">${totalIngresosRecep.toFixed(2)}</p>
+                <div className="flex flex-wrap gap-2 text-center">
+                  <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Ingresos</p>
+                    <p className="text-xs font-black text-emerald-600">${totalIngresosRecepBimoneda.usd.toFixed(2)} / Bs. {totalIngresosRecepBimoneda.ves.toFixed(2)}</p>
                   </div>
-                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos</p>
-                    <p className="text-xs font-black text-rose-600">${totalEgresosRecep.toFixed(2)}</p>
+                  <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Egresos</p>
+                    <p className="text-xs font-black text-rose-600">-${totalEgresosRecepBimoneda.usd.toFixed(2)} / -Bs. {totalEgresosRecepBimoneda.ves.toFixed(2)}</p>
                   </div>
-                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Check In</p>
-                    <p className="text-xs font-black text-blue-600">{totalCheckIns}</p>
-                  </div>
-                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Check Out</p>
-                    <p className="text-xs font-black text-indigo-600">{totalCheckOuts}</p>
-                  </div>
-                  <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Market</p>
-                    <p className="text-xs font-black text-amber-600">${totalMarketRecep.toFixed(2)}</p>
+                  <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Check In/Out</p>
+                    <p className="text-xs font-black text-blue-600">{totalCheckIns} / {totalCheckOuts}</p>
                   </div>
                   <div className="bg-slate-800 px-3 py-1.5 rounded-lg">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Neto</p>
-                    <p className="text-xs font-black text-white">${(totalIngresosRecep - totalEgresosRecep).toFixed(2)}</p>
+                    <p className="text-[8px] font-bold text-slate-300 uppercase">Neto Real</p>
+                    <p className="text-xs font-black text-white">${(totalIngresosRecepBimoneda.usd - totalEgresosRecepBimoneda.usd).toFixed(2)} / Bs. {(totalIngresosRecepBimoneda.ves - totalEgresosRecepBimoneda.ves).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
