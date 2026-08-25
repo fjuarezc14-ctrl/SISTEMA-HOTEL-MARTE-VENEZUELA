@@ -950,61 +950,85 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       </div>
 
       {/* Financial KPIs Overview - Estándar Bimonetario Nativo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Bloque DIVISAS ($ USD) */}
-        <div className="bg-emerald-50/70 p-4.5 rounded-2xl border-2 border-emerald-300 shadow-sm">
-          <div className="flex justify-between items-center mb-3 border-b border-emerald-200/80 pb-2">
-            <h4 className="text-xs font-black text-emerald-800 uppercase flex items-center gap-1.5">
-              <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Resumen Operativo en Divisas ($ USD)
-            </h4>
-            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-              {activeFilterMode === 'shift' ? (selectedRecepAudit !== 'TODOS' ? `Turno Activo (${selectedRecepAudit})` : 'Turno Activo') : 'Histórico General'}
-            </span>
+      {activeFilterMode === 'all' ? (
+        <div className="bg-slate-100/90 border-2 border-dashed border-slate-300 p-5 rounded-2xl text-center flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-12 h-12 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-xl shrink-0 shadow-sm">
+              <i className="fa-solid fa-lock"></i>
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                Totales Operativos Bloqueados <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">Histórico General</span>
+              </h4>
+              <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                Para evitar confusiones en el arqueo del turno, los montos totales globales están bloqueados. Puedes consultar el historial de movimientos abajo.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setFilterMode('shift')}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-black px-4 py-2 rounded-xl text-xs shadow-sm transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+          >
+            <i className="fa-solid fa-clock"></i> Ver Totales de Turno Activo
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Bloque DIVISAS ($ USD) */}
+          <div className="bg-emerald-50/70 p-4.5 rounded-2xl border-2 border-emerald-300 shadow-sm">
+            <div className="flex justify-between items-center mb-3 border-b border-emerald-200/80 pb-2">
+              <h4 className="text-xs font-black text-emerald-800 uppercase flex items-center gap-1.5">
+                <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Resumen Operativo en Divisas ($ USD)
+              </h4>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                {activeFilterMode === 'shift' ? (selectedRecepAudit !== 'TODOS' ? `Turno Activo (${selectedRecepAudit})` : 'Turno Activo') : 'Histórico General'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos USD</p>
+                <p className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">${totalIngresosBimoneda.usd.toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos USD</p>
+                <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-${totalEgresosBimoneda.usd.toFixed(2)}</p>
+              </div>
+              <div className="bg-emerald-700 p-3 rounded-xl text-white shadow-2xs">
+                <p className="text-[9px] font-bold text-emerald-200 uppercase">Neto USD</p>
+                <p className="text-base sm:text-lg font-black text-white mt-0.5">${totalNetoBimoneda.usd.toFixed(2)}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos USD</p>
-              <p className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">${totalIngresosBimoneda.usd.toFixed(2)}</p>
+          {/* Bloque BOLÍVARES (Bs. VES) */}
+          <div className="bg-blue-50/70 p-4.5 rounded-2xl border-2 border-blue-300 shadow-sm">
+            <div className="flex justify-between items-center mb-3 border-b border-blue-200/80 pb-2">
+              <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-1.5">
+                <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Resumen Operativo en Bolívares (Bs. VES)
+              </h4>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
+                {activeFilterMode === 'shift' ? (selectedRecepAudit !== 'TODOS' ? `Turno Activo (${selectedRecepAudit})` : 'Turno Activo') : 'Histórico General'}
+              </span>
             </div>
-            <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos USD</p>
-              <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-${totalEgresosBimoneda.usd.toFixed(2)}</p>
-            </div>
-            <div className="bg-emerald-700 p-3 rounded-xl text-white shadow-2xs">
-              <p className="text-[9px] font-bold text-emerald-200 uppercase">Neto USD</p>
-              <p className="text-base sm:text-lg font-black text-white mt-0.5">${totalNetoBimoneda.usd.toFixed(2)}</p>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos VES</p>
+                <p className="text-base sm:text-lg font-black text-blue-700 mt-0.5">Bs. {totalIngresosBimoneda.ves.toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos VES</p>
+                <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-Bs. {totalEgresosBimoneda.ves.toFixed(2)}</p>
+              </div>
+              <div className="bg-blue-800 p-3 rounded-xl text-white shadow-2xs">
+                <p className="text-[9px] font-bold text-blue-200 uppercase">Neto VES</p>
+                <p className="text-base sm:text-lg font-black text-white mt-0.5">Bs. {totalNetoBimoneda.ves.toFixed(2)}</p>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Bloque BOLÍVARES (Bs. VES) */}
-        <div className="bg-blue-50/70 p-4.5 rounded-2xl border-2 border-blue-300 shadow-sm">
-          <div className="flex justify-between items-center mb-3 border-b border-blue-200/80 pb-2">
-            <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-1.5">
-              <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Resumen Operativo en Bolívares (Bs. VES)
-            </h4>
-            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
-              {activeFilterMode === 'shift' ? (selectedRecepAudit !== 'TODOS' ? `Turno Activo (${selectedRecepAudit})` : 'Turno Activo') : 'Histórico General'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos VES</p>
-              <p className="text-base sm:text-lg font-black text-blue-700 mt-0.5">Bs. {totalIngresosBimoneda.ves.toFixed(2)}</p>
-            </div>
-            <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos VES</p>
-              <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-Bs. {totalEgresosBimoneda.ves.toFixed(2)}</p>
-            </div>
-            <div className="bg-blue-800 p-3 rounded-xl text-white shadow-2xs">
-              <p className="text-[9px] font-bold text-blue-200 uppercase">Neto VES</p>
-              <p className="text-base sm:text-lg font-black text-white mt-0.5">Bs. {totalNetoBimoneda.ves.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Movements History */}
