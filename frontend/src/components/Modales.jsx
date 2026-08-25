@@ -383,6 +383,16 @@ export function AsignarDirectoModal({
         return;
       }
 
+      if (!fechaNacimientoTitular) {
+        setFormError('⚠️ Debe ingresar la Fecha de Nacimiento del Titular para verificar mayoría de edad (+18 años).');
+        return;
+      }
+
+      if (isTitularMenor) {
+        setFormError(`⚠️ Check-In Bloqueado: El titular principal (${edadTitular} años) es menor de edad. El titular responsable debe tener al menos 18 años.`);
+        return;
+      }
+
       // Digital verification code check
       const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodo);
       if (isDigital && !codigoVerificacion.trim()) {
@@ -502,7 +512,7 @@ export function AsignarDirectoModal({
         dni: ci.trim(),
         nombre: nombre.trim(),
         tel: tel.trim(),
-        fechaNacimientoTitular: fechaNacimientoTitular || '2000-01-01',
+        fechaNacimientoTitular: fechaNacimientoTitular,
         nomAcomp: acompNombres,
         ciAcomp: acompanantes.map(a => a.ci).join(', '),
         acompanantes,
@@ -1306,23 +1316,36 @@ export function NuevaReservaModal({
   });
 
   // Calculate Base stay price according to modality & room category from dynamic tariffs
-  const getStayBasePrice = (type, mod) => {
+  const habObj = (habitaciones || []).find(h => String(h.num) === String(selectedHabNum));
+  const currentCategory = habObj ? habObj.tipo : (selectedHabTipo || 'Matrimonial');
+
+  const getStayBasePrice = (hab, type, mod) => {
+    if (hab) {
+      if (mod === 'pernocta' && (hab.precio_pernocta || hab.precio_usd || hab.precio)) {
+        return parseFloat(hab.precio_pernocta || hab.precio_usd || hab.precio);
+      }
+      if (mod === '4h' && (hab.precio_4h || hab.precio_usd)) {
+        return parseFloat(hab.precio_4h || hab.precio_usd);
+      }
+    }
     const rate = (tarifas || []).find(t => t.tipo === type);
     if (rate) {
       if (mod === 'pernocta') {
-        return parseFloat(rate.precio_pernocta_usd || rate.precio_diario) || 20;
+        return parseFloat(rate.precio_pernocta_usd || rate.precio_diario || rate.precio_usd) || 20;
       } else {
-        return parseFloat(rate.precio_4h_usd) || 10;
+        return parseFloat(rate.precio_4h_usd || rate.precio_usd) || 10;
       }
     }
     if (type === 'Mini Suite') {
       return mod === 'pernocta' ? 24 : 14;
     }
+    if (type === 'Suite' || type === 'Suite Presidencial') {
+      return mod === 'pernocta' ? 30 : 18;
+    }
     return mod === 'pernocta' ? 20 : 10;
   };
 
-  const currentCategory = modalidad === '4h' ? selectedHabTipo : (selectedHabTipo || 'Matrimonial');
-  const baseStayPricePerNight = getStayBasePrice(currentCategory, modalidad);
+  const baseStayPricePerNight = getStayBasePrice(habObj, currentCategory, modalidad);
 
   // Compute Pernocta Stay Nights
   const calculateNoches = () => {
@@ -1777,7 +1800,7 @@ export function NuevaReservaModal({
               {modalidad === '4h' && (
                 <div className="text-[11px] font-bold text-emerald-800 flex items-center justify-between border-t border-emerald-100 pt-2">
                   <span>Duración de Reserva: <strong>4 Horas</strong></span>
-                  <span>Tarifa por Categoría ({selectedHabTipo}): <strong>${(selectedHabTipo === 'Mini Suite' ? 14 : 10).toFixed(2)} USD</strong></span>
+                  <span>Tarifa 4 Horas ({currentCategory}): <strong>${baseStayPricePerNight.toFixed(2)} USD</strong></span>
                 </div>
               )}
             </div>
@@ -2900,7 +2923,7 @@ export function CheckoutModal({
     e.preventDefault();
     if (isSubmitting) return;
     
-    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago);
+    const isDigital = ['Pago Móvil', 'Punto de Venta', 'Zelle', 'Binance Pay'].includes(metodoPago);
     if (isDigital && totalCobrarEnCaja > 0 && !codigoVerificacionCheckout.trim()) {
       alert('⚠️ Debe ingresar el Código de Verificación / Referencia para pagos digitales.');
       return;
@@ -2912,23 +2935,28 @@ export function CheckoutModal({
         ((parseFloat(pagosMixtosChannels.efectivoVes) || 0) / tasaUsd) +
         ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) / tasaUsd) +
         ((parseFloat(pagosMixtosChannels.punto) || 0) / tasaUsd) +
-        (parseFloat(pagosMixtosChannels.zelle) || 0);
+        (parseFloat(pagosMixtosChannels.zelle) || 0) +
+        (parseFloat(pagosMixtosChannels.binance) || 0);
 
       if (Math.abs(sumMixtoUSD - totalCobrarEnCaja) > 0.05) {
         alert(`⚠️ En Pago Mixto la suma de los métodos ($${sumMixtoUSD.toFixed(2)} USD) debe ser exactamente igual al total a cobrar ($${totalCobrarEnCaja.toFixed(2)} USD).`);
         return;
       }
 
-      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef.trim()) {
+      if ((parseFloat(pagosMixtosChannels.pagoMovil) || 0) > 0 && !pagosMixtosChannels.pagoMovilRef?.trim()) {
         alert('⚠️ Debe ingresar el Código de Referencia para la parte de Pago Móvil.');
         return;
       }
-      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef.trim()) {
+      if ((parseFloat(pagosMixtosChannels.punto) || 0) > 0 && !pagosMixtosChannels.puntoRef?.trim()) {
         alert('⚠️ Debe ingresar el Código de Referencia / Baucher para la parte de Punto de Venta.');
         return;
       }
-      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef.trim()) {
+      if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0 && !pagosMixtosChannels.zelleRef?.trim()) {
         alert('⚠️ Debe ingresar la Referencia / Confirmación para la parte de Zelle.');
+        return;
+      }
+      if ((parseFloat(pagosMixtosChannels.binance) || 0) > 0 && !pagosMixtosChannels.binanceRef?.trim()) {
+        alert('⚠️ Debe ingresar el ID / Referencia para la parte de Binance Pay.');
         return;
       }
     }
@@ -2958,6 +2986,10 @@ export function CheckoutModal({
       if ((parseFloat(pagosMixtosChannels.zelle) || 0) > 0) {
         parts.push(`Zelle: $${parseFloat(pagosMixtosChannels.zelle).toFixed(2)} (Ref: ${pagosMixtosChannels.zelleRef.trim()})`);
         refs.push(pagosMixtosChannels.zelleRef.trim());
+      }
+      if ((parseFloat(pagosMixtosChannels.binance) || 0) > 0) {
+        parts.push(`Binance: $${parseFloat(pagosMixtosChannels.binance).toFixed(2)} (Ref: ${(pagosMixtosChannels.binanceRef || '').trim()})`);
+        if (pagosMixtosChannels.binanceRef) refs.push(pagosMixtosChannels.binanceRef.trim());
       }
 
       finalMetodoPago = refs.length > 0 
@@ -3113,12 +3145,13 @@ export function CheckoutModal({
                 <option value="Pago Móvil">Pago Móvil</option>
                 <option value="Punto de Venta">Punto de Venta</option>
                 <option value="Zelle">Zelle</option>
+                <option value="Binance Pay">Binance Pay ($ USD)</option>
                 <option value="Pago Mixto">Pago Mixto (Efectivo + Digital)</option>
               </select>
             </div>
 
             {/* Reference Code field for digital payments */}
-            {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago) && (
+            {['Pago Móvil', 'Punto de Venta', 'Zelle', 'Binance Pay'].includes(metodoPago) && (
               <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200">
                 <label className="block text-[10px] font-black text-amber-900 uppercase mb-1">
                   Código de Verificación / Referencia Bancaria *
@@ -4344,12 +4377,13 @@ export function ExtenderHorasModal({
               <option value="Punto de Venta">Punto de Venta</option>
               <option value="Efectivo ($)">Efectivo ($ USD)</option>
               <option value="Zelle">Zelle</option>
+              <option value="Binance Pay">Binance Pay ($ USD)</option>
               <option value="Pago Mixto">Pago Mixto (Multicanal)</option>
             </select>
           </div>
 
           {/* Reference for digital payments */}
-          {['Pago Móvil', 'Punto de Venta', 'Zelle'].includes(metodoPago) && (
+          {['Pago Móvil', 'Punto de Venta', 'Zelle', 'Binance Pay'].includes(metodoPago) && (
             <div>
               <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">
                 Código / N° Referencia Bancaria *

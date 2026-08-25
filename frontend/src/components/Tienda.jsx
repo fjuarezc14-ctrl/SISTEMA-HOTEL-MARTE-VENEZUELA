@@ -208,7 +208,6 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
       }
       clearCart();
       setIsPreConsumo(false);
-      fetchPreConsumos();
       if (onStateChange) onStateChange();
     } catch (err) {
       setErrorMsg(`⚠️ ${err.message}`);
@@ -281,6 +280,7 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                     realStock = 0;
                   }
                 }
+                const isLowStock = realStock > 0 && realStock <= 5;
                 const isOutOfStock = realStock <= 0;
                 const inCart = cart.find(c => c.id === prod.id);
                 const priceVes = (prod.precio_venta * tasaUsd).toFixed(2);
@@ -312,8 +312,13 @@ export default function Tienda({ productos = [], clientes = [], habitaciones = [
                       <h4 className="font-bold text-slate-800 text-xs line-clamp-2 mb-1">
                         {prod.nombre} {isComboItem && <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded ml-1">PROMO ⚡</span>}
                       </h4>
-                      <p className="text-[10px] text-slate-400 font-medium mb-3">
-                        Stock: <strong className={isOutOfStock ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}>{realStock} {isComboItem ? 'combos' : 'unids.'}</strong>
+                      <p className="text-[10px] text-slate-400 font-medium mb-3 flex items-center justify-between">
+                        <span>Stock: <strong className={isOutOfStock ? 'text-rose-600 font-bold' : isLowStock ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}>{realStock} {isComboItem ? 'combos' : 'unids.'}</strong></span>
+                        {isLowStock && (
+                          <span className="bg-rose-100 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded border border-rose-200">
+                            ⚠️ Stock Bajo
+                          </span>
+                        )}
                       </p>
                     </div>
 

@@ -829,6 +829,26 @@ app.post('/api/habitaciones/:num/cambiar-modalidad', requireAuth, async (req, re
   }
 });
 
+// POST /api/habitaciones/:num/limpiar - Mark room as cleaned and set status to Libre
+app.post('/api/habitaciones/:num/limpiar', requireAuth, async (req, res) => {
+  const { num } = req.params;
+  try {
+    const room = await db.get('SELECT * FROM habitaciones WHERE num = ?', [num]);
+    if (!room) {
+      return res.status(404).json({ error: 'Habitación no encontrada' });
+    }
+    await db.run(
+      `UPDATE habitaciones SET estado = 'Libre', huesped = '', acomp = '', ingreso = '', salida = '' WHERE num = ?`,
+      [num]
+    );
+    await registrarAuditoria(req.user.id, req.user.nombre, req.user.rol, 'Limpieza Habitación', `Habitación ${num} marcada como Limpia y Disponible`, req.ip);
+    res.json({ success: true, message: `Habitación ${num} marcada como Limpia.` });
+  } catch (err) {
+    console.error('Error cleaning room:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Helper: Calcular hora de salida según modalidad (4 Horas + Horas Extra iniciales o Pernocta 11:00 AM en hora Venezuela)
 function calcularHoraSalida(modalidad, horasExtraUpfront = 0) {
   const options = { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
@@ -897,8 +917,8 @@ app.post('/api/checkin-directo', requireAuth, async (req, res) => {
   const { ci, dni, nombre, tel, numHabitacion, nomAcomp, ciAcomp, dniAcomp, monto, metodo, codigoVerificacion, comprobante, modalidad, esMenor, fechaNacimientoTitular, horasExtraIniciales } = req.body;
   const numDoc = (ci || dni || '').trim();
 
-  if (!numDoc || !nombre || !tel || !numHabitacion) {
-    return res.status(400).json({ error: 'Faltan campos obligatorios (CI/Documento, Nombre, Teléfono, Habitación).' });
+  if (!numDoc || !nombre || !tel || !numHabitacion || (!fechaNacimientoTitular && (!cliente || !cliente.fechaNacimiento))) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios (CI/Documento, Nombre, Teléfono, Fecha de Nacimiento del Titular, Habitación).' });
   }
 
   try {
@@ -2194,25 +2214,24 @@ app.delete('/api/caja/transaccion/:id', requireAuth, async (req, res) => {
 
 // POST /api/caja/cierre-turno - Registrar el resumen del Cierre de Turno por Usuario (v2 - Fase 5)
 app.post('/api/caja/cierre-turno', requireAuth, async (req, res) => {
-  const { totalEfectivo, totalTarjeta, totalOtros, totalEgresos, saldoNeto } = req.body;
+  const { netoDivisasUsd, netoBolivaresVes, totalEfectivoUsd, totalEfectivoVes, totalPagoMovil, totalPunto, totalZelle, totalEgresos, saldoNeto } = req.body;
   try {
+    const config = await db.get("SELECT valor FROM configuracion WHERE clave = 'tasa_usd'");
+    const tasaUsd = config ? parseFloat(config.valor) : 50.00;
+
     const transactionId = 't_cierre_' + Date.now();
-    const concepto = `CIERRE DE TURNO (${req.user.nombre}) - Efectivo: S/${parseFloat(totalEfectivo || 0).toFixed(2)}, Tarjeta: S/${parseFloat(totalTarjeta || 0).toFixed(2)}, Egresos: S/${parseFloat(totalEgresos || 0).toFixed(2)}`;
+    const concepto = `CIERRE DE TURNO (${req.user.nombre}) - Divisas: $${parseFloat(netoDivisasUsd || saldoNeto || 0).toFixed(2)} USD | Bolívares: Bs. ${parseFloat(netoBolivaresVes || 0).toFixed(2)}`;
     
-    await db.run(
-      'INSERT INTO caja (id, tipo, concepto, monto, metodo, hora, usuarioId, usuarioNombre, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        transactionId,
-        'Cierre',
-        concepto,
-        parseFloat(saldoNeto || 0),
-        'Cierre Turno',
-        getFechaHoraActual(),
-        req.user.id,
-        req.user.nombre,
-        'Cierre'
-      ]
-    );
+    await insertCajaTransaction(db, {
+      id: transactionId,
+      tipo: 'Cierre',
+      concepto,
+      monto: parseFloat(netoDivisasUsd || saldoNeto || 0),
+      metodo: 'Cierre Turno',
+      usuarioId: req.user.id,
+      usuarioNombre: req.user.nombre,
+      origen: 'Cierre'
+    });
 
     res.json({ success: true, message: 'Cierre de turno registrado en la caja correctamente.' });
   } catch (error) {

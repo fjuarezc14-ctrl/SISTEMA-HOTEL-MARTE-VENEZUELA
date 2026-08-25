@@ -190,6 +190,25 @@ export default function App() {
     }
   }, [isBlockedByPendingHandover, activeTab]);
 
+  // Global Keyboard Listener: Press ESC key to close any active modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsAsignarDirectoOpen(false);
+        setIsNuevaReservaOpen(false);
+        setIsCheckoutOpen(false);
+        setIsDetalleHabitacionOpen(false);
+        setIsAccionesReservaOpen(false);
+        setIsAgregarAcompOpen(false);
+        setExtenderRoom(null);
+        setConfirmarCheckinReservaRoomNum(null);
+        setCheckinExitosoData(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Handler: Room click actions (dynamic depending on state & user role)
   const handleRoomClick = (room) => {
     if (isBlockedByPendingHandover) {

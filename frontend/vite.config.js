@@ -8,6 +8,9 @@ export default defineConfig({
     port: 5180,
     host: true,
     allowedHosts: true,
+    watch: {
+      usePolling: true,
+    },
     proxy: {
       '/api': {
         target: 'http://backend:3010',

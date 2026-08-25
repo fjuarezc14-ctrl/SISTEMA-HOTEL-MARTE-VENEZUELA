@@ -62,43 +62,60 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
   // Parse transaction timestamp string to Date safely in local time or ISO format
   const parseDate = (horaStr) => {
-    if (!horaStr) return new Date();
+    if (!horaStr) return new Date(0);
     try {
+      if (typeof horaStr === 'number') return new Date(horaStr);
       if (typeof horaStr === 'string') {
-        if (horaStr.includes('/')) {
-          const parts = horaStr.split(',');
-          const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
-          const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
-          const parsed = new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
-          if (!isNaN(parsed.getTime())) return parsed;
+        const str = horaStr.trim();
+        if (!str) return new Date(0);
+        if (str.includes('/')) {
+          const parts = str.split(',');
+          const dateStr = parts[0].trim();
+          const timeStr = parts[1] ? parts[1].trim() : '00:00';
+          const dParts = dateStr.split('/').map(s => parseInt(s.trim(), 10));
+          if (dParts.length === 3 && !isNaN(dParts[0]) && !isNaN(dParts[1]) && !isNaN(dParts[2])) {
+            const day = dParts[0];
+            const month = dParts[1] - 1;
+            const year = dParts[2] < 100 ? 2000 + dParts[2] : dParts[2];
+            
+            let hours = 0;
+            let minutes = 0;
+            const tParts = timeStr.replace(/(AM|PM)/i, '').trim().split(':').map(s => parseInt(s.trim(), 10));
+            if (!isNaN(tParts[0])) hours = tParts[0];
+            if (!isNaN(tParts[1])) minutes = tParts[1];
+            if (timeStr.toLowerCase().includes('pm') && hours < 12) hours += 12;
+            if (timeStr.toLowerCase().includes('am') && hours === 12) hours = 0;
+
+            const parsed = new Date(year, month, day, hours, minutes, 0);
+            if (!isNaN(parsed.getTime())) return parsed;
+          }
         }
-        const d = new Date(horaStr);
+        const d = new Date(str);
         if (!isNaN(d.getTime())) return d;
       }
     } catch (e) {
-      return new Date();
+      return new Date(0);
     }
-    return new Date();
+    return new Date(0);
   };
 
   const isDateInRange = (horaStr) => {
+    if (!horaStr) return false;
     const d = parseDate(horaStr);
-    const dateToCheck = new Date(d);
-    dateToCheck.setHours(0,0,0,0);
+    if (isNaN(d.getTime())) return false;
 
     if (!customStart && !customEnd) return true;
-    let valid = true;
     if (customStart) {
       const [y, m, dayNum] = customStart.split('-').map(Number);
-      const s = new Date(y, m - 1, dayNum, 0, 0, 0);
-      if (dateToCheck < s) valid = false;
+      const s = new Date(y, m - 1, dayNum, 8, 0, 0);
+      if (d < s) return false;
     }
     if (customEnd) {
       const [y, m, dayNum] = customEnd.split('-').map(Number);
-      const e = new Date(y, m - 1, dayNum, 23, 59, 59);
-      if (dateToCheck > e) valid = false;
+      const e = new Date(y, m - 1, dayNum + 1, 7, 59, 59);
+      if (d > e) return false;
     }
-    return valid;
+    return true;
   };
 
   // Helper for safe numbers
@@ -169,6 +186,12 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
       if (usdAmt > 0) channels.push({ method: 'Zelle', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isDigital: true });
     }
 
+    const bnMatch = raw.match(/binance:\s*\$([\d.]+)/i);
+    if (bnMatch) {
+      const usdAmt = parseFloat(bnMatch[1]) || 0;
+      if (usdAmt > 0) channels.push({ method: 'Binance Pay', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isDigital: true });
+    }
+
     return {
       isMixto: true,
       cleanMetodo: 'Pago Mixto',
@@ -180,7 +203,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
    * Extrae el monto real (USD y VES) de un método de pago específico dentro de una transacción.
    */
   const extractMethodAmount = (t, targetKey) => {
-    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
     const monto = safeNum(t.monto || t.montoNum);
     const breakdown = parsePaymentBreakdown(t.metodo, monto, txTasa);
     const target = (targetKey || '').toLowerCase();
@@ -208,7 +231,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
    * Rellena únicamente la moneda real cobrada y '-' en la otra (o ambas si fue Pago Mixto multimoneda)
    */
   const getTransactionAmounts = (t) => {
-    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
     const montoNum = safeNum(t.monto || t.montoNum);
     const breakdown = parsePaymentBreakdown(t.metodo, montoNum, txTasa);
 
@@ -481,6 +504,18 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const getMethodTotalRecep = (methodName) => {
     return recepTransactions
       .filter(t => t.tipo === 'Ingreso')
+      .reduce((acc, t) => {
+        const res = extractMethodAmount(t, methodName);
+        return {
+          usd: acc.usd + res.usd,
+          ves: acc.ves + res.ves
+        };
+      }, { usd: 0, ves: 0 });
+  };
+
+  const getMethodTotalGeneral = (methodName) => {
+    return filteredCaja
+      .filter(t => t && t.tipo === 'Ingreso')
       .reduce((acc, t) => {
         const res = extractMethodAmount(t, methodName);
         return {
@@ -917,34 +952,96 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           </div>
         </div>
 
-        {/* Dashboard KPIs */}
-        <div className="md:col-span-2 grid grid-cols-2 gap-4">
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-emerald-200 border-l-4 border-l-emerald-500">
-            <p className="text-[10px] font-bold text-emerald-600 uppercase">Ingresos Hospedaje</p>
-            <div className="space-y-0.5 mt-1">
-              <p className="text-2xl font-black text-slate-800">${totalHospedaje.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
-              <p className="text-sm font-bold text-emerald-700">Bs. {totalHospedaje.ves.toFixed(2)} <span className="text-[10px] text-emerald-600 font-semibold">VES</span></p>
+        {/* Dashboard KPIs Divididos en Bloques Bimonetarios */}
+        <div className="md:col-span-2 space-y-4">
+          {/* Card Destacado: Total Habitaciones Entradas / Alquiladas (Diseño Ejecutivo Renovado) */}
+          {(() => {
+            const pernoctasCount = hospedajeTx.filter(t => {
+              const c = (t.concepto || '').toLowerCase();
+              return c.includes('pernocta') || c.includes('noche') || !c.includes('hora');
+            }).length;
+            const horasCount = hospedajeTx.length - pernoctasCount;
+
+            return (
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-13 h-13 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
+                    <i className="fa-solid fa-hotel"></i>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-indigo-600 tracking-widest block">
+                      Movimiento de Ocupación Físico
+                    </span>
+                    <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2 mt-0.5">
+                      {hospedajeTx.length} <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">Habitaciones Alquiladas</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                      Total de entradas y alquileres procesados en el período.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
+                  <div className="text-center px-3 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-[9px] font-black text-slate-400 uppercase block">🌙 Pernoctas</span>
+                    <span className="text-sm font-black text-indigo-700">{pernoctasCount}</span>
+                  </div>
+                  <div className="text-center px-3 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-[9px] font-black text-slate-400 uppercase block">⚡ Horas Extras</span>
+                    <span className="text-sm font-black text-amber-600">{horasCount}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Bloque DIVISAS ($ USD) */}
+          <div className="bg-emerald-50/60 p-4 rounded-2xl border-2 border-emerald-300 shadow-sm">
+            <h4 className="text-xs font-black text-emerald-800 uppercase flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Resumen de Operaciones en Divisas ($ USD)
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">Hospedaje USD</p>
+                <p className="text-lg font-black text-emerald-700">${totalHospedaje.usd.toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">Market USD</p>
+                <p className="text-lg font-black text-emerald-700">${totalMarket.usd.toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">Egresos USD</p>
+                <p className="text-lg font-black text-rose-600">-${totalEgresosBimoneda.usd.toFixed(2)}</p>
+              </div>
+              <div className="bg-emerald-700 p-3 rounded-xl text-white shadow-2xs">
+                <p className="text-[9px] font-bold text-emerald-200 uppercase">Neto Real USD</p>
+                <p className="text-lg font-black text-white">${totalNetoBimoneda.usd.toFixed(2)}</p>
+              </div>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 border-l-4 border-l-amber-500">
-            <p className="text-[10px] font-bold text-amber-600 uppercase">Ingresos Market</p>
-            <div className="space-y-0.5 mt-1">
-              <p className="text-2xl font-black text-slate-800">${totalMarket.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
-              <p className="text-sm font-bold text-amber-600">Bs. {totalMarket.ves.toFixed(2)} <span className="text-[10px] text-amber-500 font-semibold">VES</span></p>
-            </div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-rose-200 border-l-4 border-l-rose-500">
-            <p className="text-[10px] font-bold text-rose-600 uppercase">Egresos Totales</p>
-            <div className="space-y-0.5 mt-1">
-              <p className="text-2xl font-black text-slate-800">-${totalEgresosBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
-              <p className="text-sm font-bold text-rose-600">-Bs. {totalEgresosBimoneda.ves.toFixed(2)} <span className="text-[10px] text-rose-500 font-semibold">VES</span></p>
-            </div>
-          </div>
-          <div className="bg-slate-800 p-5 rounded-2xl shadow-sm border-l-4 border-l-blue-500">
-            <p className="text-[10px] font-bold text-blue-300 uppercase">Ganancia Neta (Total Real)</p>
-            <div className="space-y-0.5 mt-1">
-              <p className="text-2xl font-black text-white">${totalNetoBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-300">USD</span></p>
-              <p className="text-sm font-bold text-emerald-400">Bs. {totalNetoBimoneda.ves.toFixed(2)} <span className="text-[10px] text-emerald-300 font-semibold">VES</span></p>
+
+          {/* Bloque BOLÍVARES (Bs. VES) */}
+          <div className="bg-blue-50/60 p-4 rounded-2xl border-2 border-blue-300 shadow-sm">
+            <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Resumen de Operaciones en Bolívares (Bs. VES)
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">Hospedaje VES</p>
+                <p className="text-lg font-black text-blue-700">Bs. {totalHospedaje.ves.toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">Market VES</p>
+                <p className="text-lg font-black text-blue-700">Bs. {totalMarket.ves.toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[9px] font-bold text-slate-500 uppercase">Egresos VES</p>
+                <p className="text-lg font-black text-rose-600">-Bs. {totalEgresosBimoneda.ves.toFixed(2)}</p>
+              </div>
+              <div className="bg-blue-800 p-3 rounded-xl text-white shadow-2xs">
+                <p className="text-[9px] font-bold text-blue-200 uppercase">Neto Real VES</p>
+                <p className="text-lg font-black text-white">Bs. {totalNetoBimoneda.ves.toFixed(2)}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -958,30 +1055,100 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           <p className="text-[10px] font-semibold text-slate-400 mt-2">Generado el: {new Date().toLocaleString()} | Tasa USD: Bs. {tasaUsd.toFixed(2)}</p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center bg-slate-50 p-4 rounded-xl border border-slate-200 print:bg-white print:border-slate-800">
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase">Total Hospedaje</p>
-            <p className="text-base font-black text-emerald-600">${totalHospedaje.usd.toFixed(2)} USD</p>
-            <p className="text-xs font-bold text-slate-700">Bs. {totalHospedaje.ves.toFixed(2)} VES</p>
+        {/* Cuadro Resumen Ejecutivo Dividido por Moneda */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {/* Columna DIVISAS ($ USD) */}
+          <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-300">
+            <h4 className="text-xs font-black text-emerald-800 uppercase border-b border-emerald-200 pb-2 mb-3 text-center flex items-center justify-center gap-2">
+              <i className="fa-solid fa-dollar-sign text-emerald-600"></i> SECCIÓN DIVISAS ($ USD)
+            </h4>
+            <div className="space-y-2 text-xs font-semibold">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total Hospedaje:</span>
+                <span className="font-bold text-emerald-700">${totalHospedaje.usd.toFixed(2)} USD</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total Market:</span>
+                <span className="font-bold text-emerald-700">${totalMarket.usd.toFixed(2)} USD</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total Egresos:</span>
+                <span className="font-bold text-rose-600">-${totalEgresosBimoneda.usd.toFixed(2)} USD</span>
+              </div>
+              <div className="flex justify-between border-t border-emerald-300 pt-2 font-black text-sm">
+                <span className="text-emerald-900">GANANCIA NETA ($ USD):</span>
+                <span className="text-emerald-800">${totalNetoBimoneda.usd.toFixed(2)} USD</span>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase">Total Market</p>
-            <p className="text-base font-black text-amber-600">${totalMarket.usd.toFixed(2)} USD</p>
-            <p className="text-xs font-bold text-slate-700">Bs. {totalMarket.ves.toFixed(2)} VES</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase">Total Egresos</p>
-            <p className="text-base font-black text-rose-600">-${totalEgresosBimoneda.usd.toFixed(2)} USD</p>
-            <p className="text-xs font-bold text-slate-700">-Bs. {totalEgresosBimoneda.ves.toFixed(2)} VES</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase">Ganancia Neta</p>
-            <p className="text-base font-black text-slate-800">${totalNetoBimoneda.usd.toFixed(2)} USD</p>
-            <p className="text-xs font-bold text-slate-700">Bs. {totalNetoBimoneda.ves.toFixed(2)} VES</p>
+
+          {/* Columna BOLÍVARES (Bs. VES) */}
+          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-300">
+            <h4 className="text-xs font-black text-blue-800 uppercase border-b border-blue-200 pb-2 mb-3 text-center flex items-center justify-center gap-2">
+              <i className="fa-solid fa-money-bill-wave text-blue-600"></i> SECCIÓN BOLÍVARES (Bs. VES)
+            </h4>
+            <div className="space-y-2 text-xs font-semibold">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total Hospedaje:</span>
+                <span className="font-bold text-blue-700">Bs. {totalHospedaje.ves.toFixed(2)} VES</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total Market:</span>
+                <span className="font-bold text-blue-700">Bs. {totalMarket.ves.toFixed(2)} VES</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total Egresos:</span>
+                <span className="font-bold text-rose-600">-Bs. {totalEgresosBimoneda.ves.toFixed(2)} VES</span>
+              </div>
+              <div className="flex justify-between border-t border-blue-300 pt-2 font-black text-sm">
+                <span className="text-blue-900">GANANCIA NETA (Bs. VES):</span>
+                <span className="text-blue-800">Bs. {totalNetoBimoneda.ves.toFixed(2)} VES</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Resumen por método de pago removido visualmente por solicitud del cliente (Fase 3) */}
+        {/* Matriz Desglosada de Métodos de Pago por Moneda y Canal */}
+        <div className="mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <h4 className="text-xs font-black text-slate-800 uppercase border-b border-slate-300 pb-2 mb-3">
+            <i className="fa-solid fa-wallet text-slate-600 mr-2"></i> Desglose Real de Fondos por Método de Pago y Moneda
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Métodos en Divisas USD */}
+            <div className="space-y-2 text-xs">
+              <h5 className="font-bold text-emerald-800 uppercase text-[10px] tracking-wide">Canales en Divisas ($ USD)</h5>
+              <div className="flex justify-between bg-white p-2 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">💵 Efectivo ($ USD)</span>
+                <span className="font-black text-slate-800">${getMethodTotalGeneral('Efectivo ($)').usd.toFixed(2)} USD</span>
+              </div>
+              <div className="flex justify-between bg-white p-2 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">🏦 Zelle ($ USD)</span>
+                <span className="font-black text-slate-800">${getMethodTotalGeneral('Zelle').usd.toFixed(2)} USD</span>
+              </div>
+              <div className="flex justify-between bg-white p-2 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">🌐 Binance Pay ($ USD)</span>
+                <span className="font-black text-slate-800">${getMethodTotalGeneral('Binance').usd.toFixed(2)} USD</span>
+              </div>
+            </div>
+
+            {/* Métodos en Bolívares VES */}
+            <div className="space-y-2 text-xs">
+              <h5 className="font-bold text-blue-800 uppercase text-[10px] tracking-wide">Canales en Bolívares (Bs. VES)</h5>
+              <div className="flex justify-between bg-white p-2 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">💵 Efectivo (Bs. VES)</span>
+                <span className="font-black text-slate-800">Bs. {getMethodTotalGeneral('Efectivo (Bs)').ves.toFixed(2)} VES</span>
+              </div>
+              <div className="flex justify-between bg-white p-2 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">📱 Pago Móvil (Bs. VES)</span>
+                <span className="font-black text-slate-800">Bs. {getMethodTotalGeneral('Pago Móvil').ves.toFixed(2)} VES</span>
+              </div>
+              <div className="flex justify-between bg-white p-2 rounded-lg border border-slate-200">
+                <span className="font-semibold text-slate-700">💳 Punto de Venta POS (Bs. VES)</span>
+                <span className="font-black text-slate-800">Bs. {getMethodTotalGeneral('Punto').ves.toFixed(2)} VES</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {showHospedaje && (
           <div className="mb-8">
@@ -992,6 +1159,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Método</th>
+                  <th className="p-2 border-b text-center">Tasa Cobro</th>
                   <th className="p-2 border-b text-right">Monto ($ USD)</th>
                   <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
@@ -999,11 +1167,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
               <tbody>
                 {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market')))).map(t => {
                   const amounts = getTransactionAmounts(t);
+                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                   return (
                     <tr key={t.id} className="border-b hover:bg-slate-50/50">
                       <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
                       <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
                       <td className="p-2 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
+                      <td className="p-2 text-center font-mono font-bold text-emerald-800">Bs. {txTasa.toFixed(2)}</td>
                       <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
                         {amounts.usdStr}
                       </td>
@@ -1027,6 +1197,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Método</th>
+                  <th className="p-2 border-b text-center">Tasa Cobro</th>
                   <th className="p-2 border-b text-right">Monto ($ USD)</th>
                   <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
@@ -1034,11 +1205,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
               <tbody>
                 {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))).map(t => {
                   const amounts = getTransactionAmounts(t);
+                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                   return (
                     <tr key={t.id} className="border-b hover:bg-slate-50/50">
                       <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
                       <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
                       <td className="p-2 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
+                      <td className="p-2 text-center font-mono font-bold text-amber-800">Bs. {txTasa.toFixed(2)}</td>
                       <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
                         {amounts.usdStr}
                       </td>
@@ -1062,6 +1235,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                   <th className="p-2 border-b">Hora</th>
                   <th className="p-2 border-b">Concepto</th>
                   <th className="p-2 border-b">Responsable</th>
+                  <th className="p-2 border-b text-center">Tasa Cobro</th>
                   <th className="p-2 border-b text-right">Monto ($ USD)</th>
                   <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
                 </tr>
@@ -1069,11 +1243,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
               <tbody>
                 {filteredCaja.filter(t => t.tipo === 'Egreso').map(t => {
                   const amounts = getTransactionAmounts(t);
+                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                   return (
                     <tr key={t.id} className="border-b hover:bg-slate-50/50">
                       <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
                       <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
                       <td className="p-2">{t.usuarioNombre || 'Desconocido'}</td>
+                      <td className="p-2 text-center font-mono font-bold text-rose-800">Bs. {txTasa.toFixed(2)}</td>
                       <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
                         {amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}
                       </td>

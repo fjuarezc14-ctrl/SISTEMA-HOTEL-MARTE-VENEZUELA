@@ -68,21 +68,22 @@ export default function EntregaTurnos({
   const [solicitudVes, setSolicitudVes] = useState('');
   const [isSubmittingCorreccion, setIsSubmittingCorreccion] = useState(false);
 
-  // Helper: Get exact payment amount by method (supporting mixed payments)
+  // Helper: Get exact payment amount by method (supporting mixed payments and returning native currency unit)
   const getAmountForMethod = (t, targetMethod) => {
-    const val = parseFloat(t.monto) || 0;
+    const valUsd = parseFloat(t.monto) || 0;
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const valVes = (t.monto_ves && parseFloat(t.monto_ves) > 0) ? parseFloat(t.monto_ves) : (valUsd * txTasa);
     if (!t.metodo) return 0;
     
-    // If it's a direct payment of that method
-    if (t.metodo === targetMethod) return val;
-    
-    // For fuzzy name matching on single payment methods
-    if (!t.metodo.includes('Pago Mixto')) {
-      if (targetMethod === 'Pago Móvil' && t.metodo.toLowerCase().includes('pago móvil')) return val;
-      if (targetMethod === 'Punto de Venta' && t.metodo.toLowerCase().includes('punto')) return val;
-      if (targetMethod === 'Zelle' && t.metodo.toLowerCase().includes('zelle')) return val;
-      if (targetMethod === 'Efectivo ($)' && t.metodo === 'Efectivo ($)') return val;
-      if (targetMethod === 'Efectivo (Bs)' && t.metodo === 'Efectivo (Bs)') return val;
+    // If it's a direct single payment of that method
+    if (!t.metodo.includes('Pago Mixto') && !t.metodo.includes('Mixto')) {
+      const cleanM = t.metodo.toLowerCase();
+      if (targetMethod === 'Efectivo ($)' && (cleanM.includes('efectivo ($)') || cleanM === 'efectivo ($)')) return valUsd;
+      if (targetMethod === 'Efectivo (Bs)' && (cleanM.includes('efectivo (bs)') || cleanM.includes('efectivo bolívares'))) return valVes;
+      if (targetMethod === 'Pago Móvil' && (cleanM.includes('pago móvil') || cleanM.includes('pago movil'))) return valVes;
+      if (targetMethod === 'Punto de Venta' && cleanM.includes('punto')) return valVes;
+      if (targetMethod === 'Zelle' && cleanM.includes('zelle')) return valUsd;
+      if (targetMethod === 'Binance' && cleanM.includes('binance')) return valUsd;
       return 0;
     }
     
@@ -91,13 +92,18 @@ export default function EntregaTurnos({
     if (targetMethod === 'Efectivo ($)') {
       regex = /Efectivo\s*\(\$\):\s*\$?([\d.]+)/i;
     } else if (targetMethod === 'Efectivo (Bs)') {
-      regex = /Efectivo\s*\(Bs\):\s*\$?([\d.]+)/i;
+      regex = /Efectivo\s*\(Bs\):\s*Bs\.\s*([\d.]+)/i;
+      if (!t.metodo.match(regex)) regex = /Efectivo\s*\(Bs\):\s*([\d.]+)/i;
     } else if (targetMethod === 'Pago Móvil') {
-      regex = /Pago\s*Móvil:\s*\$?([\d.]+)/i;
+      regex = /Pago\s*Móvil:\s*Bs\.\s*([\d.]+)/i;
+      if (!t.metodo.match(regex)) regex = /Pago\s*Móvil:\s*([\d.]+)/i;
     } else if (targetMethod === 'Punto de Venta') {
-      regex = /Punto:\s*\$?([\d.]+)/i;
+      regex = /Punto:\s*Bs\.\s*([\d.]+)/i;
+      if (!t.metodo.match(regex)) regex = /Punto:\s*([\d.]+)/i;
     } else if (targetMethod === 'Zelle') {
       regex = /Zelle:\s*\$?([\d.]+)/i;
+    } else if (targetMethod === 'Binance') {
+      regex = /Binance:\s*\$?([\d.]+)/i;
     }
     
     if (regex) {
@@ -169,23 +175,43 @@ export default function EntregaTurnos({
     return myMovements;
   };
 
-  // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM" and ISO strings)
+  // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM", ISO strings and timestamps)
   const parseCajaFecha = (horaStr) => {
     if (!horaStr) return new Date(0);
-    if (typeof horaStr !== 'string') return new Date(horaStr);
-    
-    if (horaStr.includes('/')) {
-      try {
-        const parts = horaStr.split(',');
-        const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
-        const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
-        return new Date(dateParts[2], dateParts[1] - 1, dateParts[0], timeParts[0] || 0, timeParts[1] || 0);
-      } catch (e) {
-        return new Date(0);
+    try {
+      if (typeof horaStr === 'number') return new Date(horaStr);
+      if (typeof horaStr === 'string') {
+        const str = horaStr.trim();
+        if (!str) return new Date(0);
+        if (str.includes('/')) {
+          const parts = str.split(',');
+          const dateStr = parts[0].trim();
+          const timeStr = parts[1] ? parts[1].trim() : '00:00';
+          const dParts = dateStr.split('/').map(s => parseInt(s.trim(), 10));
+          if (dParts.length === 3 && !isNaN(dParts[0]) && !isNaN(dParts[1]) && !isNaN(dParts[2])) {
+            const day = dParts[0];
+            const month = dParts[1] - 1;
+            const year = dParts[2] < 100 ? 2000 + dParts[2] : dParts[2];
+            
+            let hours = 0;
+            let minutes = 0;
+            const tParts = timeStr.replace(/(AM|PM)/i, '').trim().split(':').map(s => parseInt(s.trim(), 10));
+            if (!isNaN(tParts[0])) hours = tParts[0];
+            if (!isNaN(tParts[1])) minutes = tParts[1];
+            if (timeStr.toLowerCase().includes('pm') && hours < 12) hours += 12;
+            if (timeStr.toLowerCase().includes('am') && hours === 12) hours = 0;
+
+            const parsed = new Date(year, month, day, hours, minutes, 0);
+            if (!isNaN(parsed.getTime())) return parsed;
+          }
+        }
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
       }
+    } catch (e) {
+      return new Date(0);
     }
-    const d = new Date(horaStr);
-    return isNaN(d.getTime()) ? new Date(0) : d;
+    return new Date(0);
   };
 
   // Calculate active shift cutoff time strictly from the most recent shift delivery in the hotel (or start of today)
@@ -218,7 +244,7 @@ export default function EntregaTurnos({
     return sum;
   }, 0);
 
-  const myEfectivoVES = (startCashVes / tasaUsd) + myMovements.reduce((sum, t) => {
+  const myEfectivoVES = startCashVes + myMovements.reduce((sum, t) => {
     if (t.tipo === 'Ingreso') return sum + getAmountForMethod(t, 'Efectivo (Bs)');
     if (t.tipo === 'Egreso') return sum - getAmountForMethod(t, 'Efectivo (Bs)');
     return sum;
@@ -290,16 +316,16 @@ export default function EntregaTurnos({
   // Automatically load shift values on mount/update
   React.useEffect(() => {
     setSaldoUsd(myEfectivoUSD.toFixed(2));
-    setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2));
-    setSaldoPagoMovil((myPagoMovil * tasaUsd).toFixed(2));
-    setSaldoPunto((myPunto * tasaUsd).toFixed(2));
+    setSaldoVes(myEfectivoVES.toFixed(2));
+    setSaldoPagoMovil(myPagoMovil.toFixed(2));
+    setSaldoPunto(myPunto.toFixed(2));
     setSaldoZelle(myZelle.toFixed(2));
   }, [caja, currentUser, tasaUsd, shiftCutoffTime]);
 
   // Fallback trigger if needed
   const handleAutoFillCaja = () => {
     setSaldoUsd(myEfectivoUSD.toFixed(2));
-    setSaldoVes((myEfectivoVES * tasaUsd).toFixed(2));
+    setSaldoVes(myEfectivoVES.toFixed(2));
     setSaldoPagoMovil(myPagoMovil.toFixed(2));
     setSaldoPunto(myPunto.toFixed(2));
     setSaldoZelle(myZelle.toFixed(2));
@@ -332,6 +358,9 @@ export default function EntregaTurnos({
       return true;
     });
 
+    const hospedajeEfectivoUSD = myMovements.filter(t => t.tipo === 'Ingreso' && t.origen !== 'Market' && !(t.concepto || '').toLowerCase().includes('market') && !(t.concepto || '').toLowerCase().includes('tienda')).reduce((s, t) => s + getAmountForMethod(t, 'Efectivo ($)'), 0);
+    const hospedajeEfectivoVES = myMovements.filter(t => t.tipo === 'Ingreso' && t.origen !== 'Market' && !(t.concepto || '').toLowerCase().includes('market') && !(t.concepto || '').toLowerCase().includes('tienda')).reduce((s, t) => s + getAmountForMethod(t, 'Efectivo (Bs)'), 0);
+
     const reportData = {
       titulo: 'REPORTE DE CIERRE DE TURNO (PREVIO A ENTREGA)',
       fecha: new Date().toLocaleString('es-VE'),
@@ -346,6 +375,16 @@ export default function EntregaTurnos({
       ventasMarket: myMarketSales,
       marketUSD,
       marketVES,
+      hospedajeEfectivoUSD,
+      hospedajeEfectivoVES,
+      pmHospedaje,
+      pmMarket,
+      ptHospedaje,
+      ptMarket,
+      zlHospedaje,
+      zlMarket,
+      marketEfectivoUSD,
+      marketEfectivoVES,
       lenceria,
       equipamiento,
       novedades: novedades.trim() || 'Sin novedades declaradas',
@@ -412,6 +451,21 @@ export default function EntregaTurnos({
     const histStartCashUsd = prevShift ? parseFloat(prevShift.saldoEfectivoUsd || 0) : 0;
     const histStartCashVes = prevShift ? parseFloat(prevShift.saldoEfectivoVes || 0) : 0;
 
+    const histPmHospedaje = histMovements.filter(item => item.tipo === 'Ingreso' && item.origen !== 'Market' && !(item.concepto || '').toLowerCase().includes('market') && !(item.concepto || '').toLowerCase().includes('tienda')).reduce((s, item) => s + getAmountForMethod(item, 'Pago Móvil'), 0);
+    const histPmMarket = histMovements.filter(item => item.tipo === 'Ingreso' && (item.origen === 'Market' || (item.concepto || '').toLowerCase().includes('market') || (item.concepto || '').toLowerCase().includes('tienda'))).reduce((s, item) => s + getAmountForMethod(item, 'Pago Móvil'), 0);
+
+    const histPtHospedaje = histMovements.filter(item => item.tipo === 'Ingreso' && item.origen !== 'Market' && !(item.concepto || '').toLowerCase().includes('market') && !(item.concepto || '').toLowerCase().includes('tienda')).reduce((s, item) => s + getAmountForMethod(item, 'Punto de Venta'), 0);
+    const histPtMarket = histMovements.filter(item => item.tipo === 'Ingreso' && (item.origen === 'Market' || (item.concepto || '').toLowerCase().includes('market') || (item.concepto || '').toLowerCase().includes('tienda'))).reduce((s, item) => s + getAmountForMethod(item, 'Punto de Venta'), 0);
+
+    const histZlHospedaje = histMovements.filter(item => item.tipo === 'Ingreso' && item.origen !== 'Market' && !(item.concepto || '').toLowerCase().includes('market') && !(item.concepto || '').toLowerCase().includes('tienda')).reduce((s, item) => s + getAmountForMethod(item, 'Zelle'), 0);
+    const histZlMarket = histMovements.filter(item => item.tipo === 'Ingreso' && (item.origen === 'Market' || (item.concepto || '').toLowerCase().includes('market') || (item.concepto || '').toLowerCase().includes('tienda'))).reduce((s, item) => s + getAmountForMethod(item, 'Zelle'), 0);
+
+    const histHospedajeEfectivoUSD = histMovements.filter(item => item.tipo === 'Ingreso' && item.origen !== 'Market' && !(item.concepto || '').toLowerCase().includes('market') && !(item.concepto || '').toLowerCase().includes('tienda')).reduce((s, item) => s + getAmountForMethod(item, 'Efectivo ($)'), 0);
+    const histHospedajeEfectivoVES = histMovements.filter(item => item.tipo === 'Ingreso' && item.origen !== 'Market' && !(item.concepto || '').toLowerCase().includes('market') && !(item.concepto || '').toLowerCase().includes('tienda')).reduce((s, item) => s + getAmountForMethod(item, 'Efectivo (Bs)'), 0);
+
+    const histMarketEfectivoUSD = histMarketMovements.reduce((s, item) => s + getAmountForMethod(item, 'Efectivo ($)'), 0);
+    const histMarketEfectivoVES = histMarketMovements.reduce((s, item) => s + getAmountForMethod(item, 'Efectivo (Bs)'), 0);
+
     const reportData = {
       id: t.id,
       titulo: `REPORTE DE ENTREGA DE TURNO N° ${t.id}`,
@@ -430,6 +484,16 @@ export default function EntregaTurnos({
       ventasMarket: parseFloat(t.ventasMarket) || 0,
       marketUSD,
       marketVES,
+      hospedajeEfectivoUSD: histHospedajeEfectivoUSD,
+      hospedajeEfectivoVES: histHospedajeEfectivoVES,
+      pmHospedaje: histPmHospedaje,
+      pmMarket: histPmMarket,
+      ptHospedaje: histPtHospedaje,
+      ptMarket: histPtMarket,
+      zlHospedaje: histZlHospedaje,
+      zlMarket: histZlMarket,
+      marketEfectivoUSD: histMarketEfectivoUSD,
+      marketEfectivoVES: histMarketEfectivoVES,
       lenceria: lenceriaObj,
       equipamiento: equipObj,
       novedades: t.novedades || 'Sin novedades',
@@ -701,7 +765,7 @@ export default function EntregaTurnos({
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
                     <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
-                      🏨 Hospedaje: Bs. {(pmHospedaje * tasaUsd).toFixed(2)} | 🛒 Market: Bs. {(pmMarket * tasaUsd).toFixed(2)}
+                      🏨 Hospedaje: Bs. {pmHospedaje.toFixed(2)} | 🛒 Market: Bs. {pmMarket.toFixed(2)}
                     </span>
                   </div>
                   <div>
@@ -717,7 +781,7 @@ export default function EntregaTurnos({
                       className="w-full px-3 py-2 rounded-lg border border-indigo-100 text-xs font-bold bg-indigo-50/60 text-indigo-900 cursor-not-allowed"
                     />
                     <span className="text-[10px] text-slate-400 font-bold mt-0.5 block">
-                      🏨 Hospedaje: Bs. {(ptHospedaje * tasaUsd).toFixed(2)} | 🛒 Market: Bs. {(ptMarket * tasaUsd).toFixed(2)}
+                      🏨 Hospedaje: Bs. {ptHospedaje.toFixed(2)} | 🛒 Market: Bs. {ptMarket.toFixed(2)}
                     </span>
                   </div>
                   <div>
@@ -1308,58 +1372,87 @@ export default function EntregaTurnos({
           <div className="space-y-6">
             {/* Cash & Digital Breakdown Table */}
             <div>
-              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">1. Arqueo y Declaración de Caja</h3>
+              <h3 className="font-black text-xs uppercase border-b border-black pb-1 mb-2">1. Arqueo y Declaración de Caja (Desglose Hospedaje vs. Minimarket)</h3>
               <table className="w-full text-left border border-black text-xs">
                 <thead>
                   <tr className="bg-slate-100 border-b border-black font-bold">
-                    <th className="p-2 border-r border-black">Canal de Pago / Concepto</th>
-                    <th className="p-2 border-r border-black text-right">Monto ($ USD)</th>
-                    <th className="p-2 text-right">Monto (Bs)</th>
+                    <th className="p-1.5 border-r border-black">Canal de Pago / Método</th>
+                    <th className="p-1.5 border-r border-black text-right">🏠 Hospedaje ($)</th>
+                    <th className="p-1.5 border-r border-black text-right">🏠 Hospedaje (Bs)</th>
+                    <th className="p-1.5 border-r border-black text-right">🛒 Market ($)</th>
+                    <th className="p-1.5 border-r border-black text-right">🛒 Market (Bs)</th>
+                    <th className="p-1.5 text-right font-black">Total Declarado</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-b border-slate-300">
-                    <td className="p-2 border-r border-slate-300 font-bold">Efectivo Físico ($ USD)</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">
-                      {printableReport.saldoUsd > 0 ? `$${printableReport.saldoUsd.toFixed(2)}` : '-'}
+                    <td className="p-1.5 border-r border-slate-300 font-bold">Efectivo Físico ($ USD)</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.hospedajeEfectivoUSD || 0) > 0 ? `$${(printableReport.hospedajeEfectivoUSD).toFixed(2)}` : '-'}
                     </td>
-                    <td className="p-2 text-right font-semibold">-</td>
-                  </tr>
-                  <tr className="border-b border-slate-300">
-                    <td className="p-2 border-r border-slate-300 font-bold">Efectivo Físico en Bolívares (Bs)</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">-</td>
-                    <td className="p-2 text-right font-semibold">
-                      {printableReport.saldoVes > 0 ? `Bs. ${printableReport.saldoVes.toFixed(2)}` : '-'}
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.marketEfectivoUSD || 0) > 0 ? `$${(printableReport.marketEfectivoUSD).toFixed(2)}` : '-'}
                     </td>
-                  </tr>
-                  <tr className="border-b border-slate-300">
-                    <td className="p-2 border-r border-slate-300 font-bold">Ventas por Pago Móvil</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">-</td>
-                    <td className="p-2 text-right font-semibold">
-                      {printableReport.saldoPagoMovil > 0 ? `Bs. ${printableReport.saldoPagoMovil.toFixed(2)}` : '-'}
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 text-right font-black text-emerald-800">
+                      ${(printableReport.saldoUsd || 0).toFixed(2)} USD
                     </td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="p-2 border-r border-slate-300 font-bold">Ventas por Punto de Venta</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">-</td>
-                    <td className="p-2 text-right font-semibold">
-                      {printableReport.saldoPunto > 0 ? `Bs. ${printableReport.saldoPunto.toFixed(2)}` : '-'}
+                    <td className="p-1.5 border-r border-slate-300 font-bold">Efectivo Físico (Bs)</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.hospedajeEfectivoVES || 0) > 0 ? `Bs. ${(printableReport.hospedajeEfectivoVES).toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.marketEfectivoVES || 0) > 0 ? `Bs. ${(printableReport.marketEfectivoVES).toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-1.5 text-right font-black text-blue-800">
+                      Bs. {(printableReport.saldoVes || 0).toFixed(2)}
                     </td>
                   </tr>
                   <tr className="border-b border-slate-300">
-                    <td className="p-2 border-r border-slate-300 font-bold">Ventas por Zelle</td>
-                    <td className="p-2 border-r border-slate-300 text-right font-black">
-                      {printableReport.saldoZelle > 0 ? `$${printableReport.saldoZelle.toFixed(2)}` : '-'}
+                    <td className="p-1.5 border-r border-slate-300 font-bold">Pago Móvil</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.pmHospedaje || 0) > 0 ? `Bs. ${(printableReport.pmHospedaje).toFixed(2)}` : '-'}
                     </td>
-                    <td className="p-2 text-right font-semibold">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.pmMarket || 0) > 0 ? `Bs. ${(printableReport.pmMarket).toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-1.5 text-right font-black text-purple-800">
+                      Bs. {(printableReport.saldoPagoMovil || 0).toFixed(2)}
+                    </td>
                   </tr>
-                  <tr className="bg-slate-50 font-black">
-                    <td className="p-2 border-r border-black uppercase">Ventas Minimarket / Snacks (Mi Turno)</td>
-                    <td className="p-2 border-r border-black text-right text-sm">
-                      {printableReport.marketUSD > 0 ? `$${printableReport.marketUSD.toFixed(2)}` : (printableReport.ventasMarket > 0 ? `$${printableReport.ventasMarket.toFixed(2)}` : '-')}
+                  <tr className="border-b border-slate-300">
+                    <td className="p-1.5 border-r border-slate-300 font-bold">Punto de Venta</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.ptHospedaje || 0) > 0 ? `Bs. ${(printableReport.ptHospedaje).toFixed(2)}` : '-'}
                     </td>
-                    <td className="p-2 text-right text-xs">
-                      {printableReport.marketVES > 0 ? `Bs. ${printableReport.marketVES.toFixed(2)}` : '-'}
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.ptMarket || 0) > 0 ? `Bs. ${(printableReport.ptMarket).toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-1.5 text-right font-black text-blue-800">
+                      Bs. {(printableReport.saldoPunto || 0).toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-slate-300">
+                    <td className="p-1.5 border-r border-slate-300 font-bold">Zelle ($ USD)</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.zlHospedaje || 0) > 0 ? `$${(printableReport.zlHospedaje).toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 border-r border-slate-300 text-right font-black">
+                      {(printableReport.zlMarket || 0) > 0 ? `$${(printableReport.zlMarket).toFixed(2)}` : '-'}
+                    </td>
+                    <td className="p-1.5 border-r border-slate-300 text-right text-slate-400">-</td>
+                    <td className="p-1.5 text-right font-black text-emerald-800">
+                      ${(printableReport.saldoZelle || 0).toFixed(2)} USD
                     </td>
                   </tr>
                 </tbody>
@@ -1377,7 +1470,7 @@ export default function EntregaTurnos({
                     <th className="p-1.5 border-r border-black">Huésped / Concepto</th>
                     <th className="p-1.5 border-r border-black">Medio de Pago</th>
                     <th className="p-1.5 border-r border-black text-right">Monto Pagado</th>
-                    <th className="p-1.5 text-right">Equivalente</th>
+                    <th className="p-1.5 text-right font-black">Tasa Aplicada</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1394,9 +1487,10 @@ export default function EntregaTurnos({
 
                     const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta'].some(m => cleanMetodo.toLowerCase().includes(m)) || (cleanMetodo.toLowerCase().includes('efectivo') && !cleanMetodo.toLowerCase().includes('($)'));
                     const displayUsd = parseFloat(item.monto) || 0;
+                    const itemTasa = (item.tasa_usd && parseFloat(item.tasa_usd) > 0) ? parseFloat(item.tasa_usd) : tasaUsd;
                     const displayVes = (item.monto_ves && parseFloat(item.monto_ves) > 0)
                       ? parseFloat(item.monto_ves)
-                      : (displayUsd * tasaUsd);
+                      : (displayUsd * itemTasa);
 
                     return (
                       <tr key={item.id || index} className="border-b border-slate-300">
@@ -1409,8 +1503,8 @@ export default function EntregaTurnos({
                         <td className="p-1.5 border-r border-slate-300 text-right font-black text-slate-800">
                           {isVes ? `Bs. ${displayVes.toFixed(2)}` : `$${displayUsd.toFixed(2)} USD`}
                         </td>
-                        <td className="p-1.5 text-right font-medium text-slate-500">
-                          {isVes ? `~ $${displayUsd.toFixed(2)} USD` : `~ Bs. ${displayVes.toFixed(2)}`}
+                        <td className="p-1.5 text-right font-mono font-bold text-emerald-800">
+                          Bs. {itemTasa.toFixed(2)}
                         </td>
                       </tr>
                     );

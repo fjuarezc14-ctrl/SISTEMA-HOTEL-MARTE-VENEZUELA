@@ -33,6 +33,8 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const [valFilter, setValFilter] = useState('all');
   // Filter pending validation transactions by receptionist
   const [valRecepFilter, setValRecepFilter] = useState('TODOS');
+  // Fast Search Query state for Cash Flow Table
+  const [searchQuery, setSearchQuery] = useState('');
 
   // States for Control de Huéspedes Policial (Fase 4)
   const [isPoliceModalOpen, setIsPoliceModalOpen] = useState(false);
@@ -53,22 +55,13 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const [editRefVal, setEditRefVal] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
-  // Helper function to detect digital payments with reference code strings (Pago Móvil, Punto, Zelle)
-  const isDigitalPayment = (m) => {
-    if (!m) return false;
-    const str = m.toLowerCase();
+  // Helper function to detect digital payments with reference code strings (Pago Móvil, Punto, Zelle, Binance)
+  const isDigitalPayment = (metodoStr) => {
+    if (!metodoStr) return false;
+    const str = metodoStr.toLowerCase();
+    if (str === 'efectivo ($)' || str === 'efectivo (bs)' || str === 'efectivo bolívares') return false;
 
-    // Pago Mixto check: is digital only if it contains digital channels (pago móvil, punto, zelle)
-    if (str.includes('pago mixto') || str.includes('mixto')) {
-      return str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle');
-    }
-
-    // Pure physical cash is never digital
-    if (str === 'efectivo ($)' || str === 'efectivo (bs)' || str === 'efectivo bolívares' || str === 'efectivo') {
-      return false;
-    }
-
-    const hasDigitalMethod = str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle');
+    const hasDigitalMethod = str.includes('pago móvil') || str.includes('pago movil') || str.includes('punto') || str.includes('zelle') || str.includes('binance');
     const hasRealRef = str.includes('ref:') && !str.includes('ref: n/a') && !str.includes('ref: -') && !str.includes('ref: none');
     return hasDigitalMethod || hasRealRef;
   };
@@ -188,6 +181,15 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       if (usdAmt > 0) channels.push({ type: 'zelle', method: 'Zelle', label: `$${usdAmt.toFixed(2)} Zelle`, amountUsd: usdAmt, isDigital: true, ref });
     }
 
+    // Extract Binance
+    const bnMatch = raw.match(/binance:\s*\$([\d.]+)(?:\s*\(Ref:\s*([^)]+)\))?/i);
+    if (bnMatch) {
+      const usdAmt = parseFloat(bnMatch[1]) || 0;
+      const ref = bnMatch[2] ? bnMatch[2].trim() : null;
+      if (ref) refsList.push({ method: 'Binance', code: ref });
+      if (usdAmt > 0) channels.push({ type: 'binance', method: 'Binance Pay', label: `$${usdAmt.toFixed(2)} Binance`, amountUsd: usdAmt, isDigital: true, ref });
+    }
+
     const hasDigital = channels.some(c => c.isDigital);
 
     return {
@@ -214,25 +216,43 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   // Is Admin or Supervisor
   const isAdminOrSupervisor = currentUser && (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Super Admin');
 
-  // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM" and ISO strings)
+  // Robust Date parser for caja.hora string (handles "DD/MM/YYYY, HH:MM", ISO strings and timestamps)
   const parseCajaFecha = (horaStr) => {
     if (!horaStr) return new Date(0);
-    if (typeof horaStr !== 'string') return new Date(horaStr);
-    if (horaStr.includes('/')) {
-      try {
-        const parts = horaStr.split(',');
-        const dateParts = parts[0].trim().split('/').map(Number); // [D, M, Y]
-        const timeParts = (parts[1] || '00:00').trim().split(':').map(Number); // [H, M]
-        // Parsear siempre como hora Venezuela (UTC-4) con offset explícito
-        const isoStr = `${dateParts[2]}-${String(dateParts[1]).padStart(2,'0')}-${String(dateParts[0]).padStart(2,'0')}T${String(timeParts[0] || 0).padStart(2,'0')}:${String(timeParts[1] || 0).padStart(2,'0')}:00-04:00`;
-        const p = new Date(isoStr);
-        return isNaN(p.getTime()) ? new Date(0) : p;
-      } catch (e) {
-        return new Date(0);
+    try {
+      if (typeof horaStr === 'number') return new Date(horaStr);
+      if (typeof horaStr === 'string') {
+        const str = horaStr.trim();
+        if (!str) return new Date(0);
+        if (str.includes('/')) {
+          const parts = str.split(',');
+          const dateStr = parts[0].trim();
+          const timeStr = parts[1] ? parts[1].trim() : '00:00';
+          const dParts = dateStr.split('/').map(s => parseInt(s.trim(), 10));
+          if (dParts.length === 3 && !isNaN(dParts[0]) && !isNaN(dParts[1]) && !isNaN(dParts[2])) {
+            const day = dParts[0];
+            const month = dParts[1] - 1;
+            const year = dParts[2] < 100 ? 2000 + dParts[2] : dParts[2];
+            
+            let hours = 0;
+            let minutes = 0;
+            const tParts = timeStr.replace(/(AM|PM)/i, '').trim().split(':').map(s => parseInt(s.trim(), 10));
+            if (!isNaN(tParts[0])) hours = tParts[0];
+            if (!isNaN(tParts[1])) minutes = tParts[1];
+            if (timeStr.toLowerCase().includes('pm') && hours < 12) hours += 12;
+            if (timeStr.toLowerCase().includes('am') && hours === 12) hours = 0;
+
+            const parsed = new Date(year, month, day, hours, minutes, 0);
+            if (!isNaN(parsed.getTime())) return parsed;
+          }
+        }
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
       }
+    } catch (e) {
+      return new Date(0);
     }
-    const d = new Date(horaStr);
-    return isNaN(d.getTime()) ? new Date(0) : d;
+    return new Date(0);
   };
 
   // Calculate active shift cutoff time (Fase 2)
@@ -243,13 +263,24 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     currentUser && (t.usuarioId === currentUser.id || t.usuarioNombre === currentUser.nombre)
   );
   
-  const getCajaTimestamp = (id) => {
-    if (!id) return 0;
-    const match = id.match(/\d+/);
+  const getCajaTimestamp = (tOrId) => {
+    if (!tOrId) return 0;
+    if (typeof tOrId === 'object') {
+      if (tOrId.hora) {
+        const dt = parseCajaFecha(tOrId.hora);
+        if (dt && !isNaN(dt.getTime())) return dt.getTime();
+      }
+      if (tOrId.id) {
+        const match = String(tOrId.id).match(/\d+/);
+        if (match) return parseInt(match[0], 10);
+      }
+      return 0;
+    }
+    const match = String(tOrId).match(/\d+/);
     return match ? parseInt(match[0], 10) : 0;
   };
   
-  const sortedCierres = [...myCierreTransactions].sort((a, b) => getCajaTimestamp(b.id) - getCajaTimestamp(a.id));
+  const sortedCierres = [...myCierreTransactions].sort((a, b) => getCajaTimestamp(b) - getCajaTimestamp(a));
   const lastCierreTx = sortedCierres[0];
   const lastCierreDate = lastCierreTx ? parseCajaFecha(lastCierreTx.hora) : null;
 
@@ -356,9 +387,12 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     document.body.removeChild(link);
   };
 
-  // Filter caja list by Filter Mode
+  // Filter caja list by Filter Mode (strictly force 'mine' for non-admin/supervisor)
+  const isStrictReceptionist = !isAdminOrSupervisor;
+  const activeFilterMode = isStrictReceptionist ? 'mine' : filterMode;
+
   let displayedCaja = [...caja];
-  if (filterMode === 'mine' && currentUser) {
+  if (activeFilterMode === 'mine' && currentUser) {
     displayedCaja = displayedCaja.filter(t => {
       if (t.tipo === 'Cierre') return false; // Hide system closure markers from list
       const matchesUser = (t.usuarioId === currentUser.id) || (t.usuarioNombre && currentUser.nombre && t.usuarioNombre.trim().toLowerCase() === currentUser.nombre.trim().toLowerCase());
@@ -396,18 +430,60 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     }
   }
 
-  displayedCaja = [...displayedCaja].sort((a, b) => getCajaTimestamp(b.id) - getCajaTimestamp(a.id));
+  // Fast text search query filter
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    displayedCaja = displayedCaja.filter(t => {
+      const concepto = (t.concepto || '').toLowerCase();
+      const usuario = (t.usuarioNombre || '').toLowerCase();
+      const metodo = (t.metodo || '').toLowerCase();
+      const monto = String(t.monto || '');
+      const montoVes = String(t.monto_ves || '');
+      return concepto.includes(q) || usuario.includes(q) || metodo.includes(q) || monto.includes(q) || montoVes.includes(q);
+    });
+  }
 
-  // Calculate totals for displayed movements ($ USD and Bs. VES)
-  const totalIngresos = displayedCaja
+  displayedCaja = [...displayedCaja].sort((a, b) => getCajaTimestamp(b) - getCajaTimestamp(a));
+
+  // Calculate bimonetaria native totals for displayed movements ($ USD and Bs. VES)
+  const totalIngresosBimoneda = displayedCaja
     .filter(t => t.tipo === 'Ingreso')
-    .reduce((sum, t) => sum + parseFloat(t.monto), 0);
+    .reduce((acc, t) => {
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
+      let sumUsd = 0;
+      let sumVes = 0;
+      for (const ch of breakdown.channels) {
+        if (ch.isVes) {
+          sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+        } else {
+          sumUsd += ch.amountUsd;
+        }
+      }
+      return { usd: acc.usd + sumUsd, ves: acc.ves + sumVes };
+    }, { usd: 0, ves: 0 });
 
-  const totalEgresos = displayedCaja
+  const totalEgresosBimoneda = displayedCaja
     .filter(t => t.tipo === 'Egreso')
-    .reduce((sum, t) => sum + parseFloat(t.monto), 0);
+    .reduce((acc, t) => {
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
+      let sumUsd = 0;
+      let sumVes = 0;
+      for (const ch of breakdown.channels) {
+        if (ch.isVes) {
+          sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+        } else {
+          sumUsd += ch.amountUsd;
+        }
+      }
+      return { usd: acc.usd + sumUsd, ves: acc.ves + sumVes };
+    }, { usd: 0, ves: 0 });
 
-  const saldoNeto = totalIngresos - totalEgresos;
+  const totalNetoBimoneda = {
+    usd: totalIngresosBimoneda.usd - totalEgresosBimoneda.usd,
+    ves: totalIngresosBimoneda.ves - totalEgresosBimoneda.ves
+  };
 
   // Shift calculation for current logged in user (by official 5 payment methods)
   const myMovements = currentUser ? caja.filter(t => {
@@ -426,7 +502,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
    * la porción exacta de cada canal sin errores de regex.
    */
   const extractMethodAmount = (t, targetKey) => {
-    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
     const monto = parseFloat(t.monto) || 0;
     const breakdown = parsePaymentBreakdown(t.metodo, monto, txTasa);
     const target = targetKey.toLowerCase();
@@ -472,7 +548,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const digitalValidadosUsd = myMovements
     .filter(t => t.tipo === 'Ingreso' && t.validado === 1)
     .reduce((s, t) => {
-      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
       const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
       const digSum = breakdown.channels.filter(c => c.isDigital).reduce((cs, c) => cs + c.amountUsd, 0);
       return s + digSum;
@@ -481,7 +557,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   const digitalPendientesUsd = myMovements
     .filter(t => t.tipo === 'Ingreso' && (!t.validado || t.validado === 0))
     .reduce((s, t) => {
-      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+      const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
       const breakdown = parsePaymentBreakdown(t.metodo, parseFloat(t.monto) || 0, txTasa);
       const digSum = breakdown.channels.filter(c => c.isDigital).reduce((cs, c) => cs + c.amountUsd, 0);
       return s + digSum;
@@ -657,9 +733,13 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          totalEfectivo: myEfectivoVES.usd,
-          totalTarjeta: myPuntoVenta.usd,
-          totalOtros: myPagoMovil.usd + myDivisasUSD.usd + myZelle.usd,
+          netoDivisasUsd: (myDivisasUSD.usd + myZelle.usd - myEgresos),
+          netoBolivaresVes: (myEfectivoVES.ves + myPagoMovil.ves + myPuntoVenta.ves),
+          totalEfectivoUsd: myDivisasUSD.usd,
+          totalEfectivoVes: myEfectivoVES.ves,
+          totalPagoMovil: myPagoMovil.ves,
+          totalPunto: myPuntoVenta.ves,
+          totalZelle: myZelle.usd,
           totalEgresos: myEgresos,
           saldoNeto: mySaldoNeto
         })
@@ -828,160 +908,254 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
         )}
       </div>
 
-      {/* Financial KPIs Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl shrink-0">
-            <i className="fa-solid fa-[#c5920c] fa-money-bill-trend-up"></i>
+      {/* Financial KPIs Overview - Estándar Bimonetario Nativo */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Bloque DIVISAS ($ USD) */}
+        <div className="bg-emerald-50/70 p-4.5 rounded-2xl border-2 border-emerald-300 shadow-sm">
+          <div className="flex justify-between items-center mb-3 border-b border-emerald-200/80 pb-2">
+            <h4 className="text-xs font-black text-emerald-800 uppercase flex items-center gap-1.5">
+              <i className="fa-solid fa-dollar-sign text-emerald-600"></i> Resumen Operativo en Divisas ($ USD)
+            </h4>
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+              {filterMode === 'mine' ? 'Mi Turno' : 'General'}
+            </span>
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase">Total Ingresos ({filterMode === 'mine' ? 'Mi Turno' : 'General'})</p>
-            <p className="text-2xl font-black text-emerald-600">${totalIngresos.toFixed(2)} USD</p>
-            <span className="text-[10px] text-slate-400 font-bold block">~ Bs. {(totalIngresos * tasaUsd).toFixed(2)}</span>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos USD</p>
+              <p className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">${totalIngresosBimoneda.usd.toFixed(2)}</p>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos USD</p>
+              <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-${totalEgresosBimoneda.usd.toFixed(2)}</p>
+            </div>
+            <div className="bg-emerald-700 p-3 rounded-xl text-white shadow-2xs">
+              <p className="text-[9px] font-bold text-emerald-200 uppercase">Neto USD</p>
+              <p className="text-base sm:text-lg font-black text-white mt-0.5">${totalNetoBimoneda.usd.toFixed(2)}</p>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-2xl shrink-0">
-            <i className="fa-solid fa-money-bill-transfer"></i>
+        {/* Bloque BOLÍVARES (Bs. VES) */}
+        <div className="bg-blue-50/70 p-4.5 rounded-2xl border-2 border-blue-300 shadow-sm">
+          <div className="flex justify-between items-center mb-3 border-b border-blue-200/80 pb-2">
+            <h4 className="text-xs font-black text-blue-800 uppercase flex items-center gap-1.5">
+              <i className="fa-solid fa-money-bill-wave text-blue-600"></i> Resumen Operativo en Bolívares (Bs. VES)
+            </h4>
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
+              {filterMode === 'mine' ? 'Mi Turno' : 'General'}
+            </span>
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase">Total Egresos ({filterMode === 'mine' ? 'Mi Turno' : 'General'})</p>
-            <p className="text-2xl font-black text-rose-600">${totalEgresos.toFixed(2)} USD</p>
-            <span className="text-[10px] text-slate-400 font-bold block">~ Bs. {(totalEgresos * tasaUsd).toFixed(2)}</span>
-          </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-[#c5920c] flex items-center gap-4 bg-amber-50/10">
-          <div className="w-14 h-14 rounded-full bg-[#c5920c] text-white flex items-center justify-center text-2xl shrink-0">
-            <i className="fa-solid fa-cash-register"></i>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase">Saldo Neto en Caja</p>
-            <p className="text-2xl font-black text-slate-800">${saldoNeto.toFixed(2)} USD</p>
-            <span className="text-[10px] text-amber-700 font-bold block">~ Bs. {(saldoNeto * tasaUsd).toFixed(2)}</span>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos VES</p>
+              <p className="text-base sm:text-lg font-black text-blue-700 mt-0.5">Bs. {totalIngresosBimoneda.ves.toFixed(2)}</p>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos VES</p>
+              <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-Bs. {totalEgresosBimoneda.ves.toFixed(2)}</p>
+            </div>
+            <div className="bg-blue-800 p-3 rounded-xl text-white shadow-2xs">
+              <p className="text-[9px] font-bold text-blue-200 uppercase">Neto VES</p>
+              <p className="text-base sm:text-lg font-black text-white mt-0.5">Bs. {totalNetoBimoneda.ves.toFixed(2)}</p>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Movements History */}
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-slate-800">Flujo de Caja Activo</h3>
-            <span className="text-xs text-slate-400 font-semibold">
-              {displayedCaja.length} transacción(es)
-            </span>
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
+                <i className="fa-solid fa-[#ff331f] fa-list-check text-xs"></i> Flujo de Caja Activo
+              </h3>
+              <span className="text-xs text-slate-500 font-bold bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
+                {displayedCaja.length} movimiento(s)
+              </span>
+            </div>
+
+            {/* Buscador Rápido Inteligente & Botón Excel */}
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <div className="relative flex-1">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="🔍 Buscar por hab, concepto, recepcionista o ref..."
+                  className="w-full pl-8 pr-8 py-1.5 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 font-semibold outline-none focus:ring-2 focus:ring-[#ff331f] transition-all shadow-2xs"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    title="Limpiar búsqueda"
+                  >
+                    <i className="fa-solid fa-xmark text-xs"></i>
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  if (!displayedCaja || displayedCaja.length === 0) {
+                    alert('No hay movimientos para exportar.');
+                    return;
+                  }
+                  const headers = ['Hora / Fecha', 'Tipo', 'Concepto', 'Origen', 'Responsable', 'Método', 'Monto (USD)', 'Monto (VES)', 'Tasa Aplicada'];
+                  const rows = displayedCaja.map(t => {
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    const vesVal = t.monto_ves ? parseFloat(t.monto_ves).toFixed(2) : (parseFloat(t.monto || 0) * txTasa).toFixed(2);
+                    return [
+                      `"${(t.hora || '').replace(/"/g, '""')}"`,
+                      `"${(t.tipo || '').replace(/"/g, '""')}"`,
+                      `"${(t.concepto || '').replace(/"/g, '""')}"`,
+                      `"${(t.origen || 'Hospedaje').replace(/"/g, '""')}"`,
+                      `"${(t.usuarioNombre || 'Sistema').replace(/"/g, '""')}"`,
+                      `"${(t.metodo || '').replace(/"/g, '""')}"`,
+                      `"${parseFloat(t.monto || 0).toFixed(2)}"`,
+                      `"${vesVal}"`,
+                      `"${txTasa.toFixed(2)}"`
+                    ].join(',');
+                  });
+
+                  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.setAttribute('download', `Flujo_Caja_Hotel_Marte_${new Date().toISOString().slice(0, 10)}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-sm transition-all flex items-center gap-1.5 shrink-0"
+                title="Exportar movimientos a Excel / CSV"
+              >
+                <i className="fa-solid fa-file-excel"></i> Excel
+              </button>
+            </div>
           </div>
-          <div className="overflow-x-auto">
+
+          <div className="overflow-x-auto max-h-[580px] overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-300 hover:scrollbar-thumb-slate-400 border-b border-slate-200">
             {displayedCaja.length === 0 ? (
               <div className="p-12 text-center text-slate-400 text-sm font-medium">
-                No hay movimientos registrados en este filtro.
+                No hay movimientos registrados que coincidan con la búsqueda o filtro.
               </div>
             ) : (
-              <table className="w-full text-left border-collapse min-w-max">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 text-xs font-bold uppercase border-b border-slate-200">
-                    <th className="p-4 pl-6">Hora</th>
-                    <th className="p-4">Concepto / Detalle</th>
-                    <th className="p-4">Responsable</th>
-                    <th className="p-4 text-center">Método de Pago</th>
-                    <th className="p-4 text-center">Código de Referencia</th>
-                    <th className="p-4 text-center">Estado Validación</th>
-                    <th className="p-4 text-right">Monto ($ USD / Bs)</th>
-                    <th className="p-4 text-center pr-6">Acciones</th>
+              <table className="w-full min-w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-100 text-slate-700 text-[11px] font-black uppercase border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
+                  <tr>
+                    <th className="p-3 px-4 pl-5 bg-slate-100">Hora</th>
+                    <th className="p-3 px-4 bg-slate-100">Concepto / Detalle</th>
+                    <th className="p-3 px-4 bg-slate-100">Responsable</th>
+                    <th className="p-3 px-4 text-center bg-slate-100">Método de Pago</th>
+                    <th className="p-3 px-4 text-center bg-slate-100">Código Referencia</th>
+                    <th className="p-3 px-4 text-center bg-slate-100">Estado Validación</th>
+                    <th className="p-3 px-4 text-right bg-slate-100">Monto Nativo</th>
+                    <th className="p-3 px-4 text-center pr-5 bg-slate-100">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
+                <tbody className="divide-y divide-slate-100 text-xs">
                   {displayedCaja.map(t => {
-                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00)) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                     const montoUsdVal = parseFloat(t.monto) || 0;
                     const isValidated = t.validado === 1;
                     const breakdown = parsePaymentBreakdown(t.metodo, montoUsdVal, txTasa);
                     const isDigital = breakdown.isMixto ? breakdown.hasDigital : breakdown.isDigital;
 
                     return (
-                      <tr key={t.id} className="hover:bg-slate-50/50">
-                        <td className="p-4 pl-6 text-slate-400 font-semibold whitespace-nowrap">{t.hora}</td>
-                        <td className="p-4 font-bold text-slate-800 min-w-[220px] max-w-sm leading-snug" title={t.concepto}>{t.concepto}</td>
-                        <td className="p-4 text-xs font-semibold text-slate-600">
-                          <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded-md border border-slate-200">
-                            <i className="fa-solid fa-user-check text-[10px] text-slate-400 mr-1"></i>
+                      <tr key={t.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-3 pl-5 text-slate-500 font-semibold whitespace-nowrap text-[11px]">{t.hora}</td>
+                        <td className="p-3 px-4 font-bold text-slate-800 leading-snug min-w-[200px] max-w-[300px] whitespace-normal break-words" title={t.concepto}>{t.concepto}</td>
+                        <td className="p-2.5 px-3 text-[11px] font-semibold text-slate-600">
+                          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 inline-block">
+                            <i className="fa-solid fa-user-check text-[9px] text-slate-400 mr-1"></i>
                             {t.usuarioNombre || 'Sistema'}
                           </span>
                         </td>
                         
                         {/* Método de Pago estructurado */}
-                        <td className="p-4 text-center">
-                          <div className="flex flex-col items-center justify-center gap-1">
+                        <td className="p-2.5 px-3 text-center">
+                          <div className="flex flex-col items-center justify-center gap-0.5">
                             {breakdown.isMixto ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <span className="bg-purple-100 text-purple-900 border border-purple-300 px-2.5 py-0.5 rounded-full text-xs font-black flex items-center gap-1 shadow-2xs">
-                                  <i className="fa-solid fa-arrows-split-up-and-left text-[10px] text-purple-600"></i> Pago Mixto
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="bg-purple-100 text-purple-900 border border-purple-300 px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 shadow-2xs">
+                                  <i className="fa-solid fa-arrows-split-up-and-left text-[9px] text-purple-600"></i> Pago Mixto
                                 </span>
-                                <div className="flex flex-wrap justify-center gap-1 max-w-[260px]">
+                                <div className="flex flex-wrap justify-center gap-0.5 max-w-[200px]">
                                   {breakdown.channels.map((ch, idx) => (
-                                    <span key={idx} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                    <span key={idx} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                                       {ch.label}
                                     </span>
                                   ))}
                                 </div>
                               </div>
                             ) : (
-                              <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold inline-block">
+                              <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200 text-[11px] font-bold inline-block">
                                 {breakdown.cleanMetodo}
                               </span>
                             )}
+                            
+                            {/* Insignia de Tasa Histórica Congelada de la Transacción */}
+                            <span className="bg-emerald-50 text-emerald-900 border border-emerald-200 text-[9px] font-black px-1.5 py-0.5 rounded inline-flex items-center gap-1 shadow-2xs" title={`Tasa capturada al momento del cobro: Bs. ${txTasa.toFixed(2)}`}>
+                              <i className="fa-solid fa-tag text-[8px] text-emerald-600"></i>
+                              Tasa: Bs. {txTasa.toFixed(2)}
+                            </span>
+
                             {(currentUser?.rol === 'Administrador' || currentUser?.rol === 'Super Admin') && (
                               <button
                                 onClick={() => handleOpenEditMetodo(t)}
                                 title="Editar método de pago (Super Admin)"
-                                className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-300 transition-all mt-0.5"
+                                className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[9px] font-black px-1 py-0.5 rounded border border-amber-300 transition-all"
                               >
-                                <i className="fa-solid fa-pen text-[9px] mr-1"></i> Editar
+                                <i className="fa-solid fa-pen text-[8px] mr-0.5"></i> Editar
                               </button>
                             )}
                           </div>
                         </td>
 
                         {/* Código de Referencia estructurado */}
-                        <td className="p-4 text-center font-mono">
+                        <td className="p-2.5 px-3 text-center font-mono">
                           {breakdown.isMixto ? (
                             breakdown.refsList.length > 0 ? (
-                              <div className="flex flex-wrap justify-center gap-1 max-w-[180px]">
+                              <div className="flex flex-wrap justify-center gap-0.5 max-w-[150px]">
                                 {breakdown.refsList.map((r, idx) => (
-                                  <span key={idx} className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-[11px] px-2 py-0.5 rounded-md inline-block shadow-2xs">
-                                    <i className="fa-solid fa-hashtag text-[9px] text-amber-600 mr-0.5"></i>
-                                    {r.code} <span className="text-[9px] font-sans font-normal text-amber-700">({r.method})</span>
+                                  <span key={idx} className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-[10px] px-1.5 py-0.5 rounded inline-block shadow-2xs">
+                                    <i className="fa-solid fa-hashtag text-[8px] text-amber-600 mr-0.5"></i>
+                                    {r.code} <span className="text-[8px] font-sans font-normal text-amber-700">({r.method})</span>
                                   </span>
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-slate-400 text-xs font-medium">-</span>
+                              <span className="text-slate-400 text-[11px] font-medium">-</span>
                             )
                           ) : (
                             breakdown.refCode && breakdown.refCode !== '-' ? (
-                              <span className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-xs px-2.5 py-1 rounded-lg inline-block shadow-2xs">
-                                <i className="fa-solid fa-hashtag text-[10px] text-amber-600 mr-1"></i>
+                              <span className="bg-amber-50 text-amber-900 border border-amber-300 font-black text-[11px] px-2 py-0.5 rounded-md inline-block shadow-2xs">
+                                <i className="fa-solid fa-hashtag text-[9px] text-amber-600 mr-0.5"></i>
                                 {breakdown.refCode}
                               </span>
                             ) : (
-                              <span className="text-slate-400 text-xs font-medium">-</span>
+                              <span className="text-slate-400 text-[11px] font-medium">-</span>
                             )
                           )}
                         </td>
                         
                         {/* Validation Status Badge & Action */}
-                        <td className="p-4 text-center">
+                        <td className="p-2.5 px-3 text-center">
                           {isDigital ? (
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1">
                               {isValidated ? (
-                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1">
+                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                                   <i className="fa-solid fa-circle-check text-emerald-600"></i>
                                   Validado {t.usuario_validador_nombre ? `(${t.usuario_validador_nombre})` : ''}
                                 </span>
                               ) : (
-                                <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1">
+                                <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                                   <i className="fa-solid fa-hourglass-half text-amber-600"></i>
                                   Pendiente ⏳
                                 </span>
@@ -991,10 +1165,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                                 <button
                                   disabled={validatingId === t.id}
                                   onClick={() => handleValidarPago(t.id)}
-                                  className={`p-1.5 rounded-lg border text-xs transition-all ${
+                                  className={`p-1 rounded border text-[10px] transition-all ${
                                     isValidated
                                       ? 'bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-slate-300'
-                                      : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-sm'
+                                      : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-2xs'
                                   }`}
                                   title={isValidated ? 'Desmarcar validación bancaria' : 'Validar este pago digital (Revisión bancaria)'}
                                 >
@@ -1007,30 +1181,36 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                               )}
                             </div>
                           ) : (
-                            <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                              <i className="fa-solid fa-wallet text-blue-500 mr-1"></i> Físico en Caja
+                            <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                              <i className="fa-solid fa-wallet text-blue-500 mr-1"></i> Físico
                             </span>
                           )}
                         </td>
 
-                        {/* Monto ($ USD / Bs) con desglose multimoneda exacto */}
+                        {/* Monto ($ USD / Bs) en moneda nativa limpia */}
                         {(() => {
                           const sign = t.tipo === 'Ingreso' ? '+' : t.tipo === 'Egreso' ? '-' : '';
                           const colorClass = t.tipo === 'Ingreso' ? 'text-green-600' : t.tipo === 'Egreso' ? 'text-rose-600' : 'text-amber-600';
 
                           if (breakdown.isMixto) {
                             return (
-                              <td className="p-4 text-right">
-                                <span className={`text-base font-black ${colorClass} block`}>
-                                  {sign} ${montoUsdVal.toFixed(2)} USD
+                              <td className="p-2.5 px-3 text-right">
+                                <span className={`text-[10px] font-black text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded uppercase inline-block mb-1 shadow-2xs`}>
+                                  <i className="fa-solid fa-layer-group text-[8px] mr-1"></i>
+                                  Pago Mixto
                                 </span>
-                                <div className="flex flex-col items-end gap-0.5 mt-1">
+                                <div className="flex flex-col items-end gap-1">
                                   {breakdown.channels.map((ch, idx) => (
-                                    <span key={idx} className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                                      {ch.method.includes('($)') || ch.method.includes('Zelle')
-                                        ? `$${ch.amountUsd.toFixed(2)} ${ch.method}`
-                                        : `Bs. ${(ch.amountVes || (ch.amountUsd * txTasa)).toFixed(2)} ${ch.method}`}
-                                    </span>
+                                    <div key={idx} className="flex items-center justify-end gap-1.5">
+                                      <span className={`text-xs font-black ${colorClass}`}>
+                                        {sign} {ch.method.includes('($)') || ch.method.includes('Zelle') || ch.method.includes('Binance')
+                                          ? `$${ch.amountUsd.toFixed(2)} USD`
+                                          : `Bs. ${(ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa)).toFixed(2)}`}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                        {ch.method}
+                                      </span>
+                                    </div>
                                   ))}
                                 </div>
                               </td>
@@ -1038,23 +1218,21 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                           }
 
                           const isVesPayment = ['Efectivo (Bs)', 'Pago Móvil', 'Punto de Venta'].some(m => breakdown.cleanMetodo.toLowerCase().includes(m.toLowerCase())) || (breakdown.cleanMetodo.toLowerCase().includes('efectivo') && !breakdown.cleanMetodo.toLowerCase().includes('($)'));
-                          const hasValidMontoVes = t.monto_ves && parseFloat(t.monto_ves) > 0 && (parseFloat(t.tasa_usd) !== 50.00 || tasaUsd === 50.00);
+                          const hasValidMontoVes = t.monto_ves && parseFloat(t.monto_ves) > 0;
                           const displayVes = hasValidMontoVes
                             ? parseFloat(t.monto_ves).toFixed(2)
                             : (montoUsdVal * txTasa).toFixed(2);
 
                           if (isVesPayment) {
                             return (
-                              <td className={`p-4 text-right font-black ${colorClass}`}>
+                              <td className={`p-2.5 px-3 text-right font-black text-xs ${colorClass}`}>
                                 {sign} Bs. {displayVes}
-                                <span className="text-[10px] text-slate-400 font-medium block">~ ${montoUsdVal.toFixed(2)} USD</span>
                               </td>
                             );
                           } else {
                             return (
-                              <td className={`p-4 text-right font-black ${colorClass}`}>
+                              <td className={`p-2.5 px-3 text-right font-black text-xs ${colorClass}`}>
                                 {sign} ${montoUsdVal.toFixed(2)} USD
-                                <span className="text-[10px] text-slate-400 font-medium block">~ Bs. {displayVes}</span>
                               </td>
                             );
                           }
@@ -1350,8 +1528,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-money-bill-wave text-emerald-600"></i> Efectivo (Bs):
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">Bs. {myEfectivoVES.ves.toFixed(2)}</span>
-                  <span className="text-[9px] text-slate-400 block">~ ${myEfectivoVES.usd.toFixed(2)} USD</span>
+                  <span className="font-black text-slate-800 text-sm block">Bs. {myEfectivoVES.ves.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1360,8 +1537,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-dollar-sign text-amber-600"></i> Efectivo ($):
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myDivisasUSD.usd.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {myDivisasUSD.ves.toFixed(2)}</span>
+                  <span className="font-black text-slate-800 text-sm block">${myDivisasUSD.usd.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -1374,8 +1550,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-mobile-screen-button text-purple-600"></i> Pago Móvil:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">Bs. {myPagoMovil.ves.toFixed(2)}</span>
-                  <span className="text-[9px] text-slate-400 block">~ ${myPagoMovil.usd.toFixed(2)} USD</span>
+                  <span className="font-black text-slate-800 text-sm block">Bs. {myPagoMovil.ves.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1384,8 +1559,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-credit-card text-blue-600"></i> Punto de Venta:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">Bs. {myPuntoVenta.ves.toFixed(2)}</span>
-                  <span className="text-[9px] text-slate-400 block">~ ${myPuntoVenta.usd.toFixed(2)} USD</span>
+                  <span className="font-black text-slate-800 text-sm block">Bs. {myPuntoVenta.ves.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1394,8 +1568,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                   <i className="fa-solid fa-coins text-amber-500"></i> Zelle:
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-slate-800 block">${myZelle.usd.toFixed(2)} USD</span>
-                  <span className="text-[9px] text-slate-400 block">~ Bs. {myZelle.ves.toFixed(2)}</span>
+                  <span className="font-black text-slate-800 text-sm block">${myZelle.usd.toFixed(2)} USD</span>
                 </div>
               </div>
 
@@ -1418,18 +1591,36 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
                 <span className="font-black">- ${myEgresos.toFixed(2)} USD</span>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex justify-between items-center mt-3 shadow-sm">
-                <div>
-                  <span className="text-[10px] font-black uppercase text-amber-800 block">Total Neto del Turno</span>
-                  <span className="text-[10px] text-amber-700 font-semibold">(Efectivo + Digitales - Egresos)</span>
+              <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl space-y-2.5 mt-3 shadow-sm">
+                <div className="text-[10px] font-black uppercase text-amber-900 tracking-wider border-b border-amber-200/80 pb-1.5 flex justify-between items-center">
+                  <span><i className="fa-solid fa-scale-balanced mr-1"></i> Total Neto del Turno (Desglose Bimonetario)</span>
+                  <span className="text-[9px] text-amber-700 font-semibold">(Ingresos - Egresos)</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-xl font-black text-amber-900 block">
-                    ${mySaldoNeto.toFixed(2)} USD
-                  </span>
-                  <span className="text-xs font-bold text-amber-700 block">
-                    ~ Bs. {mySaldoNetoVes.toFixed(2)}
-                  </span>
+                
+                <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                  <div className="bg-emerald-50/90 p-2.5 rounded-lg border border-emerald-200 text-left">
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-tight">
+                      <i className="fa-solid fa-dollar-sign text-emerald-600 mr-1"></i> Neto Divisas ($ USD)
+                    </span>
+                    <span className="text-base font-black text-emerald-900 block mt-0.5">
+                      ${(myDivisasUSD.usd + myZelle.usd - myEgresos).toFixed(2)} USD
+                    </span>
+                    <span className="text-[9px] text-emerald-700 font-medium block leading-tight mt-0.5">
+                      Efectivo $ + Zelle + Binance
+                    </span>
+                  </div>
+
+                  <div className="bg-blue-50/90 p-2.5 rounded-lg border border-blue-200 text-left">
+                    <span className="text-[10px] font-bold text-blue-800 uppercase block tracking-tight">
+                      <i className="fa-solid fa-money-bill-wave text-blue-600 mr-1"></i> Neto Bolívares (Bs)
+                    </span>
+                    <span className="text-base font-black text-blue-900 block mt-0.5">
+                      Bs. {(myEfectivoVES.ves + myPagoMovil.ves + myPuntoVenta.ves).toFixed(2)}
+                    </span>
+                    <span className="text-[9px] text-blue-700 font-medium block leading-tight mt-0.5">
+                      Efectivo Bs + Pago Móvil + Punto
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
