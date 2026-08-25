@@ -34,12 +34,10 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // Authenticated Fetch Helper
-  const authFetch = async (url, options = {}) => {
-    const activeToken = token || localStorage.getItem('marte_token');
+  // Authenticated Fetch Helper with atomic token fallback
+  const authFetch = async (url, options = {}, overrideToken = null) => {
+    const activeToken = overrideToken || token || localStorage.getItem('marte_token');
     if (!activeToken) {
-      setUser(null);
-      setToken('');
       return null;
     }
     const headers = {
@@ -52,10 +50,13 @@ export default function App() {
     try {
       const res = await fetch(url, { ...options, headers });
       if (res.status === 401) {
-        localStorage.removeItem('marte_token');
-        localStorage.removeItem('marte_user');
-        setUser(null);
-        setToken('');
+        // Only clear session if the 401 corresponds to the active persisted token
+        if (localStorage.getItem('marte_token') === activeToken) {
+          localStorage.removeItem('marte_token');
+          localStorage.removeItem('marte_user');
+          setUser(null);
+          setToken('');
+        }
         return null;
       }
       return res;
@@ -105,7 +106,27 @@ export default function App() {
     tieneAcomp: false
   });
 
-  // Handle Login form submission (v2 - Fase 1)
+  // Fetch state on mount and periodically
+  const fetchState = async (explicitToken = null) => {
+    const activeToken = explicitToken || token || localStorage.getItem('marte_token');
+    if (!activeToken) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await authFetch('/api/state', {}, activeToken);
+      if (!res) return;
+      if (!res.ok) throw new Error('Error al obtener el estado');
+      const data = await res.json();
+      setAppState(data);
+    } catch (error) {
+      console.error('API Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Login form submission with atomic synchronization
   const handleLoginSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setLoginError('');
@@ -118,13 +139,19 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Credenciales inválidas');
 
+      // 1. Persist token and user synchronously in localStorage
       localStorage.setItem('marte_token', data.token);
       localStorage.setItem('marte_user', JSON.stringify(data.user));
+      
+      // 2. Set React states
       setToken(data.token);
       setUser(data.user);
       
-      // Auto navigate to the first permitted module
-      const firstTab = data.user.permisos[0] || 'habitaciones';
+      // 3. Immediately pre-fetch full application state using the new token
+      await fetchState(data.token);
+
+      // 4. Auto navigate to the first permitted module
+      const firstTab = (data.user.permisos && data.user.permisos[0]) || 'habitaciones';
       setActiveTab(firstTab);
     } catch (error) {
       setLoginError(error.message);
@@ -140,31 +167,21 @@ export default function App() {
     setLoginPassword('');
   };
 
-  // Fetch state on mount and periodically
-  const fetchState = async () => {
-    if (!localStorage.getItem('marte_token')) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const res = await authFetch('/api/state');
-      if (!res) return;
-      if (!res.ok) throw new Error('Error al obtener el estado');
-      const data = await res.json();
-      setAppState(data);
-    } catch (error) {
-      console.error('API Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchState();
-    // Poll every 10 seconds to keep UI in sync
-    const interval = setInterval(fetchState, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const activeToken = token || localStorage.getItem('marte_token');
+    if (activeToken) {
+      fetchState(activeToken);
+      const interval = setInterval(() => {
+        const currentToken = localStorage.getItem('marte_token');
+        if (currentToken) {
+          fetchState(currentToken);
+        }
+      }, 10000);
+      return () => clearInterval(interval);
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
 
   // Operational control: Force redirection to shift handover if blocked
   useEffect(() => {
