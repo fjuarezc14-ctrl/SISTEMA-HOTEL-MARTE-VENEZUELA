@@ -999,7 +999,7 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                     <span className="text-sm font-black text-indigo-700">{pernoctasCount}</span>
                   </div>
                   <div className="text-center px-3 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="text-[9px] font-black text-slate-400 uppercase block">⚡ Horas Extras</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase block">⚡ Modalidad 4 Horas</span>
                     <span className="text-sm font-black text-amber-600">{horasCount}</span>
                   </div>
                 </div>
