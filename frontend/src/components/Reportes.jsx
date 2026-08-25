@@ -128,23 +128,26 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
   const parsePaymentBreakdown = (metodoStr, montoUsd, tasa) => {
     const raw = (metodoStr || '').trim();
     if (!raw) {
-      return { isMixto: false, cleanMetodo: 'Efectivo ($)', refCode: '-', isDigital: false, channels: [{ method: 'Efectivo ($)', label: 'Efectivo ($)', amountUsd: montoUsd, amountVes: montoUsd * (tasa || 1), isDigital: false, ref: null }] };
+      return { isMixto: false, cleanMetodo: 'Efectivo ($)', refCode: '-', isDigital: false, isVes: false, channels: [{ method: 'Efectivo ($)', label: 'Efectivo ($)', amountUsd: montoUsd, amountVes: montoUsd * (tasa || 1), isVes: false, isDigital: false, ref: null }] };
     }
 
     const isMixto = raw.toLowerCase().includes('pago mixto') || raw.toLowerCase().includes('mixto');
     if (!isMixto) {
       const cleanM = raw.replace(/\s*-\s*Ref:.*$/i, '').trim();
-      const isDig = raw.toLowerCase().includes('pago móvil') || raw.toLowerCase().includes('pago movil') || raw.toLowerCase().includes('punto') || raw.toLowerCase().includes('zelle');
+      const isDig = raw.toLowerCase().includes('pago móvil') || raw.toLowerCase().includes('pago movil') || raw.toLowerCase().includes('punto') || raw.toLowerCase().includes('zelle') || raw.toLowerCase().includes('binance');
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta', 'punto'].some(m => cleanM.toLowerCase().includes(m)) || (cleanM.toLowerCase().includes('efectivo') && !cleanM.toLowerCase().includes('($)'));
       return {
         isMixto: false,
         cleanMetodo: cleanM,
         refCode: '-',
         isDigital: isDig,
+        isVes,
         channels: [{
           method: cleanM,
           label: cleanM,
           amountUsd: montoUsd,
-          amountVes: montoUsd * (tasa || 1),
+          amountVes: isVes ? (montoUsd * (tasa || 1)) : 0,
+          isVes,
           isDigital: isDig,
           ref: null
         }]
@@ -156,40 +159,40 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     const efUsdMatch = raw.match(/efectivo \(\$\):\s*\$([\d.]+)/i);
     if (efUsdMatch) {
       const amt = parseFloat(efUsdMatch[1]) || 0;
-      if (amt > 0) channels.push({ method: 'Efectivo ($)', amountUsd: amt, amountVes: amt * (tasa || 1), isDigital: false });
+      if (amt > 0) channels.push({ method: 'Efectivo ($)', amountUsd: amt, amountVes: amt * (tasa || 1), isVes: false, isDigital: false });
     }
 
     const efVesMatch = raw.match(/efectivo \(bs\):\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
     if (efVesMatch) {
       const vesAmt = parseFloat(efVesMatch[1]) || 0;
       const usdAmt = efVesMatch[2] ? parseFloat(efVesMatch[2]) : (vesAmt / (tasa || 1));
-      if (vesAmt > 0) channels.push({ method: 'Efectivo (Bs)', amountUsd: usdAmt, amountVes: vesAmt, isDigital: false });
+      if (vesAmt > 0) channels.push({ method: 'Efectivo (Bs)', amountUsd: usdAmt, amountVes: vesAmt, isVes: true, isDigital: false });
     }
 
     const pmMatch = raw.match(/pago m[óo]vil:\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
     if (pmMatch) {
       const vesAmt = parseFloat(pmMatch[1]) || 0;
       const usdAmt = pmMatch[2] ? parseFloat(pmMatch[2]) : (vesAmt / (tasa || 1));
-      if (vesAmt > 0) channels.push({ method: 'Pago Móvil', amountUsd: usdAmt, amountVes: vesAmt, isDigital: true });
+      if (vesAmt > 0) channels.push({ method: 'Pago Móvil', amountUsd: usdAmt, amountVes: vesAmt, isVes: true, isDigital: true });
     }
 
     const ptMatch = raw.match(/punto:\s*bs\.?\s*([\d.]+)(?:\s*\(\$([\d.]+)\))?/i);
     if (ptMatch) {
       const vesAmt = parseFloat(ptMatch[1]) || 0;
       const usdAmt = ptMatch[2] ? parseFloat(ptMatch[2]) : (vesAmt / (tasa || 1));
-      if (vesAmt > 0) channels.push({ method: 'Punto de Venta', amountUsd: usdAmt, amountVes: vesAmt, isDigital: true });
+      if (vesAmt > 0) channels.push({ method: 'Punto de Venta', amountUsd: usdAmt, amountVes: vesAmt, isVes: true, isDigital: true });
     }
 
     const zlMatch = raw.match(/zelle:\s*\$([\d.]+)/i);
     if (zlMatch) {
       const usdAmt = parseFloat(zlMatch[1]) || 0;
-      if (usdAmt > 0) channels.push({ method: 'Zelle', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isDigital: true });
+      if (usdAmt > 0) channels.push({ method: 'Zelle', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isVes: false, isDigital: true });
     }
 
     const bnMatch = raw.match(/binance:\s*\$([\d.]+)/i);
     if (bnMatch) {
       const usdAmt = parseFloat(bnMatch[1]) || 0;
-      if (usdAmt > 0) channels.push({ method: 'Binance Pay', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isDigital: true });
+      if (usdAmt > 0) channels.push({ method: 'Binance Pay', amountUsd: usdAmt, amountVes: usdAmt * (tasa || 1), isVes: false, isDigital: true });
     }
 
     return {
@@ -219,8 +222,13 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
       const isZelle = target === 'zelle' && chMethod.includes('zelle');
 
       if (isEfectivoUsd || isEfectivoVes || isPagoMovil || isPunto || isZelle || chMethod.includes(target)) {
-        sumUsd += ch.amountUsd;
-        sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+        if (ch.isVes) {
+          sumVes += (t.monto_ves && parseFloat(t.monto_ves) > 0 && !breakdown.isMixto)
+            ? parseFloat(t.monto_ves)
+            : (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+        } else {
+          sumUsd += ch.amountUsd;
+        }
       }
     }
     return { usd: sumUsd, ves: sumVes };
@@ -239,12 +247,12 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     let realVes = 0;
 
     for (const ch of breakdown.channels) {
-      const chM = (ch.method || '').toLowerCase();
-      const isUsdChannel = chM.includes('($)') || chM.includes('zelle');
-      if (isUsdChannel) {
-        realUsd += ch.amountUsd;
+      if (ch.isVes) {
+        realVes += (t.monto_ves && parseFloat(t.monto_ves) > 0 && !breakdown.isMixto)
+          ? parseFloat(t.monto_ves)
+          : (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
       } else {
-        realVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+        realUsd += ch.amountUsd;
       }
     }
 
