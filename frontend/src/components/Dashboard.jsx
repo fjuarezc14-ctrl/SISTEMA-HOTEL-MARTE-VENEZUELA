@@ -73,6 +73,57 @@ export default function Dashboard({
         </div>
       </div>
 
+      {/* Top Banner: Notificación de Próximas Reservas (1 Día Antes / Hoy) */}
+      {(() => {
+        const todayDate = new Date();
+        const y = todayDate.getFullYear();
+        const m = String(todayDate.getMonth() + 1).padStart(2, '0');
+        const d = String(todayDate.getDate()).padStart(2, '0');
+        const todayStr = `${y}-${m}-${d}`;
+
+        const tomDate = new Date();
+        tomDate.setDate(tomDate.getDate() + 1);
+        const ty = tomDate.getFullYear();
+        const tm = String(tomDate.getMonth() + 1).padStart(2, '0');
+        const td = String(tomDate.getDate()).padStart(2, '0');
+        const tomorrowStr = `${ty}-${tm}-${td}`;
+
+        const upcomingAlerts = (reservas || []).filter(r => r.fechaIngreso === tomorrowStr || r.fechaIngreso === todayStr);
+        if (upcomingAlerts.length === 0) return null;
+
+        return (
+          <div className="bg-sky-50 border-2 border-sky-300 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center text-xl shrink-0 shadow-sm animate-pulse">
+                <i className="fa-solid fa-bell"></i>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-sky-900 uppercase tracking-wide flex items-center gap-1.5">
+                  Aviso de Próximas Llegadas de Reserva (1 Día Antes / Hoy)
+                </h4>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {upcomingAlerts.map(r => {
+                    const isTomorrow = r.fechaIngreso === tomorrowStr;
+                    const clientName = r.cliente ? r.cliente.nombre : (r.clienteNombre || 'Cliente');
+                    return (
+                      <span key={r.id} className={`text-xs font-bold px-2.5 py-0.5 rounded-lg border ${
+                        isTomorrow ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-blue-100 text-blue-900 border-blue-300'
+                      }`}>
+                        <i className="fa-solid fa-calendar-day mr-1"></i>
+                        Hab <strong>#{r.numHabitacion}</strong> ({clientName}) - <span className="uppercase font-black">{isTomorrow ? 'MAÑANA' : 'HOY'}</span> a las {r.hora}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <span className="text-xs font-black bg-sky-200 text-sky-900 px-3 py-1 rounded-xl border border-sky-300">
+              {upcomingAlerts.length} Reserva(s) Prevista(s)
+            </span>
+          </div>
+        );
+      })()}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ROOM MAP */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
@@ -161,16 +212,48 @@ export default function Dashboard({
                     </span>
                   )}
 
-                  {h.estado === 'Reservada' && (() => {
+                  {/* Reservation badges */}
+                  {(() => {
                     const r = (reservas || []).find(resv => resv.numHabitacion === h.num);
                     if (!r) return null;
-                    const dateFormatted = r.fechaIngreso ? new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }) : '';
-                    return (
-                      <span className="block text-[10px] font-extrabold text-blue-600 bg-blue-100/60 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-blue-200">
-                        <i className="fa-solid fa-clock mr-1"></i>
-                        {dateFormatted ? `${dateFormatted} a las ` : ''}{r.hora}
-                      </span>
-                    );
+
+                    const todayDate = new Date();
+                    const y = todayDate.getFullYear();
+                    const m = String(todayDate.getMonth() + 1).padStart(2, '0');
+                    const d = String(todayDate.getDate()).padStart(2, '0');
+                    const todayStr = `${y}-${m}-${d}`;
+
+                    const tomDate = new Date();
+                    tomDate.setDate(tomDate.getDate() + 1);
+                    const ty = tomDate.getFullYear();
+                    const tm = String(tomDate.getMonth() + 1).padStart(2, '0');
+                    const td = String(tomDate.getDate()).padStart(2, '0');
+                    const tomorrowStr = `${ty}-${tm}-${td}`;
+
+                    if (r.fechaIngreso === tomorrowStr) {
+                      return (
+                        <span className="block text-[9px] font-black text-amber-900 bg-amber-200/90 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-amber-400 shadow-2xs">
+                          <i className="fa-solid fa-bell text-amber-700 mr-1 animate-pulse"></i>
+                          Reserva MAÑANA ({r.hora})
+                        </span>
+                      );
+                    } else if (r.fechaIngreso === todayStr || h.estado === 'Reservada') {
+                      return (
+                        <span className="block text-[9px] font-extrabold text-blue-600 bg-blue-100/60 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-blue-200">
+                          <i className="fa-solid fa-clock mr-1"></i>
+                          Llega HOY ({r.hora})
+                        </span>
+                      );
+                    } else if (r.fechaIngreso > tomorrowStr) {
+                      const dateFormatted = new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' });
+                      return (
+                        <span className="block text-[9px] font-bold text-slate-600 bg-slate-100 py-0.5 px-1 rounded-md mt-2 tracking-tight border border-slate-200">
+                          <i className="fa-solid fa-calendar-check text-slate-400 mr-1"></i>
+                          Reserva: {dateFormatted} ({r.hora})
+                        </span>
+                      );
+                    }
+                    return null;
                   })()}
 
                   {/* Expiration Banner */}

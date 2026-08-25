@@ -252,16 +252,48 @@ export default function Habitaciones({ habitaciones = [], tickets = [], tarifas 
                   </span>
                 )}
 
-                {h.estado === 'Reservada' && (() => {
+                {/* Reservation badges */}
+                {(() => {
                   const r = (reservas || []).find(resv => resv.numHabitacion === h.num);
                   if (!r) return null;
-                  const dateFormatted = r.fechaIngreso ? new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }) : '';
-                  return (
-                    <span className="block text-[10px] font-extrabold text-blue-600 bg-blue-100/60 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-blue-200">
-                      <i className="fa-solid fa-clock mr-1"></i>
-                      {dateFormatted ? `${dateFormatted} a las ` : ''}{r.hora}
-                    </span>
-                  );
+
+                  const todayDate = new Date();
+                  const y = todayDate.getFullYear();
+                  const m = String(todayDate.getMonth() + 1).padStart(2, '0');
+                  const d = String(todayDate.getDate()).padStart(2, '0');
+                  const todayStr = `${y}-${m}-${d}`;
+
+                  const tomDate = new Date();
+                  tomDate.setDate(tomDate.getDate() + 1);
+                  const ty = tomDate.getFullYear();
+                  const tm = String(tomDate.getMonth() + 1).padStart(2, '0');
+                  const td = String(tomDate.getDate()).padStart(2, '0');
+                  const tomorrowStr = `${ty}-${tm}-${td}`;
+
+                  if (r.fechaIngreso === tomorrowStr) {
+                    return (
+                      <span className="block text-[9px] font-black text-amber-900 bg-amber-200/90 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-amber-400 shadow-2xs">
+                        <i className="fa-solid fa-bell text-amber-700 mr-1 animate-pulse"></i>
+                        Reserva MAÑANA ({r.hora})
+                      </span>
+                    );
+                  } else if (r.fechaIngreso === todayStr || h.estado === 'Reservada') {
+                    return (
+                      <span className="block text-[9px] font-extrabold text-blue-600 bg-blue-100/60 py-1 px-1.5 rounded-lg mt-2 tracking-wide border border-blue-200">
+                        <i className="fa-solid fa-clock mr-1"></i>
+                        Llega HOY ({r.hora})
+                      </span>
+                    );
+                  } else if (r.fechaIngreso > tomorrowStr) {
+                    const dateFormatted = new Date(r.fechaIngreso + 'T00:00:00').toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' });
+                    return (
+                      <span className="block text-[9px] font-bold text-slate-600 bg-slate-100 py-0.5 px-1 rounded-md mt-2 tracking-tight border border-slate-200">
+                        <i className="fa-solid fa-calendar-check text-slate-400 mr-1"></i>
+                        Reserva: {dateFormatted} ({r.hora})
+                      </span>
+                    );
+                  }
+                  return null;
                 })()}
                 
                 {h.estado === 'Ocupada' && h.salida && (

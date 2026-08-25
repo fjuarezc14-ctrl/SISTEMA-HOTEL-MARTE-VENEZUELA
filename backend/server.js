@@ -420,6 +420,19 @@ app.get('/api/state', requireAuth, async (req, res) => {
       FROM reservas r
       JOIN clientes c ON r.clienteId = c.id
     `);
+
+    // Auto-normalize rooms with future reservations (> today) so they remain 'Libre' today
+    const todayStr = new Date().toISOString().split('T')[0];
+    for (const h of habitaciones) {
+      if (h.estado === 'Reservada') {
+        const matchingRes = reservasRaw.find(r => r.numHabitacion === h.num);
+        if (!matchingRes || (matchingRes.fechaIngreso && matchingRes.fechaIngreso > todayStr)) {
+          await db.run("UPDATE habitaciones SET estado = 'Libre', huesped = '' WHERE num = ?", [h.num]);
+          h.estado = 'Libre';
+          h.huesped = '';
+        }
+      }
+    }
     
     const reservas = reservasRaw.map(r => ({
       id: r.id,
@@ -1384,12 +1397,17 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
       );
     }
 
-    // 2. Set Room status to Reservada
+    // 2. Set Room status to Reservada ONLY if reservation is for TODAY
     const formattedName = formatGuestName(nombre);
-    await db.run(
-      `UPDATE habitaciones SET estado = 'Reservada', huesped = ? WHERE num = ?`,
-      [formattedName, numHabitacion]
-    );
+    const todayDateStr = new Date().toISOString().split('T')[0];
+    const isForToday = !fechaIngreso || fechaIngreso === todayDateStr;
+
+    if (isForToday) {
+      await db.run(
+        `UPDATE habitaciones SET estado = 'Reservada', huesped = ? WHERE num = ?`,
+        [formattedName, numHabitacion]
+      );
+    }
 
     // 3. Create reservation record
     const resId = 'r_' + Date.now();
