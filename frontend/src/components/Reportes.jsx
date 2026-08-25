@@ -261,28 +261,26 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return String(metodoStr);
   };
 
-  // General executive calculations for filteredCaja
-  const ingresosHospedaje = filteredCaja
-    .filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))))
-    .reduce((sum, t) => sum + safeNum(t.monto), 0);
+  // General executive calculations for filteredCaja using exact bimonetary breakdown
+  const sumAmounts = (txList) => txList.reduce((acc, t) => {
+    const res = getTransactionAmounts(t);
+    return {
+      usd: acc.usd + res.usd,
+      ves: acc.ves + res.ves
+    };
+  }, { usd: 0, ves: 0 });
 
-  const ingresosMarket = filteredCaja
-    .filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')))
-    .reduce((sum, t) => sum + safeNum(t.monto), 0);
+  const hospedajeTx = filteredCaja.filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))));
+  const marketTx = filteredCaja.filter(t => t && t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')));
+  const egresosTx = filteredCaja.filter(t => t && t.tipo === 'Egreso');
 
-  const totalEgresos = filteredCaja
-    .filter(t => t && t.tipo === 'Egreso')
-    .reduce((sum, t) => sum + safeNum(t.monto), 0);
-
-  const gananciaNeta = (ingresosHospedaje + ingresosMarket) - totalEgresos;
-
-  const metodosSummary = filteredCaja
-    .filter(t => t && t.tipo === 'Ingreso')
-    .reduce((acc, t) => {
-      const m = t.metodo || 'Otros';
-      acc[m] = (acc[m] || 0) + safeNum(t.monto);
-      return acc;
-    }, {});
+  const totalHospedaje = sumAmounts(hospedajeTx);
+  const totalMarket = sumAmounts(marketTx);
+  const totalEgresosBimoneda = sumAmounts(egresosTx);
+  const totalNetoBimoneda = {
+    usd: (totalHospedaje.usd + totalMarket.usd) - totalEgresosBimoneda.usd,
+    ves: (totalHospedaje.ves + totalMarket.ves) - totalEgresosBimoneda.ves
+  };
 
   // Build unique receptionists list from caja & historial
   const recepList = Array.from(new Set([
@@ -471,11 +469,14 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
     return { turno, txns, ingresos, egresos, checkIns, checkOuts, market, total: ingresos - egresos };
   }).filter(g => g.txns.length > 0);
 
-  const totalIngresosRecep = recepTransactions.filter(t => t.tipo === 'Ingreso').reduce((s, t) => s + t.montoNum, 0);
-  const totalEgresosRecep = recepTransactions.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + t.montoNum, 0);
+  const totalIngresosRecepBimoneda = sumAmounts(recepTransactions.filter(t => t.tipo === 'Ingreso'));
+  const totalEgresosRecepBimoneda = sumAmounts(recepTransactions.filter(t => t.tipo === 'Egreso'));
   const totalCheckIns = recepTransactions.filter(t => t.tipoTransaccion === 'Check In').length;
   const totalCheckOuts = recepTransactions.filter(t => t.tipoTransaccion === 'Check Out').length;
-  const totalMarketRecep = recepTransactions.filter(t => t.tipoTransaccion === 'Market').reduce((s, t) => s + t.montoNum, 0);
+  const totalMarketRecepBimoneda = sumAmounts(recepTransactions.filter(t => t.tipoTransaccion === 'Market'));
+  const totalIngresosRecep = totalIngresosRecepBimoneda.usd;
+  const totalEgresosRecep = totalEgresosRecepBimoneda.usd;
+  const totalMarketRecep = totalMarketRecepBimoneda.usd;
 
   const getMethodTotalRecep = (methodName) => {
     return recepTransactions
@@ -694,23 +695,29 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-emerald-200 border-l-4 border-l-emerald-500">
               <p className="text-[10px] font-bold text-emerald-600 uppercase">Total Ingresos</p>
-              <p className="text-xl font-black text-slate-800">${totalIngresosRecep.toFixed(2)}</p>
-              <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(totalIngresosRecep * tasaUsd).toFixed(2)}</p>
+              <div className="space-y-0.5 mt-1">
+                <p className="text-xl font-black text-slate-800">${totalIngresosRecepBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
+                <p className="text-xs font-bold text-emerald-700">Bs. {totalIngresosRecepBimoneda.ves.toFixed(2)} <span className="text-[10px] text-emerald-600 font-semibold">VES</span></p>
+              </div>
             </div>
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-rose-200 border-l-4 border-l-rose-500">
               <p className="text-[10px] font-bold text-rose-600 uppercase">Total Egresos</p>
-              <p className="text-xl font-black text-slate-800">${totalEgresosRecep.toFixed(2)}</p>
-              <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(totalEgresosRecep * tasaUsd).toFixed(2)}</p>
+              <div className="space-y-0.5 mt-1">
+                <p className="text-xl font-black text-slate-800">-${totalEgresosRecepBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
+                <p className="text-xs font-bold text-rose-600">-Bs. {totalEgresosRecepBimoneda.ves.toFixed(2)} <span className="text-[10px] text-rose-500 font-semibold">VES</span></p>
+              </div>
             </div>
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-blue-200 border-l-4 border-l-blue-500">
               <p className="text-[10px] font-bold text-blue-600 uppercase">Check In / Check Out</p>
-              <p className="text-xl font-black text-slate-800">{totalCheckIns} / {totalCheckOuts}</p>
+              <p className="text-xl font-black text-slate-800 mt-1">{totalCheckIns} / {totalCheckOuts}</p>
               <p className="text-[10px] text-slate-400 font-bold">Ingresos / Egresos de huéspedes</p>
             </div>
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-amber-200 border-l-4 border-l-amber-500">
               <p className="text-[10px] font-bold text-amber-600 uppercase">Total Market</p>
-              <p className="text-xl font-black text-slate-800">${totalMarketRecep.toFixed(2)}</p>
-              <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(totalMarketRecep * tasaUsd).toFixed(2)}</p>
+              <div className="space-y-0.5 mt-1">
+                <p className="text-xl font-black text-slate-800">${totalMarketRecepBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
+                <p className="text-xs font-bold text-amber-600">Bs. {totalMarketRecepBimoneda.ves.toFixed(2)} <span className="text-[10px] text-amber-500 font-semibold">VES</span></p>
+              </div>
             </div>
           </div>
 
@@ -914,23 +921,31 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
         <div className="md:col-span-2 grid grid-cols-2 gap-4">
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-emerald-200 border-l-4 border-l-emerald-500">
             <p className="text-[10px] font-bold text-emerald-600 uppercase">Ingresos Hospedaje</p>
-            <p className="text-2xl font-black text-slate-800">${ingresosHospedaje.toFixed(2)}</p>
-            <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(ingresosHospedaje * tasaUsd).toFixed(2)}</p>
+            <div className="space-y-0.5 mt-1">
+              <p className="text-2xl font-black text-slate-800">${totalHospedaje.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
+              <p className="text-sm font-bold text-emerald-700">Bs. {totalHospedaje.ves.toFixed(2)} <span className="text-[10px] text-emerald-600 font-semibold">VES</span></p>
+            </div>
           </div>
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 border-l-4 border-l-amber-500">
             <p className="text-[10px] font-bold text-amber-600 uppercase">Ingresos Market</p>
-            <p className="text-2xl font-black text-slate-800">${ingresosMarket.toFixed(2)}</p>
-            <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(ingresosMarket * tasaUsd).toFixed(2)}</p>
+            <div className="space-y-0.5 mt-1">
+              <p className="text-2xl font-black text-slate-800">${totalMarket.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
+              <p className="text-sm font-bold text-amber-600">Bs. {totalMarket.ves.toFixed(2)} <span className="text-[10px] text-amber-500 font-semibold">VES</span></p>
+            </div>
           </div>
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-rose-200 border-l-4 border-l-rose-500">
             <p className="text-[10px] font-bold text-rose-600 uppercase">Egresos Totales</p>
-            <p className="text-2xl font-black text-slate-800">${totalEgresos.toFixed(2)}</p>
-            <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(totalEgresos * tasaUsd).toFixed(2)}</p>
+            <div className="space-y-0.5 mt-1">
+              <p className="text-2xl font-black text-slate-800">-${totalEgresosBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-400">USD</span></p>
+              <p className="text-sm font-bold text-rose-600">-Bs. {totalEgresosBimoneda.ves.toFixed(2)} <span className="text-[10px] text-rose-500 font-semibold">VES</span></p>
+            </div>
           </div>
           <div className="bg-slate-800 p-5 rounded-2xl shadow-sm border-l-4 border-l-blue-500">
-            <p className="text-[10px] font-bold text-blue-300 uppercase">Ganancia Neta (USD)</p>
-            <p className="text-2xl font-black text-white">${gananciaNeta.toFixed(2)}</p>
-            <p className="text-[10px] text-slate-400 font-bold">~ Bs. {(gananciaNeta * tasaUsd).toFixed(2)}</p>
+            <p className="text-[10px] font-bold text-blue-300 uppercase">Ganancia Neta (Total Real)</p>
+            <div className="space-y-0.5 mt-1">
+              <p className="text-2xl font-black text-white">${totalNetoBimoneda.usd.toFixed(2)} <span className="text-xs font-bold text-slate-300">USD</span></p>
+              <p className="text-sm font-bold text-emerald-400">Bs. {totalNetoBimoneda.ves.toFixed(2)} <span className="text-[10px] text-emerald-300 font-semibold">VES</span></p>
+            </div>
           </div>
         </div>
       </div>
@@ -946,23 +961,23 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center bg-slate-50 p-4 rounded-xl border border-slate-200 print:bg-white print:border-slate-800">
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Total Hospedaje</p>
-            <p className="text-lg font-black text-emerald-600">${ingresosHospedaje.toFixed(2)} USD</p>
-            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(ingresosHospedaje * tasaUsd).toFixed(2)} VES</p>
+            <p className="text-base font-black text-emerald-600">${totalHospedaje.usd.toFixed(2)} USD</p>
+            <p className="text-xs font-bold text-slate-700">Bs. {totalHospedaje.ves.toFixed(2)} VES</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Total Market</p>
-            <p className="text-lg font-black text-amber-600">${ingresosMarket.toFixed(2)} USD</p>
-            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(ingresosMarket * tasaUsd).toFixed(2)} VES</p>
+            <p className="text-base font-black text-amber-600">${totalMarket.usd.toFixed(2)} USD</p>
+            <p className="text-xs font-bold text-slate-700">Bs. {totalMarket.ves.toFixed(2)} VES</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Total Egresos</p>
-            <p className="text-lg font-black text-rose-600">${totalEgresos.toFixed(2)} USD</p>
-            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(totalEgresos * tasaUsd).toFixed(2)} VES</p>
+            <p className="text-base font-black text-rose-600">-${totalEgresosBimoneda.usd.toFixed(2)} USD</p>
+            <p className="text-xs font-bold text-slate-700">-Bs. {totalEgresosBimoneda.ves.toFixed(2)} VES</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-500 uppercase">Ganancia Neta</p>
-            <p className="text-lg font-black text-slate-800">${gananciaNeta.toFixed(2)} USD</p>
-            <p className="text-[10px] font-bold text-slate-500">~ Bs. {(gananciaNeta * tasaUsd).toFixed(2)} VES</p>
+            <p className="text-base font-black text-slate-800">${totalNetoBimoneda.usd.toFixed(2)} USD</p>
+            <p className="text-xs font-bold text-slate-700">Bs. {totalNetoBimoneda.ves.toFixed(2)} VES</p>
           </div>
         </div>
 
