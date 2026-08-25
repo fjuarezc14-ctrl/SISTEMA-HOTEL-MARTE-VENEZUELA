@@ -2399,24 +2399,23 @@ app.get('/api/reportes/cierre-diario', requireAuth, async (req, res) => {
       }
     });
 
-    // Fetch declared shifts balances
-    const turnos = await db.all("SELECT * FROM entrega_turnos");
-    const dailyTurnos = turnos.filter(t => {
-      const tDate = parseDBDate(t.fechaHoraEntrega);
-      return tDate >= startRange && tDate <= endRange;
+    // Calculate declared physical and digital balances from real caja transactions
+    let declaredUsdCash = 0;
+    let declaredVesCash = 0;
+    let declaredPagoMovil = 0;
+    let declaredPunto = 0;
+    let declaredZelle = 0;
+
+    dailyTx.forEach(t => {
+      if (t.tipo === 'Ingreso') {
+        const bd = getPaymentBreakdown(t, tasaUsd);
+        declaredUsdCash += bd.usdCash;
+        declaredVesCash += bd.vesCash;
+        declaredPagoMovil += bd.pagoMovil;
+        declaredPunto += bd.punto;
+        declaredZelle += bd.zelle;
+      }
     });
-
-    // Physical cash is non-cumulative (from the last shift of the day)
-    dailyTurnos.sort((a, b) => parseDBDate(a.fechaHoraEntrega) - parseDBDate(b.fechaHoraEntrega));
-    const lastShift = dailyTurnos[dailyTurnos.length - 1];
-
-    const declaredUsdCash = lastShift ? (parseFloat(lastShift.saldoEfectivoUsd) || 0) : 0;
-    const declaredVesCash = lastShift ? (parseFloat(lastShift.saldoEfectivoVes) || 0) : 0;
-
-    // Digital payments are cumulative across all shifts of the day
-    const declaredPagoMovil = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPagoMovil) || 0), 0);
-    const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
-    const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
 
     // Sum egresos
     let egresosBs = 0;
@@ -2595,22 +2594,22 @@ app.get('/api/reportes/cierre-consolidado', requireAuth, async (req, res) => {
         }
       });
 
-      const dailyTurnos = turnos.filter(t => {
-        const tDate = parseDBDate(t.fechaHoraEntrega);
-        return tDate >= startRange && tDate <= endRange;
+      let declaredUsdCash = 0;
+      let declaredVesCash = 0;
+      let declaredPagoMovil = 0;
+      let declaredPunto = 0;
+      let declaredZelle = 0;
+
+      dailyTx.forEach(t => {
+        if (t.tipo === 'Ingreso') {
+          const bd = getPaymentBreakdown(t, tasaUsd);
+          declaredUsdCash += bd.usdCash;
+          declaredVesCash += bd.vesCash;
+          declaredPagoMovil += bd.pagoMovil;
+          declaredPunto += bd.punto;
+          declaredZelle += bd.zelle;
+        }
       });
-
-      // Physical cash is non-cumulative (from the last shift of the day)
-      dailyTurnos.sort((a, b) => parseDBDate(a.fechaHoraEntrega) - parseDBDate(b.fechaHoraEntrega));
-      const lastShift = dailyTurnos[dailyTurnos.length - 1];
-
-      const declaredUsdCash = lastShift ? (parseFloat(lastShift.saldoEfectivoUsd) || 0) : 0;
-      const declaredVesCash = lastShift ? (parseFloat(lastShift.saldoEfectivoVes) || 0) : 0;
-
-      // Digital payments are cumulative across all shifts of the day
-      const declaredPagoMovil = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPagoMovil) || 0), 0);
-      const declaredPunto = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoPunto) || 0), 0);
-      const declaredZelle = dailyTurnos.reduce((s, t) => s + (parseFloat(t.saldoZelle) || 0), 0);
 
       let egresosBs = 0;
       let egresosUsd = 0;
