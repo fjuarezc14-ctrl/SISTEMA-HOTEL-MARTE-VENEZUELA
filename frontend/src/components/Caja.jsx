@@ -310,7 +310,11 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
   }
   shiftStart8am.setHours(8, 0, 0, 0); // 08:00:00
 
-  const shiftCutoffTime = lastShiftResetDate ? lastShiftResetDate : shiftStart8am;
+  // Active shift cutoff timestamp: only use lastShiftResetDate if it is from the current operational window (>= shiftStart8am),
+  // otherwise fallback to shiftStart8am to prevent pulling historical transactions from past days (e.g. Aug 23rd).
+  const shiftCutoffTime = (lastShiftResetDate && lastShiftResetDate >= shiftStart8am) 
+    ? lastShiftResetDate 
+    : shiftStart8am;
 
   // Build unique receptionists list for Police Report dropdown (Fase 4)
   const recepList = Array.from(new Set(
