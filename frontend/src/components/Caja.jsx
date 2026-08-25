@@ -117,16 +117,19 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     if (!isMixto) {
       const isDigital = isDigitalPayment(raw);
       const { cleanMetodo, refCode } = parseMetodoAndRef(raw);
+      const isVes = ['efectivo (bs)', 'pago móvil', 'pago movil', 'punto de venta', 'punto'].some(m => cleanMetodo.toLowerCase().includes(m)) || (cleanMetodo.toLowerCase().includes('efectivo') && !cleanMetodo.toLowerCase().includes('($)'));
       return {
         isMixto: false,
         cleanMetodo,
         refCode,
         isDigital,
+        isVes,
         channels: [{
           method: cleanMetodo,
           label: cleanMetodo,
           amountUsd: montoUsd,
-          amountVes: montoUsd * (tasa || 1),
+          amountVes: isVes ? (montoUsd * (tasa || 1)) : 0,
+          isVes,
           isDigital,
           ref: refCode !== '-' ? refCode : null
         }]
@@ -141,7 +144,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     const efUsdMatch = raw.match(/efectivo \(\$\):\s*\$([\d.]+)/i);
     if (efUsdMatch) {
       const amt = parseFloat(efUsdMatch[1]) || 0;
-      if (amt > 0) channels.push({ type: 'cash_usd', method: 'Efectivo ($)', label: `$${amt.toFixed(2)} Efectivo ($)`, amountUsd: amt, isDigital: false, ref: null });
+      if (amt > 0) channels.push({ type: 'cash_usd', method: 'Efectivo ($)', label: `$${amt.toFixed(2)} Efectivo ($)`, amountUsd: amt, isVes: false, isDigital: false, ref: null });
     }
 
     // Extract Efectivo (Bs)
@@ -149,7 +152,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
     if (efVesMatch) {
       const vesAmt = parseFloat(efVesMatch[1]) || 0;
       const usdAmt = efVesMatch[2] ? parseFloat(efVesMatch[2]) : (vesAmt / tasa);
-      if (vesAmt > 0) channels.push({ type: 'cash_ves', method: 'Efectivo (Bs)', label: `Bs. ${vesAmt.toFixed(2)} Efectivo (Bs)`, amountUsd: usdAmt, amountVes: vesAmt, isDigital: false, ref: null });
+      if (vesAmt > 0) channels.push({ type: 'cash_ves', method: 'Efectivo (Bs)', label: `Bs. ${vesAmt.toFixed(2)} Efectivo (Bs)`, amountUsd: usdAmt, amountVes: vesAmt, isVes: true, isDigital: false, ref: null });
     }
 
     // Extract Pago Móvil
@@ -159,7 +162,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       const usdAmt = pmMatch[2] ? parseFloat(pmMatch[2]) : (vesAmt / tasa);
       const ref = pmMatch[3] ? pmMatch[3].trim() : null;
       if (ref) refsList.push({ method: 'PM', code: ref });
-      if (vesAmt > 0) channels.push({ type: 'pago_movil', method: 'Pago Móvil', label: `Bs. ${vesAmt.toFixed(2)} Pago Móvil`, amountUsd: usdAmt, amountVes: vesAmt, isDigital: true, ref });
+      if (vesAmt > 0) channels.push({ type: 'pago_movil', method: 'Pago Móvil', label: `Bs. ${vesAmt.toFixed(2)} Pago Móvil`, amountUsd: usdAmt, amountVes: vesAmt, isVes: true, isDigital: true, ref });
     }
 
     // Extract Punto de Venta
@@ -169,7 +172,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       const usdAmt = ptMatch[2] ? parseFloat(ptMatch[2]) : (vesAmt / tasa);
       const ref = ptMatch[3] ? ptMatch[3].trim() : null;
       if (ref) refsList.push({ method: 'Punto', code: ref });
-      if (vesAmt > 0) channels.push({ type: 'punto', method: 'Punto de Venta', label: `Bs. ${vesAmt.toFixed(2)} Punto`, amountUsd: usdAmt, amountVes: vesAmt, isDigital: true, ref });
+      if (vesAmt > 0) channels.push({ type: 'punto', method: 'Punto de Venta', label: `Bs. ${vesAmt.toFixed(2)} Punto`, amountUsd: usdAmt, amountVes: vesAmt, isVes: true, isDigital: true, ref });
     }
 
     // Extract Zelle
@@ -178,7 +181,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       const usdAmt = parseFloat(zlMatch[1]) || 0;
       const ref = zlMatch[2] ? zlMatch[2].trim() : null;
       if (ref) refsList.push({ method: 'Zelle', code: ref });
-      if (usdAmt > 0) channels.push({ type: 'zelle', method: 'Zelle', label: `$${usdAmt.toFixed(2)} Zelle`, amountUsd: usdAmt, isDigital: true, ref });
+      if (usdAmt > 0) channels.push({ type: 'zelle', method: 'Zelle', label: `$${usdAmt.toFixed(2)} Zelle`, amountUsd: usdAmt, isVes: false, isDigital: true, ref });
     }
 
     // Extract Binance
@@ -187,7 +190,7 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       const usdAmt = parseFloat(bnMatch[1]) || 0;
       const ref = bnMatch[2] ? bnMatch[2].trim() : null;
       if (ref) refsList.push({ method: 'Binance', code: ref });
-      if (usdAmt > 0) channels.push({ type: 'binance', method: 'Binance Pay', label: `$${usdAmt.toFixed(2)} Binance`, amountUsd: usdAmt, isDigital: true, ref });
+      if (usdAmt > 0) channels.push({ type: 'binance', method: 'Binance Pay', label: `$${usdAmt.toFixed(2)} Binance`, amountUsd: usdAmt, isVes: false, isDigital: true, ref });
     }
 
     const hasDigital = channels.some(c => c.isDigital);
@@ -455,7 +458,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       let sumVes = 0;
       for (const ch of breakdown.channels) {
         if (ch.isVes) {
-          sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+          const vesVal = (t.monto_ves && parseFloat(t.monto_ves) > 0 && !breakdown.isMixto)
+            ? parseFloat(t.monto_ves)
+            : (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+          sumVes += vesVal;
         } else {
           sumUsd += ch.amountUsd;
         }
@@ -472,7 +478,10 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
       let sumVes = 0;
       for (const ch of breakdown.channels) {
         if (ch.isVes) {
-          sumVes += (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+          const vesVal = (t.monto_ves && parseFloat(t.monto_ves) > 0 && !breakdown.isMixto)
+            ? parseFloat(t.monto_ves)
+            : (ch.amountVes !== undefined ? ch.amountVes : (ch.amountUsd * txTasa));
+          sumVes += vesVal;
         } else {
           sumUsd += ch.amountUsd;
         }
