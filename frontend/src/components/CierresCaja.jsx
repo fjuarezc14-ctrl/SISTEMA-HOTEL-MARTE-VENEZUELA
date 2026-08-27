@@ -25,7 +25,12 @@ export default function CierresCaja() {
   const [error, setError] = useState('');
 
   // Daily Closure States
-  const [diarioFecha, setDiarioFecha] = useState(() => formatDateLocal(new Date()));
+  const [diarioModo, setDiarioModo] = useState('activo'); // 'activo' | 'fecha'
+  const [diarioFecha, setDiarioFecha] = useState(() => {
+    const shiftDate = new Date();
+    if (shiftDate.getHours() < 8) shiftDate.setDate(shiftDate.getDate() - 1);
+    return formatDateLocal(shiftDate);
+  });
   const [diarioData, setDiarioData] = useState(null);
 
   // Consolidated Closure States
@@ -194,28 +199,62 @@ export default function CierresCaja() {
         <div>
           {/* Controls (Hidden during print) */}
           <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-50 p-4 rounded-xl mb-6 border print:hidden">
-            <div className="flex items-center space-x-3">
-              <label className="text-sm font-semibold text-gray-700">Seleccionar Fecha:</label>
-              <input
-                type="date"
-                value={diarioFecha}
-                onChange={(e) => {
-                  setDiarioFecha(e.target.value);
-                  fetchDiario(e.target.value);
-                }}
-                className="px-3 py-2 border rounded-lg focus:outline-none focus:ring focus:ring-indigo-200"
-              />
-              <button
-                onClick={() => fetchDiario(diarioFecha)}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
-              >
-                Buscar
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Selector de Modo: Turno Activo vs Fecha Específica */}
+              <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDiarioModo('activo');
+                    const shiftDate = new Date();
+                    if (shiftDate.getHours() < 8) shiftDate.setDate(shiftDate.getDate() - 1);
+                    const fStr = formatDateLocal(shiftDate);
+                    setDiarioFecha(fStr);
+                    fetchDiario(fStr);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    diarioModo === 'activo' ? 'bg-amber-500 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <i className="fa-solid fa-clock"></i> Turno Activo (8am - 8am)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDiarioModo('fecha')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    diarioModo === 'fecha' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <i className="fa-solid fa-calendar-days"></i> Consultar Fecha Pasada
+                </button>
+              </div>
+
+              {diarioModo === 'fecha' && (
+                <div className="flex items-center space-x-2 animate-fade-in">
+                  <input
+                    type="date"
+                    value={diarioFecha}
+                    onChange={(e) => {
+                      setDiarioFecha(e.target.value);
+                      fetchDiario(e.target.value);
+                    }}
+                    className="px-3 py-1.5 border rounded-lg text-xs font-semibold focus:outline-none focus:ring focus:ring-indigo-200 bg-white"
+                  />
+                  <button
+                    onClick={() => fetchDiario(diarioFecha)}
+                    className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition"
+                  >
+                    Buscar
+                  </button>
+                </div>
+              )}
             </div>
+
             <div>
               <button
                 onClick={handlePrint}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition flex items-center space-x-2"
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition flex items-center space-x-2 shadow-xs"
               >
                 <i className="fa-solid fa-print"></i>
                 <span>Imprimir Reporte</span>

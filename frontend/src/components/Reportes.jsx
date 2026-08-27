@@ -980,9 +980,16 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           {(() => {
             const pernoctasCount = hospedajeTx.filter(t => {
               const c = (t.concepto || '').toLowerCase();
-              return c.includes('pernocta') || c.includes('noche') || !c.includes('hora');
+              return c.includes('pernocta') || c.includes('noche');
             }).length;
-            const horasCount = hospedajeTx.length - pernoctasCount;
+
+            const horasExtrasCount = hospedajeTx.filter(t => {
+              const c = (t.concepto || '').toLowerCase();
+              return c.includes('hora extra') || c.includes('horas extras') || c.includes('extensi') || c.includes('recargo');
+            }).length;
+
+            const horasCount = Math.max(0, hospedajeTx.length - pernoctasCount - horasExtrasCount);
+            const totalHabitacionesFisicas = pernoctasCount + horasCount;
 
             return (
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
@@ -995,22 +1002,26 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
                       Movimiento de Ocupación Físico
                     </span>
                     <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2 mt-0.5">
-                      {hospedajeTx.length} <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">Habitaciones Alquiladas</span>
+                      {totalHabitacionesFisicas} <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">Habitaciones Alquiladas</span>
                     </h3>
                     <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                      Total de entradas y alquileres procesados en el período.
+                      Total de entradas físicas de habitaciones procesadas en el período.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
                   <div className="text-center px-3 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
                     <span className="text-[9px] font-black text-slate-400 uppercase block">🌙 Pernoctas</span>
                     <span className="text-sm font-black text-indigo-700">{pernoctasCount}</span>
                   </div>
                   <div className="text-center px-3 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="text-[9px] font-black text-slate-400 uppercase block">⚡ Modalidad 4 Horas</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase block">⏱️ Modalidad 4 Horas</span>
                     <span className="text-sm font-black text-amber-600">{horasCount}</span>
+                  </div>
+                  <div className="text-center px-3 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-[9px] font-black text-slate-400 uppercase block">⚡ Horas Extras</span>
+                    <span className="text-sm font-black text-purple-600">{horasExtrasCount}</span>
                   </div>
                 </div>
               </div>
