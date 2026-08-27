@@ -249,82 +249,86 @@ export default function CierresCaja() {
                 {/* 1. CANTIDAD DE HABITACIONES Y PERNOCTAS ALQUILADAS */}
                 <div>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">1. Cantidad de Habitaciones y Pernoctas Alquiladas</h3>
-                  <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 border-b">Tipo de Habitación</th>
-                        <th className="px-4 py-2 text-center text-xs font-bold text-gray-500 border-b">Modalidad</th>
-                        <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Cantidad Alquilada</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700 font-medium">Matrimonial</td>
-                        <td className="px-4 py-2 text-center text-gray-600">Por Horas (4h)</td>
-                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.matrimonial4h || 0}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700 font-medium">Matrimonial</td>
-                        <td className="px-4 py-2 text-center text-emerald-700 font-semibold">Pernocta</td>
-                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.matrimonialPernocta || 0}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700 font-medium">Mini Suite</td>
-                        <td className="px-4 py-2 text-center text-gray-600">Por Horas (4h)</td>
-                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.minisuite4h || 0}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700 font-medium">Mini Suite</td>
-                        <td className="px-4 py-2 text-center text-emerald-700 font-semibold">Pernocta</td>
-                        <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.minisuitePernocta || 0}</td>
-                      </tr>
-                      <tr className="bg-indigo-50/50 font-bold">
-                        <td className="px-4 py-2.5 text-indigo-900" colSpan="2">TOTAL HABITACIONES ALQUILADAS</td>
-                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">{diarioData.ocupacion?.totalHabitaciones || 0}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 border-b">Tipo de Habitación</th>
+                          <th className="px-4 py-2 text-center text-xs font-bold text-gray-500 border-b">Modalidad</th>
+                          <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Cantidad Alquilada</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-sm">
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700 font-medium">Matrimonial</td>
+                          <td className="px-4 py-2 text-center text-gray-600">Por Horas (4h)</td>
+                          <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.matrimonial4h || 0}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700 font-medium">Matrimonial</td>
+                          <td className="px-4 py-2 text-center text-emerald-700 font-semibold">Pernocta</td>
+                          <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.matrimonialPernocta || 0}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700 font-medium">Mini Suite</td>
+                          <td className="px-4 py-2 text-center text-gray-600">Por Horas (4h)</td>
+                          <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.minisuite4h || 0}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700 font-medium">Mini Suite</td>
+                          <td className="px-4 py-2 text-center text-emerald-700 font-semibold">Pernocta</td>
+                          <td className="px-4 py-2 text-right font-bold text-gray-800">{diarioData.ocupacion?.minisuitePernocta || 0}</td>
+                        </tr>
+                        <tr className="bg-indigo-50/50 font-bold">
+                          <td className="px-4 py-2.5 text-indigo-900" colSpan="2">TOTAL HABITACIONES ALQUILADAS</td>
+                          <td className="px-4 py-2.5 text-right text-indigo-900 text-base">{diarioData.ocupacion?.totalHabitaciones || 0}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* 2. VENTAS (INGRESO TEÓRICO) */}
                 <div>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">2. Ventas Registradas (Ingresos Teóricos)</h3>
-                  <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 border-b">Concepto</th>
-                        <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Bolívares (Bs)</th>
-                        <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Dólares ($ USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700">Ventas Habitaciones</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.habitaciones.usd.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700">Ingreso de Acompañante</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.acompanante.usd.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700">Ventas Mini Bar</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.minibar.usd.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2 text-gray-700">Daños, Serv y Otros</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.danos.usd.toFixed(2)}</td>
-                      </tr>
-                      <tr className="bg-indigo-50/50 font-bold">
-                        <td className="px-4 py-2.5 text-indigo-900 text-base">TOTAL VENTAS</td>
-                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">Bs. {diarioData.ventas.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-2.5 text-right text-indigo-900 text-base">${diarioData.ventas.total.usd.toFixed(2)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border border-gray-100 rounded-lg overflow-hidden">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 border-b">Concepto</th>
+                          <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Bolívares (Bs)</th>
+                          <th className="px-4 py-2 text-right text-xs font-bold text-gray-500 border-b">Dólares ($ USD)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-sm">
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700">Ventas Habitaciones</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.habitaciones.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.habitaciones.usd.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700">Ingreso de Acompañante</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.acompanante.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.acompanante.usd.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700">Ventas Mini Bar</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.minibar.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.minibar.usd.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2 text-gray-700">Daños, Serv y Otros</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">Bs. {diarioData.ventas.danos.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-gray-800">${diarioData.ventas.danos.usd.toFixed(2)}</td>
+                        </tr>
+                        <tr className="bg-indigo-50/50 font-bold">
+                          <td className="px-4 py-2.5 text-indigo-900 text-base">TOTAL VENTAS</td>
+                          <td className="px-4 py-2.5 text-right text-indigo-900 text-base">Bs. {diarioData.ventas.total.ves.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-2.5 text-right text-indigo-900 text-base">${diarioData.ventas.total.usd.toFixed(2)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* 3. DISPONIBLE (CONTEO DE CAJA) */}

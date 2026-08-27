@@ -985,18 +985,18 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos USD</p>
-                <p className="text-base sm:text-lg font-black text-emerald-700 mt-0.5">${totalIngresosBimoneda.usd.toFixed(2)}</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Ingresos USD</p>
+                <p className="text-sm sm:text-lg font-black text-emerald-700 mt-0.5">${totalIngresosBimoneda.usd.toFixed(2)}</p>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-2xs">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos USD</p>
-                <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-${totalEgresosBimoneda.usd.toFixed(2)}</p>
+              <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-emerald-100 shadow-2xs">
+                <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Egresos USD</p>
+                <p className="text-sm sm:text-lg font-black text-rose-600 mt-0.5">-${totalEgresosBimoneda.usd.toFixed(2)}</p>
               </div>
-              <div className="bg-emerald-700 p-3 rounded-xl text-white shadow-2xs">
-                <p className="text-[9px] font-bold text-emerald-200 uppercase">Neto USD</p>
-                <p className="text-base sm:text-lg font-black text-white mt-0.5">${totalNetoBimoneda.usd.toFixed(2)}</p>
+              <div className="bg-emerald-700 p-2.5 sm:p-3 rounded-xl text-white shadow-2xs">
+                <p className="text-[8px] sm:text-[9px] font-bold text-emerald-200 uppercase">Neto USD</p>
+                <p className="text-sm sm:text-lg font-black text-white mt-0.5">${totalNetoBimoneda.usd.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -1012,18 +1012,18 @@ export default function Caja({ caja = [], entregaTurnos = [], historialEstadias 
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Ingresos VES</p>
-                <p className="text-base sm:text-lg font-black text-blue-700 mt-0.5">Bs. {totalIngresosBimoneda.ves.toFixed(2)}</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Ingresos VES</p>
+                <p className="text-sm sm:text-lg font-black text-blue-700 mt-0.5">Bs. {totalIngresosBimoneda.ves.toFixed(2)}</p>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Egresos VES</p>
-                <p className="text-base sm:text-lg font-black text-rose-600 mt-0.5">-Bs. {totalEgresosBimoneda.ves.toFixed(2)}</p>
+              <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase">Egresos VES</p>
+                <p className="text-sm sm:text-lg font-black text-rose-600 mt-0.5">-Bs. {totalEgresosBimoneda.ves.toFixed(2)}</p>
               </div>
-              <div className="bg-blue-800 p-3 rounded-xl text-white shadow-2xs">
-                <p className="text-[9px] font-bold text-blue-200 uppercase">Neto VES</p>
-                <p className="text-base sm:text-lg font-black text-white mt-0.5">Bs. {totalNetoBimoneda.ves.toFixed(2)}</p>
+              <div className="bg-blue-800 p-2.5 sm:p-3 rounded-xl text-white shadow-2xs">
+                <p className="text-[8px] sm:text-[9px] font-bold text-blue-200 uppercase">Neto VES</p>
+                <p className="text-sm sm:text-lg font-black text-white mt-0.5">Bs. {totalNetoBimoneda.ves.toFixed(2)}</p>
               </div>
             </div>
           </div>
