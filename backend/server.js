@@ -444,6 +444,7 @@ app.get('/api/state', requireAuth, async (req, res) => {
       fechaIngreso: r.fechaIngreso || '',
       fechaSalida: r.fechaSalida || '',
       modalidad: r.modalidad || 'pernocta',
+      monto: parseFloat(r.monto || 0),
       cliente: {
         id: r.clienteId,
         nombre: r.clienteNombre,
@@ -1429,13 +1430,14 @@ app.post('/api/reservar', requireAuth, async (req, res) => {
       acompText = formattedAcomps.join(', ');
     }
 
+    const finalMonto = parseFloat(monto) || 0;
+
     await db.run(
-      'INSERT INTO reservas (id, res, clienteId, nombreAcomp, numHabitacion, hora, fechaIngreso, fechaSalida, modalidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [resId, resCode, clientId, acompText, numHabitacion, hora, fechaIngreso || '', fechaSalida || '', modalidad || 'pernocta']
+      'INSERT INTO reservas (id, res, clienteId, nombreAcomp, numHabitacion, hora, fechaIngreso, fechaSalida, modalidad, monto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [resId, resCode, clientId, acompText, numHabitacion, hora, fechaIngreso || '', fechaSalida || '', modalidad || 'pernocta', finalMonto]
     );
 
     // 4. Register deposit payment in Caja if amount > 0
-    const finalMonto = parseFloat(monto) || 0;
     if (finalMonto > 0) {
       await insertCajaTransaction(db, {
         tipo: 'Ingreso',
@@ -1592,7 +1594,10 @@ app.post('/api/checkin-reserva', requireAuth, async (req, res) => {
     const cantHuespedes = (acompText ? acompText.split(',').length : 0) + 1;
 
     // Consolidate payments: valor total de la habitacion en USD
-    const totalUsdPaid = (parseFloat(reserva.monto) || 0) + finalBalance;
+    const advancePaid = (reserva && parseFloat(reserva.monto) > 0)
+      ? parseFloat(reserva.monto)
+      : (resTx ? (parseFloat(resTx.monto) || 0) : 0);
+    const totalUsdPaid = advancePaid + finalBalance;
     const totalVesPaid = totalUsdPaid * tasaUsd;
     const consolidatedMetodo = finalBalance > 0 ? `${metodoPago} / ${balanceMetodo}` : metodoPago;
     const consolidatedRef = finalBalance > 0 ? `${referencia} / ${balanceReferencia || '-'}` : referencia;

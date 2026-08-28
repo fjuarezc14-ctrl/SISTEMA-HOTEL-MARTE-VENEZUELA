@@ -2296,7 +2296,9 @@ export function ConfirmarCheckinReservaModal({
     : (reserva?.modalidad === '4h' ? 10 : 20);
   const noches = reserva?.nochesPernocta || 1;
   const totalStayPrice = reserva?.modalidad === 'pernocta' ? (stayPrice * noches) : stayPrice;
-  const advance = resTx ? (parseFloat(resTx.monto) || 0) : 0;
+  const advance = (reserva && parseFloat(reserva.monto) > 0)
+    ? parseFloat(reserva.monto)
+    : (resTx ? (parseFloat(resTx.monto) || 0) : 0);
   const balance = Math.max(0, totalStayPrice - advance);
 
   const [modalWasClosed, setModalWasClosed] = useState(true);

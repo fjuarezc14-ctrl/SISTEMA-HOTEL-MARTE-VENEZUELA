@@ -51,6 +51,7 @@ export async function initDb() {
       fechaIngreso TEXT DEFAULT '',
       fechaSalida TEXT DEFAULT '',
       modalidad TEXT DEFAULT 'pernocta',
+      monto REAL DEFAULT 0,
       FOREIGN KEY(numHabitacion) REFERENCES habitaciones(num),
       FOREIGN KEY(clienteId) REFERENCES clientes(id)
     );
@@ -241,6 +242,9 @@ export async function initDb() {
   } catch (err) {}
   try {
     await db.run(`ALTER TABLE reservas ADD COLUMN modalidad TEXT DEFAULT 'pernocta'`);
+  } catch (err) {}
+  try {
+    await db.run(`ALTER TABLE reservas ADD COLUMN monto REAL DEFAULT 0`);
   } catch (err) {}
 
   // Seed data if empty
