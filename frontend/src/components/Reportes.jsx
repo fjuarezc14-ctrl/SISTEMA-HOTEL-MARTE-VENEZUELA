@@ -1185,115 +1185,121 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
 
         {showHospedaje && (
           <div className="mb-8">
-            <h4 className="text-sm font-black text-emerald-700 uppercase bg-emerald-50 border border-emerald-200 p-2 rounded-t-xl print:bg-white print:border-b-2 print:border-emerald-700">Detalle: Ingresos por Hospedaje</h4>
-            <table className="w-full text-left border-collapse text-xs border border-slate-200">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="p-2 border-b">Hora</th>
-                  <th className="p-2 border-b">Concepto</th>
-                  <th className="p-2 border-b">Método</th>
-                  <th className="p-2 border-b text-center">Tasa Cobro</th>
-                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
-                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market')))).map(t => {
-                  const amounts = getTransactionAmounts(t);
-                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-                  return (
-                    <tr key={t.id} className="border-b hover:bg-slate-50/50">
-                      <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
-                      <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
-                      <td className="p-2 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
-                      <td className="p-2 text-center font-mono font-bold text-emerald-800">Bs. {txTasa.toFixed(2)}</td>
-                      <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
-                        {amounts.usdStr}
-                      </td>
-                      <td className={`p-2 text-right font-bold ${amounts.ves > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
-                        {amounts.vesStr}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <h4 className="text-sm font-black text-emerald-700 uppercase bg-emerald-50 border border-emerald-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-emerald-700">Detalle: Ingresos por Hospedaje</h4>
+            <div className="overflow-x-auto touch-pan-x border border-slate-200 rounded-b-xl bg-white shadow-2xs">
+              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-2.5 border-b">Hora</th>
+                    <th className="p-2.5 border-b">Concepto</th>
+                    <th className="p-2.5 border-b">Método</th>
+                    <th className="p-2.5 border-b text-center">Tasa Cobro</th>
+                    <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
+                    <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market')))).map(t => {
+                    const amounts = getTransactionAmounts(t);
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    return (
+                      <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                        <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
+                        <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
+                        <td className="p-2.5 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
+                        <td className="p-2.5 text-center font-mono font-bold text-emerald-800">Bs. {txTasa.toFixed(2)}</td>
+                        <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
+                          {amounts.usdStr}
+                        </td>
+                        <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
+                          {amounts.vesStr}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {showMarket && (
           <div className="mb-8">
-            <h4 className="text-sm font-black text-amber-700 uppercase bg-amber-50 border border-amber-200 p-2 rounded-t-xl print:bg-white print:border-b-2 print:border-amber-700">Detalle: Ingresos por Market (Tienda)</h4>
-            <table className="w-full text-left border-collapse text-xs border border-slate-200">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="p-2 border-b">Hora</th>
-                  <th className="p-2 border-b">Concepto</th>
-                  <th className="p-2 border-b">Método</th>
-                  <th className="p-2 border-b text-center">Tasa Cobro</th>
-                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
-                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))).map(t => {
-                  const amounts = getTransactionAmounts(t);
-                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-                  return (
-                    <tr key={t.id} className="border-b hover:bg-slate-50/50">
-                      <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
-                      <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
-                      <td className="p-2 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
-                      <td className="p-2 text-center font-mono font-bold text-amber-800">Bs. {txTasa.toFixed(2)}</td>
-                      <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
-                        {amounts.usdStr}
-                      </td>
-                      <td className={`p-2 text-right font-bold ${amounts.ves > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
-                        {amounts.vesStr}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <h4 className="text-sm font-black text-amber-700 uppercase bg-amber-50 border border-amber-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-amber-700">Detalle: Ingresos por Market (Tienda)</h4>
+            <div className="overflow-x-auto touch-pan-x border border-slate-200 rounded-b-xl bg-white shadow-2xs">
+              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-2.5 border-b">Hora</th>
+                    <th className="p-2.5 border-b">Concepto</th>
+                    <th className="p-2.5 border-b">Método</th>
+                    <th className="p-2.5 border-b text-center">Tasa Cobro</th>
+                    <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
+                    <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))).map(t => {
+                    const amounts = getTransactionAmounts(t);
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    return (
+                      <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                        <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
+                        <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
+                        <td className="p-2.5 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
+                        <td className="p-2.5 text-center font-mono font-bold text-amber-800">Bs. {txTasa.toFixed(2)}</td>
+                        <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
+                          {amounts.usdStr}
+                        </td>
+                        <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
+                          {amounts.vesStr}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {showEgresos && (
           <div className="mb-8">
-            <h4 className="text-sm font-black text-rose-700 uppercase bg-rose-50 border border-rose-200 p-2 rounded-t-xl print:bg-white print:border-b-2 print:border-rose-700">Detalle: Egresos (Gastos y Retiros)</h4>
-            <table className="w-full text-left border-collapse text-xs border border-slate-200">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="p-2 border-b">Hora</th>
-                  <th className="p-2 border-b">Concepto</th>
-                  <th className="p-2 border-b">Responsable</th>
-                  <th className="p-2 border-b text-center">Tasa Cobro</th>
-                  <th className="p-2 border-b text-right">Monto ($ USD)</th>
-                  <th className="p-2 border-b text-right">Monto (Bs. VES)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCaja.filter(t => t.tipo === 'Egreso').map(t => {
-                  const amounts = getTransactionAmounts(t);
-                  const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-                  return (
-                    <tr key={t.id} className="border-b hover:bg-slate-50/50">
-                      <td className="p-2 whitespace-nowrap text-slate-500">{t.hora}</td>
-                      <td className="p-2 font-semibold text-slate-800">{t.concepto}</td>
-                      <td className="p-2">{t.usuarioNombre || 'Desconocido'}</td>
-                      <td className="p-2 text-center font-mono font-bold text-rose-800">Bs. {txTasa.toFixed(2)}</td>
-                      <td className={`p-2 text-right font-bold ${amounts.usd > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
-                        {amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}
-                      </td>
-                      <td className={`p-2 text-right font-bold ${amounts.ves > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
-                        {amounts.ves > 0 ? `-Bs. ${amounts.ves.toFixed(2)} VES` : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <h4 className="text-sm font-black text-rose-700 uppercase bg-rose-50 border border-rose-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-rose-700">Detalle: Egresos (Gastos y Retiros)</h4>
+            <div className="overflow-x-auto touch-pan-x border border-slate-200 rounded-b-xl bg-white shadow-2xs">
+              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-2.5 border-b">Hora</th>
+                    <th className="p-2.5 border-b">Concepto</th>
+                    <th className="p-2.5 border-b">Responsable</th>
+                    <th className="p-2.5 border-b text-center">Tasa Cobro</th>
+                    <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
+                    <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCaja.filter(t => t.tipo === 'Egreso').map(t => {
+                    const amounts = getTransactionAmounts(t);
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    return (
+                      <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                        <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
+                        <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
+                        <td className="p-2.5">{t.usuarioNombre || 'Desconocido'}</td>
+                        <td className="p-2.5 text-center font-mono font-bold text-rose-800">Bs. {txTasa.toFixed(2)}</td>
+                        <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
+                          {amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}
+                        </td>
+                        <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
+                          {amounts.ves > 0 ? `-Bs. ${amounts.ves.toFixed(2)} VES` : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
