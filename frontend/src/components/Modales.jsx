@@ -2850,7 +2850,12 @@ export function CheckoutModal({
             ? parseFloat(activeStay.monto_usd) 
             : ((parseFloat(activeStay.monto_ves) || 0) / tasaUsd))
         : 0;
-      const initialPending = Math.max(0, basePriceCheckout - stayPaidUsd);
+
+      // Si el huésped ya pagó la habitación al ingresar (Check-In), el saldo pendiente de hospedaje es $0.00 USD
+      const initialPending = (activeStay && stayPaidUsd > 0)
+        ? 0
+        : Math.max(0, basePriceCheckout - stayPaidUsd);
+
       setMontoHabitacion(initialPending.toFixed(2));
       
       setMetodoPago('Efectivo (Bs)');
