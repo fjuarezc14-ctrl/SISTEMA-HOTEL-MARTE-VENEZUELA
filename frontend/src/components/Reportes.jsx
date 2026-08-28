@@ -1183,125 +1183,257 @@ export default function Reportes({ caja = [], historial = [], currentUser, tasaU
           </div>
         </div>
 
-        {showHospedaje && (
-          <div className="mb-8">
-            <h4 className="text-sm font-black text-emerald-700 uppercase bg-emerald-50 border border-emerald-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-emerald-700">Detalle: Ingresos por Hospedaje</h4>
-            <div className="overflow-x-auto touch-pan-x border border-slate-200 rounded-b-xl bg-white shadow-2xs">
-              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-2.5 border-b">Hora</th>
-                    <th className="p-2.5 border-b">Concepto</th>
-                    <th className="p-2.5 border-b">Método</th>
-                    <th className="p-2.5 border-b text-center">Tasa Cobro</th>
-                    <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
-                    <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market')))).map(t => {
-                    const amounts = getTransactionAmounts(t);
-                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
-                    return (
-                      <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
-                        <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
-                        <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
-                        <td className="p-2.5 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
-                        <td className="p-2.5 text-center font-mono font-bold text-emerald-800">Bs. {txTasa.toFixed(2)}</td>
-                        <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
-                          {amounts.usdStr}
-                        </td>
-                        <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
-                          {amounts.vesStr}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {showHospedaje && (() => {
+          const list = filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Hospedaje' || (!t.origen && !(t.concepto || '').toLowerCase().includes('market'))));
+          return (
+            <div className="mb-8">
+              <h4 className="text-sm font-black text-emerald-700 uppercase bg-emerald-50 border border-emerald-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-emerald-700 flex justify-between items-center">
+                <span>Detalle: Ingresos por Hospedaje</span>
+                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">{list.length} registros</span>
+              </h4>
 
-        {showMarket && (
-          <div className="mb-8">
-            <h4 className="text-sm font-black text-amber-700 uppercase bg-amber-50 border border-amber-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-amber-700">Detalle: Ingresos por Market (Tienda)</h4>
-            <div className="overflow-x-auto touch-pan-x border border-slate-200 rounded-b-xl bg-white shadow-2xs">
-              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-2.5 border-b">Hora</th>
-                    <th className="p-2.5 border-b">Concepto</th>
-                    <th className="p-2.5 border-b">Método</th>
-                    <th className="p-2.5 border-b text-center">Tasa Cobro</th>
-                    <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
-                    <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda'))).map(t => {
+              {/* Vista Móvil: Lista de Tarjetas (smartphones < 640px) */}
+              <div className="block sm:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-b-xl p-3 space-y-3">
+                {list.length === 0 ? (
+                  <p className="text-xs text-center text-slate-400 font-medium py-3 italic">No hay ingresos por hospedaje en este período</p>
+                ) : (
+                  list.map(t => {
                     const amounts = getTransactionAmounts(t);
                     const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                     return (
-                      <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
-                        <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
-                        <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
-                        <td className="p-2.5 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
-                        <td className="p-2.5 text-center font-mono font-bold text-amber-800">Bs. {txTasa.toFixed(2)}</td>
-                        <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
-                          {amounts.usdStr}
-                        </td>
-                        <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
-                          {amounts.vesStr}
-                        </td>
-                      </tr>
+                      <div key={t.id} className="pt-2 text-xs space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-mono text-[10px] text-slate-500 font-semibold">{t.hora}</span>
+                          <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                            {cleanPaymentMethodName(t.metodo)}
+                          </span>
+                        </div>
+                        <p className="font-bold text-slate-800">{t.concepto}</p>
+                        <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-semibold">Tasa: Bs. {txTasa.toFixed(2)}</span>
+                          <div className="text-right">
+                            <span className="font-black text-emerald-700 block">${amounts.usdStr}</span>
+                            <span className="font-bold text-emerald-600 text-[11px] block">{amounts.vesStr}</span>
+                          </div>
+                        </div>
+                      </div>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                  })
+                )}
+              </div>
 
-        {showEgresos && (
-          <div className="mb-8">
-            <h4 className="text-sm font-black text-rose-700 uppercase bg-rose-50 border border-rose-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-rose-700">Detalle: Egresos (Gastos y Retiros)</h4>
-            <div className="overflow-x-auto touch-pan-x border border-slate-200 rounded-b-xl bg-white shadow-2xs">
-              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-2.5 border-b">Hora</th>
-                    <th className="p-2.5 border-b">Concepto</th>
-                    <th className="p-2.5 border-b">Responsable</th>
-                    <th className="p-2.5 border-b text-center">Tasa Cobro</th>
-                    <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
-                    <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCaja.filter(t => t.tipo === 'Egreso').map(t => {
+              {/* Vista Escritorio: Tabla Completa (>= 640px) */}
+              <div className="hidden sm:block overflow-x-auto border border-slate-200 rounded-b-xl bg-white shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="p-2.5 border-b">Hora</th>
+                      <th className="p-2.5 border-b">Concepto</th>
+                      <th className="p-2.5 border-b">Método</th>
+                      <th className="p-2.5 border-b text-center">Tasa Cobro</th>
+                      <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
+                      <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-4 text-center text-slate-400 font-semibold italic">No hay ingresos por hospedaje en este período</td>
+                      </tr>
+                    ) : (
+                      list.map(t => {
+                        const amounts = getTransactionAmounts(t);
+                        const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                        return (
+                          <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                            <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
+                            <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
+                            <td className="p-2.5 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
+                            <td className="p-2.5 text-center font-mono font-bold text-emerald-800">Bs. {txTasa.toFixed(2)}</td>
+                            <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
+                              {amounts.usdStr}
+                            </td>
+                            <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-emerald-700 font-black' : 'text-slate-400 font-normal'}`}>
+                              {amounts.vesStr}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {showMarket && (() => {
+          const list = filteredCaja.filter(t => t.tipo === 'Ingreso' && (t.origen === 'Market' || (t.concepto || '').toLowerCase().includes('market') || (t.concepto || '').toLowerCase().includes('tienda')));
+          return (
+            <div className="mb-8">
+              <h4 className="text-sm font-black text-amber-700 uppercase bg-amber-50 border border-amber-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-amber-700 flex justify-between items-center">
+                <span>Detalle: Ingresos por Market (Tienda)</span>
+                <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{list.length} registros</span>
+              </h4>
+
+              {/* Vista Móvil: Lista de Tarjetas (smartphones < 640px) */}
+              <div className="block sm:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-b-xl p-3 space-y-3">
+                {list.length === 0 ? (
+                  <p className="text-xs text-center text-slate-400 font-medium py-3 italic">No hay ingresos por market en este período</p>
+                ) : (
+                  list.map(t => {
                     const amounts = getTransactionAmounts(t);
                     const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
                     return (
-                      <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
-                        <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
-                        <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
-                        <td className="p-2.5">{t.usuarioNombre || 'Desconocido'}</td>
-                        <td className="p-2.5 text-center font-mono font-bold text-rose-800">Bs. {txTasa.toFixed(2)}</td>
-                        <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
-                          {amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}
-                        </td>
-                        <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
-                          {amounts.ves > 0 ? `-Bs. ${amounts.ves.toFixed(2)} VES` : '-'}
-                        </td>
-                      </tr>
+                      <div key={t.id} className="pt-2 text-xs space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-mono text-[10px] text-slate-500 font-semibold">{t.hora}</span>
+                          <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                            {cleanPaymentMethodName(t.metodo)}
+                          </span>
+                        </div>
+                        <p className="font-bold text-slate-800">{t.concepto}</p>
+                        <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-semibold">Tasa: Bs. {txTasa.toFixed(2)}</span>
+                          <div className="text-right">
+                            <span className="font-black text-amber-600 block">${amounts.usdStr}</span>
+                            <span className="font-bold text-amber-600 text-[11px] block">{amounts.vesStr}</span>
+                          </div>
+                        </div>
+                      </div>
                     );
-                  })}
-                </tbody>
-              </table>
+                  })
+                )}
+              </div>
+
+              {/* Vista Escritorio: Tabla Completa (>= 640px) */}
+              <div className="hidden sm:block overflow-x-auto border border-slate-200 rounded-b-xl bg-white shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="p-2.5 border-b">Hora</th>
+                      <th className="p-2.5 border-b">Concepto</th>
+                      <th className="p-2.5 border-b">Método</th>
+                      <th className="p-2.5 border-b text-center">Tasa Cobro</th>
+                      <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
+                      <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-4 text-center text-slate-400 font-semibold italic">No hay ingresos por market en este período</td>
+                      </tr>
+                    ) : (
+                      list.map(t => {
+                        const amounts = getTransactionAmounts(t);
+                        const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                        return (
+                          <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                            <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
+                            <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
+                            <td className="p-2.5 font-medium">{cleanPaymentMethodName(t.metodo)}</td>
+                            <td className="p-2.5 text-center font-mono font-bold text-amber-800">Bs. {txTasa.toFixed(2)}</td>
+                            <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
+                              {amounts.usdStr}
+                            </td>
+                            <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-amber-600 font-black' : 'text-slate-400 font-normal'}`}>
+                              {amounts.vesStr}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {showEgresos && (() => {
+          const list = filteredCaja.filter(t => t.tipo === 'Egreso');
+          return (
+            <div className="mb-8">
+              <h4 className="text-sm font-black text-rose-700 uppercase bg-rose-50 border border-rose-200 p-2.5 rounded-t-xl print:bg-white print:border-b-2 print:border-rose-700 flex justify-between items-center">
+                <span>Detalle: Egresos (Gastos y Retiros)</span>
+                <span className="text-xs font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full">{list.length} registros</span>
+              </h4>
+
+              {/* Vista Móvil: Lista de Tarjetas (smartphones < 640px) */}
+              <div className="block sm:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-b-xl p-3 space-y-3">
+                {list.length === 0 ? (
+                  <p className="text-xs text-center text-slate-400 font-medium py-3 italic">No hay egresos en este período</p>
+                ) : (
+                  list.map(t => {
+                    const amounts = getTransactionAmounts(t);
+                    const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                    return (
+                      <div key={t.id} className="pt-2 text-xs space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-mono text-[10px] text-slate-500 font-semibold">{t.hora}</span>
+                          <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                            {t.usuarioNombre || 'Egreso'}
+                          </span>
+                        </div>
+                        <p className="font-bold text-slate-800">{t.concepto}</p>
+                        <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-semibold">Tasa: Bs. {txTasa.toFixed(2)}</span>
+                          <div className="text-right">
+                            <span className="font-black text-rose-600 block">{amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}</span>
+                            <span className="font-bold text-rose-600 text-[11px] block">{amounts.ves > 0 ? `-Bs. ${amounts.ves.toFixed(2)} VES` : '-'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Vista Escritorio: Tabla Completa (>= 640px) */}
+              <div className="hidden sm:block overflow-x-auto border border-slate-200 rounded-b-xl bg-white shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="p-2.5 border-b">Hora</th>
+                      <th className="p-2.5 border-b">Concepto</th>
+                      <th className="p-2.5 border-b">Responsable</th>
+                      <th className="p-2.5 border-b text-center">Tasa Cobro</th>
+                      <th className="p-2.5 border-b text-right">Monto ($ USD)</th>
+                      <th className="p-2.5 border-b text-right">Monto (Bs. VES)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="p-4 text-center text-slate-400 font-semibold italic">No hay egresos en este período</td>
+                      </tr>
+                    ) : (
+                      list.map(t => {
+                        const amounts = getTransactionAmounts(t);
+                        const txTasa = (t.tasa_usd && parseFloat(t.tasa_usd) > 0) ? parseFloat(t.tasa_usd) : tasaUsd;
+                        return (
+                          <tr key={t.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                            <td className="p-2.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">{t.hora}</td>
+                            <td className="p-2.5 font-semibold text-slate-800">{t.concepto}</td>
+                            <td className="p-2.5">{t.usuarioNombre || 'Desconocido'}</td>
+                            <td className="p-2.5 text-center font-mono font-bold text-rose-800">Bs. {txTasa.toFixed(2)}</td>
+                            <td className={`p-2.5 text-right font-bold ${amounts.usd > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
+                              {amounts.usd > 0 ? `-$${amounts.usd.toFixed(2)} USD` : '-'}
+                            </td>
+                            <td className={`p-2.5 text-right font-bold ${amounts.ves > 0 ? 'text-rose-600 font-black' : 'text-slate-400 font-normal'}`}>
+                              {amounts.ves > 0 ? `-Bs. ${amounts.ves.toFixed(2)} VES` : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </>
   )}
